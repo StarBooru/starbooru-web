@@ -1,0 +1,72 @@
+# Builds the web bundle. A tag (v0.1.0) puts it in a draft release; running it by hand
+# only builds. The notes come after, then the draft is published (docs/development.md).
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  CARGO_INCREMENTAL: 0
+  CARGO_TERM_COLOR: always
+  TRUNK_VERSION: v0.22.2
+  # The version the app shows. By hand this says the branch, like the filename.
+  STARBOORU_WEB_VERSION: ${{ github.ref_name }}
+
+jobs:
+  bundle:
+    name: Bundle
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
+      - uses: Swatinem/rust-cache@v2
+      - name: Install Trunk
+        run: |
+          curl -fsSL "https://github.com/trunk-rs/trunk/releases/download/$TRUNK_VERSION/trunk-x86_64-unknown-linux-gnu.tar.gz" \
+            | tar -xz -C /usr/local/bin trunk
+      - run: trunk build --release --locked
+      - name: Pack
+        run: |
+          name="starbooru-web-${GITHUB_REF_NAME#v}"
+          mkdir -p "$name" out
+          cp -r dist/. "$name/"
+          rm -f "$name/.trunk-lock"
+          cp LICENSE ATTRIBUTION.md "$name/"
+          tar -czf "out/$name.tar.gz" "$name"
+          (cd out && sha256sum *.tar.gz > SHA256SUMS)
+      - uses: actions/upload-artifact@v7
+        with:
+          name: web
+          path: out/*
+          if-no-files-found: error
+
+  release:
+    name: Draft release
+    if: startsWith(github.ref, 'refs/tags/')
+    needs: [bundle]
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      # Named, so it lands in artifacts/web/; a lone artifact otherwise lands in artifacts/.
+      - uses: actions/download-artifact@v8
+        with:
+          name: web
+          path: artifacts/web
+      - name: Create the draft
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          prerelease=
+          case "$GITHUB_REF_NAME" in *-*) prerelease=--prerelease ;; esac
+          gh release create "$GITHUB_REF_NAME" --draft $prerelease --verify-tag \
+            --title "StarBooru web ${GITHUB_REF_NAME#v}" --notes "Draft: the notes come next." \
+            artifacts/web/*

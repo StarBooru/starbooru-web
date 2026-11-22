@@ -1,10 +1,10 @@
 # Roadmap
 
-_Status as of 2026-11-22: docs only. Scope comes from starbooru-server's `docs/checklist.md`; the target is everything the reference web app did._
+_Status as of 2026-11-23: the crate builds and CI runs. Scope comes from starbooru-server's `docs/checklist.md`; the target is everything the reference web app did._
 
 ## 1. Foundation
 
-- [ ] Crate, lints, Trunk build, CI
+- [x] Crate, lints, Trunk build, CI
 - [ ] Tokens and themes from one seed hue; the shell (brand, search, navigation)
 - [ ] Sign-in with a password and with an identity provider
 - [ ] Gallery: grid, infinite scroll, sorts

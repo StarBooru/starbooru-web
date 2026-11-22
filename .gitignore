@@ -1,0 +1,5 @@
+/target
+/dist
+/log
+/.kilo/
+.DS_Store

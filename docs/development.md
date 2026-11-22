@@ -40,4 +40,13 @@ Headless Chromium draws in software, so blur and glows cost far more there than 
 
 ## Releasing
 
-Not set up yet. The plan: a tagged build attaches the `dist/` bundle to a release, and the server's deployment docs say how to mount it at `STARBOORU_WEB_DIR`.
+`.github/workflows/release.yml` builds the bundle on a push of a `v*` tag and puts it in a draft release: `starbooru-web-<version>.tar.gz`, with `LICENSE` and `ATTRIBUTION.md` beside the files, and a `SHA256SUMS`. A hyphen in the tag (`v0.2.0-beta.1`) makes it a prerelease. Running the workflow by hand builds without releasing.
+
+The build sets `STARBOORU_WEB_VERSION` to the tag. Write the notes, then publish with `gh release edit <tag> --draft=false`.
+
+To serve a release, unpack it and point the server at the folder:
+
+```sh
+tar -xzf starbooru-web-<version>.tar.gz
+STARBOORU_WEB_DIR=$PWD/starbooru-web-<version> starbooru-server
+```

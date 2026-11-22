@@ -1,0 +1,21 @@
+//! StarBooru for the browser: a Leptos single-page app over the StarBooru API.
+
+#[macro_use]
+mod i18n;
+mod app;
+
+use wasm_bindgen::JsCast;
+
+fn main() {
+    let lang = i18n::resolve(None, &i18n::browser_languages());
+    i18n::set_lang(lang);
+    // Into `#main`, so the loading screen after it knows when to go.
+    let root = web_sys::window()
+        .and_then(|w| w.document())
+        .and_then(|d| d.get_element_by_id("main"))
+        .and_then(|e| e.dyn_into::<web_sys::HtmlElement>().ok());
+    match root {
+        Some(root) => leptos::mount::mount_to(root, app::App).forget(),
+        None => leptos::mount::mount_to_body(app::App),
+    }
+}
