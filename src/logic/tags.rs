@@ -80,6 +80,25 @@ pub fn replace_tag(text: &str, from: &str, to: &str) -> String {
     out.join(" ")
 }
 
+/// The editor's `text` after the post's tags went from `before` to `after`
+/// while it was open, as saving its people does: the tags taken off go, the
+/// new ones join at the end, and the rest stays as typed.
+pub fn rebase(text: &str, before: &[String], after: &[String]) -> String {
+    let gone: Vec<&String> = before.iter().filter(|t| !after.contains(t)).collect();
+    let mut out = if gone.is_empty() {
+        text.to_owned()
+    } else {
+        text.split_whitespace()
+            .filter(|w| !gone.iter().any(|g| is_tag(w, g)))
+            .collect::<Vec<_>>()
+            .join(" ")
+    };
+    for tag in after.iter().filter(|t| !before.contains(t)) {
+        out = with_tag(&out, tag);
+    }
+    out
+}
+
 /// The words of `text` that aren't among the post's `saved` tags: the ones
 /// worth a "did you mean".
 pub fn new_words(text: &str, saved: &[String]) -> String {
@@ -339,6 +358,26 @@ mod tests {
         assert_eq!(with_tag("cat  ", "sky"), "cat sky");
         assert_eq!(with_tag("cat sky", "sky"), "cat sky");
         assert_eq!(with_tag("cat Sky", "sky"), "cat Sky");
+    }
+
+    #[test]
+    fn tags_changed_elsewhere_reach_the_open_editor() {
+        let tags = |s: &str| s.split_whitespace().map(str::to_owned).collect::<Vec<_>>();
+        let before = tags("cat sky boots");
+        // Saving the people put `1girl hat` on and took `boots` off.
+        let after = tags("cat sky hat 1girl");
+        assert_eq!(
+            rebase("Cat sky boots  new", &before, &after),
+            "Cat sky new hat 1girl"
+        );
+        // Nothing taken off: the text stays as typed, line breaks and all.
+        assert_eq!(
+            rebase("cat\nsky ", &tags("cat sky"), &tags("cat sky hat")),
+            "cat\nsky hat"
+        );
+        // Already typed, it isn't added twice; unchanged tags change nothing.
+        assert_eq!(rebase("cat hat", &tags("cat"), &tags("cat hat")), "cat hat");
+        assert_eq!(rebase("cat  dog", &before, &before), "cat  dog");
     }
 
     #[test]

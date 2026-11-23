@@ -16,22 +16,43 @@ use crate::components::banner::ErrorBanner;
 use crate::components::icons::{Ico, Icon};
 use crate::components::rating::RatingPicker;
 use crate::components::tag_box::TagBox;
-use crate::logic::tags::{new_words, parse_tags, replace_tag, shown_fixes, untyped, with_tag};
+use crate::logic::tags::{
+    new_words, parse_tags, rebase, replace_tag, shown_fixes, untyped, with_tag,
+};
 use crate::pages::{bad_tag_text, rating_label};
 
 /// The tag box's id, for its label.
 const TAG_BOX: &str = "post-tags";
 
-/// The editor for `post` as it was when editing began. `on_saved` gets the
-/// post as the server has it after saving.
+/// The editor for `post` as it was when editing began. `current` is the post
+/// on the page, whose tags saving its people may change meanwhile.
+/// `on_saved` gets the post as the server has it after saving.
 #[component]
 pub fn EditCard(
     post: Arc<Post>,
+    #[prop(into)] current: Signal<Option<Arc<Post>>>,
     on_cancel: Callback<()>,
     on_saved: Callback<Post>,
 ) -> impl IntoView {
     let id = post.id;
     let text = RwSignal::new(post.tags.join(" "));
+    // The post's tags the text was last brought in line with.
+    let base = StoredValue::new(post.tags.clone());
+    Effect::watch(
+        move || current.with(|p| p.as_ref().filter(|p| p.id == id).map(|p| p.tags.clone())),
+        move |now, _, _| {
+            let Some(now) = now else {
+                return;
+            };
+            if base.with_value(|b| b == now) {
+                return;
+            }
+            let before = base.get_value();
+            text.update(|t| *t = rebase(t, &before, now));
+            base.set_value(now.clone());
+        },
+        false,
+    );
     // The text as of the last finished word, for "did you mean".
     let check = RwSignal::new(String::new());
     let rating = RwSignal::new(post.rating);

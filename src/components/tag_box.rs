@@ -3,6 +3,7 @@
 //! offers are chips under the box: a click or Tab puts the first one in place
 //! of the word, Escape puts them away. A category prefix (`artist:mi`) stays
 //! and the rest is completed. The grip in the corner makes the box taller.
+//! A one-line box has no grip, and Enter sends its form as a field's would.
 
 use leptos::ev::{KeyboardEvent, PointerEvent};
 use leptos::html;
@@ -30,10 +31,13 @@ fn caret_of(el: &web_sys::HtmlTextAreaElement, value: &str) -> usize {
 /// the textarea's, for its label; the offers are `{id}-offers`.
 #[component]
 pub fn TagBox(
-    id: &'static str,
+    #[prop(into)] id: String,
     /// What's in the box.
     text: RwSignal<String>,
     #[prop(default = 5)] rows: u32,
+    /// A box the height of a line, like a field: for a few tags.
+    #[prop(optional)]
+    one_line: bool,
     /// The box itself, for the page to focus.
     #[prop(optional)]
     area: Option<NodeRef<html::Textarea>>,
@@ -136,15 +140,22 @@ pub fn TagBox(
     };
 
     let on_key = move |e: KeyboardEvent| {
-        if e.is_composing() || shown.with_untracked(Vec::is_empty) {
+        if e.is_composing() {
             return;
         }
+        let offered = !shown.with_untracked(Vec::is_empty);
         match e.key().as_str() {
-            "Tab" if !e.shift_key() => {
+            "Enter" if one_line => {
+                e.prevent_default();
+                if let Some(form) = area.get_untracked().and_then(|el| el.form()) {
+                    let _ = form.request_submit();
+                }
+            }
+            "Tab" if offered && !e.shift_key() => {
                 e.prevent_default();
                 accept(0);
             }
-            "Escape" => {
+            "Escape" if offered => {
                 // The offers go, and nothing around the box hears it.
                 e.prevent_default();
                 e.stop_propagation();
@@ -181,11 +192,11 @@ pub fn TagBox(
             .collect_view()
     };
     view! {
-        <span class="text-box">
+        <span class="text-box" class:one-line=one_line>
             <textarea
                 node_ref=area
                 id=id
-                rows=rows
+                rows=if one_line { 1 } else { rows }
                 spellcheck="false"
                 autocapitalize="none"
                 autocomplete="off"
@@ -196,7 +207,15 @@ pub fn TagBox(
                 placeholder=move || placeholder.map(|p| p.get())
                 prop:value=move || text.get()
                 on:input=move |e| {
-                    text.set(event_target_value(&e));
+                    let mut value = event_target_value(&e);
+                    // Pasted lines become words on the one line.
+                    if one_line && value.contains(['\n', '\r']) {
+                        value = value.replace(['\r', '\n'], " ");
+                        if let Some(el) = area.get_untracked() {
+                            el.set_value(&value);
+                        }
+                    }
+                    text.set(value);
                     typing.set(true);
                     follow();
                 }
@@ -218,7 +237,7 @@ pub fn TagBox(
                     }
                 }
             ></textarea>
-            <Grip area=area />
+            {(!one_line).then(|| view! { <Grip area=area /> })}
         </span>
         <Show when=move || shown.with(|s| !s.is_empty())>
             <div

@@ -7,9 +7,9 @@ use leptos::prelude::*;
 use leptos_router::NavigateOptions;
 use leptos_router::hooks::use_navigate;
 use starbooru_core::filter::SizeField;
-use starbooru_core::{FigureKind, FigureTerm, MediaKind, Order, Rating, SortKey, parse_query};
+use starbooru_core::{FigureTerm, MediaKind, Order, Rating, SortKey, parse_query};
 
-use super::rating_label;
+use super::{figure_kind_label, rating_label};
 use crate::components::icons::{Ico, Icon};
 use crate::route;
 
@@ -367,18 +367,10 @@ fn size_label(field: SizeField) -> String {
     }
 }
 
-fn kind_label(kind: FigureKind) -> String {
-    match kind {
-        FigureKind::Girl => t!("people-girl"),
-        FigureKind::Boy => t!("people-boy"),
-        FigureKind::Other => t!("people-other"),
-    }
-}
-
 /// One `{...}` term in words.
 fn figure_line(term: &FigureTerm, negated: bool) -> String {
     let tags = term.tags.join(", ");
-    let kind = term.kind.map(|k| kind_label(k).to_lowercase());
+    let kind = term.kind.map(|k| figure_kind_label(k).to_lowercase());
     match (kind, negated) {
         (None, false) => t!("explain-figure", tags = tags),
         (None, true) => t!("explain-no-figure", tags = tags),

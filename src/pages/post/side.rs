@@ -49,7 +49,7 @@ fn group_label(group: &Group) -> String {
 
 /// A tag that searches for itself. Its menu (`components/tag_menu.rs`) has
 /// the way to its page.
-fn chip(name: String, class: &'static str) -> impl IntoView {
+pub(super) fn chip(name: String, class: &'static str) -> impl IntoView {
     let href = route::gallery(&name);
     let key = name.clone();
     view! {

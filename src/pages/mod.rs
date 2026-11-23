@@ -20,7 +20,7 @@ pub mod upload;
 use leptos::prelude::*;
 use leptos_router::hooks::use_location;
 use starbooru_core::tag::{MAX_TAG_CHARS, MAX_TAGS_PER_POST, TagError};
-use starbooru_core::{Rating, TagCategory};
+use starbooru_core::{FigureKind, Rating, TagCategory};
 
 use crate::logic::tags::BadTag;
 
@@ -59,6 +59,15 @@ pub(crate) fn category_label(category: TagCategory) -> String {
         TagCategory::Character => t!("category-character"),
         TagCategory::Copyright => t!("category-copyright"),
         TagCategory::Meta => t!("category-meta"),
+    }
+}
+
+/// A kind of person in a picture, in the current language.
+pub(crate) fn figure_kind_label(kind: FigureKind) -> String {
+    match kind {
+        FigureKind::Girl => t!("people-girl"),
+        FigureKind::Boy => t!("people-boy"),
+        FigureKind::Other => t!("people-other"),
     }
 }
 

@@ -8,6 +8,7 @@ pub mod gallery;
 pub mod jobs;
 pub mod layout;
 pub mod library;
+pub mod people;
 pub mod queue;
 pub mod saved;
 pub mod search;

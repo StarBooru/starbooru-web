@@ -1,10 +1,12 @@
 //! The viewer at `/post/:id?q=…&seed=…`: the post on its stage, the bar of
 //! what can be done with it, and its tags and details beside or below.
 //! Previous and next walk the gallery's results for the same search. The
-//! tags card turns into the tag editor in place.
+//! tags card turns into the tag editor in place, and the people card into
+//! theirs.
 
 mod edit;
 pub(crate) mod glow;
+mod people;
 mod related;
 mod side;
 pub(crate) mod stage;
@@ -22,6 +24,7 @@ use starbooru_core::{EditKind, MediaKind, Neighbors, Post, edit_kind};
 
 use self::edit::EditCard;
 use self::glow::PostGlow;
+use self::people::PeopleCard;
 use self::related::Related;
 use self::side::{DetailsCard, TagsCard};
 use self::stage::{Shown, Stage};
@@ -169,8 +172,9 @@ pub fn PostView() -> impl IntoView {
     let enter = RwSignal::new(None::<bool>);
     let busy = RwSignal::new(false);
     let action_error = RwSignal::new(None::<String>);
-    // The tags card is the tag editor.
+    // The tags card is the tag editor, and the people card theirs.
     let editing = RwSignal::new(false);
+    let people_editing = RwSignal::new(false);
     let steps = StoredValue::new(0_i32);
     let generation = StoredValue::new(0_u64);
     // Votes show at once and go to the server one at a time, the latest
@@ -251,6 +255,7 @@ pub fn PostView() -> impl IntoView {
         problem.set(None);
         action_error.set(None);
         editing.set(false);
+        people_editing.set(false);
         gallery::viewed(&q.get_untracked(), id);
         if post.with_untracked(|p| p.as_ref().map(|p| p.id)) != Some(id)
             && let Some(quick) = kept(id)
@@ -519,14 +524,28 @@ pub fn PostView() -> impl IntoView {
             editing.set(true);
         }
     });
-    let saved = Callback::new(move |p: Post| {
+    // The post as an editor saved it. Whether the page is still on it.
+    let take = move |p: Post| {
         let p = Arc::new(p);
         keep(Arc::clone(&p));
-        post.set(Some(p));
         // The gallery's kept results and the suggestions show the old tags.
         gallery::forget_lists();
         api::forget_tags();
-        editing.set(false);
+        let here = post.with_untracked(|shown| shown.as_ref().map(|s| s.id)) == Some(p.id);
+        if here {
+            post.set(Some(p));
+        }
+        here
+    };
+    let saved = Callback::new(move |p: Post| {
+        if take(p) {
+            editing.set(false);
+        }
+    });
+    let people_saved = Callback::new(move |p: Post| {
+        if take(p) {
+            people_editing.set(false);
+        }
     });
 
     let failed = move || {
@@ -589,7 +608,7 @@ pub fn PostView() -> impl IntoView {
                         first=first
                         last=last
                         enter=enter
-                        editing=editing
+                        editing=Signal::derive(move || editing.get() || people_editing.get())
                         on_step=press
                         on_back=Callback::new(move |()| back())
                         on_edit=start_edit
@@ -643,6 +662,7 @@ pub fn PostView() -> impl IntoView {
                                     view! {
                                         <EditCard
                                             post=p
+                                            current=post
                                             on_cancel=Callback::new(move |()| editing.set(false))
                                             on_saved=saved
                                         />
@@ -656,6 +676,12 @@ pub fn PostView() -> impl IntoView {
                             )
                         }
                     }}
+                    <PeopleCard
+                        post=post
+                        editable=editable
+                        editing=people_editing
+                        on_saved=people_saved
+                    />
                     <DetailsCard
                         post=post
                         sampled=sampled

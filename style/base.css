@@ -125,6 +125,12 @@ textarea { resize: none; }
   .grip { width: 32px; height: 32px; right: 1px; bottom: 1px; }
   .grip::before { inset: 9px; }
 }
+/* A one-line tag box, like a field. Where the browser can size it to its
+   text it wraps and grows; elsewhere it scrolls sideways as a field does. */
+.text-box.one-line > textarea { min-height: 0; font: inherit; white-space: pre; overflow: hidden; }
+@supports (field-sizing: content) {
+  .text-box.one-line > textarea { field-sizing: content; min-width: 0; max-width: 100%; white-space: pre-wrap; overflow-wrap: anywhere; }
+}
 /* Tags matching the word being typed in a tag box. The first is the one Tab
    puts in. */
 .tag-offers { display: flex; flex-wrap: wrap; gap: 6px; }

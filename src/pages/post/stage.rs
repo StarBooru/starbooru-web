@@ -154,8 +154,8 @@ pub fn Stage(
     /// The way the last step went, for the entrance.
     #[prop(into)]
     enter: Signal<Option<bool>>,
-    /// The tag editor is open: the keys are left to it, and swipes still
-    /// turn.
+    /// The tag editor or the people's is open: the keys are left to it, and
+    /// swipes still turn.
     #[prop(into)]
     editing: Signal<bool>,
     on_step: Callback<bool>,
