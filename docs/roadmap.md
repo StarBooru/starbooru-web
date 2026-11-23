@@ -73,7 +73,7 @@ Both modes:
 - [ ] Click and drag across tiles to select several
 - [ ] A saved search reopens where it was left. Today the gallery remembers only the last 30 searches, so a saved one can drop out
 - [x] Share links: a custom expiry date besides 1, 7 and 30 days
-- [ ] Reverse search an image from a post on google images, iqdb, saucenao, trace.moe 
+- [x] Reverse search an image from a post on google images, iqdb, saucenao, trace.moe 
 
 ## 7. Design
 

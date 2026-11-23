@@ -1,7 +1,7 @@
 //! The menu a right-clicked tile opens, on any page that lists posts as
 //! `Thumb`s under `data-press="post"`: open the post here or in a new tab,
-//! like it, share it, download it and, in the gallery, select it for a mass
-//! edit or move it to the recycle bin. A long press on a phone opens it too
+//! like it, share it, look its picture up on other sites, download it and, in
+//! the gallery, select it for a mass edit or move it to the recycle bin. A long press on a phone opens it too
 //! where the browser reports one as a right click, and so do Shift+F10 and
 //! the menu key on a focused tile. In the gallery a tile swiped aside does
 //! what Settings › Gestures says, from the same actions.
@@ -24,9 +24,11 @@ use crate::api;
 use crate::components::download;
 use crate::components::icons::Icon;
 use crate::components::menu::{self, ActionMenu, MenuAt, MenuItem};
+use crate::components::reverse::ReverseMenu;
 use crate::components::snackbar::{notify, notify_undo};
 use crate::components::swipe::watch as watch_swipes;
 use crate::dom;
+use crate::logic::reverse::offered;
 use crate::logic::swipe::{Side, action};
 use crate::logic::viewer::download_name;
 use crate::logic::votes::next_vote;
@@ -70,6 +72,8 @@ pub fn PostPress(
     let open = RwSignal::new(None::<Open>);
     // The post the share sheet is open for.
     let sharing = RwSignal::new(None::<i64>);
+    // The post whose picture is being looked up, and where its menu was.
+    let reversing = RwSignal::new(None::<(Arc<Post>, MenuAt)>);
     // Votes cast from here. The lists the tiles come from aren't asked for
     // again, and the menu should still say which way the next press goes.
     let votes = StoredValue::new(HashMap::<i64, i16>::new());
@@ -187,6 +191,19 @@ pub fn PostPress(
     let menu = move || {
         let Open { post, href, at } = open.get()?;
         let liked = post.my_vote > 0;
+        let reverse = offered(&post).then(|| {
+            let post = Arc::clone(&post);
+            view! {
+                <MenuItem
+                    icon=Icon::Search
+                    label=move || t!("reverse-button")
+                    on_click=Callback::new(move |()| {
+                        open.set(None);
+                        reversing.set(Some((Arc::clone(&post), at)));
+                    })
+                />
+            }
+        });
         let (here, there) = (Arc::clone(&post), href.clone());
         let voted = Arc::clone(&post);
         let file = absolute(&post.file_url);
@@ -249,6 +266,7 @@ pub fn PostPress(
                 />
                 {select}
                 {share}
+                {reverse}
                 <MenuItem
                     icon=Icon::Download
                     label=move || t!("post-download")
@@ -268,9 +286,18 @@ pub fn PostPress(
             }
         })
     };
+    // In the tile menu's place.
+    let sites = move || {
+        reversing.get().map(|(post, at)| {
+            view! {
+                <ReverseMenu post=post at=at on_close=Callback::new(move |()| reversing.set(None)) />
+            }
+        })
+    };
     view! {
         {menu}
         {sheet}
+        {sites}
     }
 }
 

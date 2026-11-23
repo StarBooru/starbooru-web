@@ -12,6 +12,7 @@ pub mod icons;
 pub mod legal;
 pub mod menu;
 pub mod rating;
+pub mod reverse;
 pub mod select;
 pub mod snackbar;
 pub mod strength;

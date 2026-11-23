@@ -24,6 +24,7 @@ use leptos_router::NavigateOptions;
 use leptos_router::hooks::{use_navigate, use_params_map, use_query_map};
 use send_wrapper::SendWrapper;
 use starbooru_core::{EditKind, MediaKind, Neighbors, Post};
+use wasm_bindgen::JsCast;
 
 use self::edit::EditCard;
 use self::editor::{EditorSheet, Saved, pause_stage_video};
@@ -38,10 +39,13 @@ use crate::api::{self, Failure};
 use crate::components::banner::{ErrorBanner, Spinner};
 use crate::components::download::DownloadLink;
 use crate::components::icons::{Ico, Icon};
+use crate::components::menu::{MenuAt, beside};
+use crate::components::reverse::ReverseMenu;
 use crate::components::snackbar::{notify, notify_undo};
 use crate::components::tag_menu::TagPress;
 use crate::logic::editor::offer;
 use crate::logic::people::{PeopleShown, closes_when_off, people_shown};
+use crate::logic::reverse::offered;
 use crate::logic::tags::may_edit_post;
 use crate::logic::viewer::{
     back_through_history, download_name, needs_original, neighbour_href, queued, shown_url,
@@ -212,6 +216,8 @@ pub fn PostView() -> impl IntoView {
     let editor_leaving = RwSignal::new(false);
     // The share sheet is open, for this post.
     let sharing = RwSignal::new(None::<i64>);
+    // The menu of sites to look the picture up on is open, there.
+    let reversing = RwSignal::new(None::<MenuAt>);
     // Trimming needs ffmpeg on the server.
     let info = LocalResource::new(api::server_info);
     let video_editing =
@@ -350,6 +356,7 @@ pub fn PostView() -> impl IntoView {
         people_editing.set(false);
         media_editing.set(false);
         sharing.set(None);
+        reversing.set(None);
         gallery::viewed(&q.get_untracked(), id);
         if post.with_untracked(|p| p.as_ref().map(|p| p.id)) != Some(id)
             && let Some(quick) = kept(id)
@@ -677,6 +684,12 @@ pub fn PostView() -> impl IntoView {
             sharing.set(shown);
         }
     });
+    let reverse = Callback::new(move |at: MenuAt| {
+        let shown = post.with_untracked(|p| p.as_deref().filter(|p| offered(p)).map(|p| p.id));
+        if shown.is_some() && shown == id.get_untracked() {
+            reversing.set(Some(at));
+        }
+    });
 
     let open_editor = Callback::new(move |()| {
         let offered = post.with_untracked(|p| {
@@ -775,6 +788,7 @@ pub fn PostView() -> impl IntoView {
                             editing.get() || people_editing.get()
                                 || media_editing.get() && !editor_leaving.get()
                                 || sharing.with(Option::is_some)
+                                || reversing.with(Option::is_some)
                         })
                         on_step=press
                         on_back=Callback::new(move |()| back())
@@ -789,6 +803,7 @@ pub fn PostView() -> impl IntoView {
                         on_delete=Callback::new(move |()| delete())
                         on_edit_media=open_editor
                         on_share=share
+                        on_reverse=reverse
                     />
                     {move || {
                         problem
@@ -906,6 +921,19 @@ pub fn PostView() -> impl IntoView {
                             }
                         })
                 }}
+                {move || {
+                    let at = reversing.get()?;
+                    let p = post.get_untracked()?;
+                    Some(
+                        view! {
+                            <ReverseMenu
+                                post=p
+                                at=at
+                                on_close=Callback::new(move |()| reversing.set(None))
+                            />
+                        },
+                    )
+                }}
             </div>
         }
     };
@@ -938,6 +966,7 @@ fn PostBar(
     on_delete: Callback<()>,
     on_edit_media: Callback<()>,
     on_share: Callback<()>,
+    on_reverse: Callback<MenuAt>,
 ) -> impl IntoView {
     let bar = move || {
         let p = post.get()?;
@@ -977,6 +1006,28 @@ fn PostBar(
                 >
                     <Ico icon=Icon::Share />
                     <span class="bar-label">{move || t!("share-button")}</span>
+                </button>
+            }
+        });
+        let reverse = offered(&p).then(|| {
+            view! {
+                <button
+                    type="button"
+                    class="icon-btn"
+                    title=move || t!("reverse-title")
+                    aria-label=move || t!("reverse-title")
+                    aria-haspopup="menu"
+                    on:click=move |e| {
+                        if let Some(button) = e
+                            .current_target()
+                            .and_then(|t| t.dyn_into::<web_sys::Element>().ok())
+                        {
+                            on_reverse.run(beside(&button));
+                        }
+                    }
+                >
+                    <Ico icon=Icon::Search />
+                    <span class="bar-label">{move || t!("reverse-button")}</span>
                 </button>
             }
         });
@@ -1031,6 +1082,7 @@ fn PostBar(
                     name=download_name(&p.sha256, &p.file_url, &p.mime)
                 />
                 {share}
+                {reverse}
                 {edit}
             </div>
             {remove}

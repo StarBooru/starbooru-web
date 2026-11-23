@@ -55,6 +55,25 @@ impl MenuAt {
             )
         }
     }
+
+    /// For a control from `top` to `bottom`, starting at `left`: above it in
+    /// the lower half of the window, below it in the upper half.
+    pub fn beside(left: f64, top: f64, bottom: f64, width: f64, height: f64) -> Self {
+        let y = if top > height / 2.0 { top } else { bottom };
+        MenuAt {
+            x: left,
+            y,
+            width,
+            height,
+        }
+    }
+}
+
+/// Where the menu goes for a button that opens one: beside it.
+pub fn beside(el: &Element) -> MenuAt {
+    let r = el.get_bounding_client_rect();
+    let (width, height) = dom::window_size();
+    MenuAt::beside(r.left(), r.top(), r.bottom(), width, height)
 }
 
 /// The element matching `selector` a right click was on, and where the menu
@@ -211,14 +230,27 @@ pub fn ActionMenu(
     }
 }
 
-/// One of the menu's items. `danger` is for the one that removes something.
+/// One of the menu's items. `danger` is for the one that removes something;
+/// `hint`, a line under the label, says what it will do when that isn't
+/// plain from the label.
 #[component]
 pub fn MenuItem(
     icon: Icon,
     #[prop(into)] label: Signal<String>,
     #[prop(optional)] danger: bool,
+    #[prop(optional, into)] hint: Option<Signal<String>>,
     on_click: Callback<()>,
 ) -> impl IntoView {
+    let text = match hint {
+        None => view! { <span>{move || label.get()}</span> }.into_any(),
+        Some(hint) => view! {
+            <span class="menu-text">
+                <span>{move || label.get()}</span>
+                <small class="menu-hint">{move || hint.get()}</small>
+            </span>
+        }
+        .into_any(),
+    };
     view! {
         <button
             type="button"
@@ -228,7 +260,7 @@ pub fn MenuItem(
             on:click=move |_| on_click.run(())
         >
             <Ico icon=icon size=20 />
-            <span>{move || label.get()}</span>
+            {text}
         </button>
     }
 }
@@ -270,6 +302,17 @@ mod tests {
         assert_eq!(px(&s, "bottom"), 100.0);
         assert_eq!(px(&s, "max-height"), 692.0);
         assert!(s.contains("100%"));
+    }
+
+    #[test]
+    fn a_button_s_menu_opens_away_from_the_nearer_edge() {
+        // A bar low on a phone: the menu's bottom at the button's top.
+        let low = MenuAt::beside(300.0, 600.0, 640.0, 390.0, 844.0);
+        assert_eq!(low.y, 600.0);
+        assert_eq!(px(&low.style(), "bottom"), 244.0);
+        // High up: under the button.
+        let high = MenuAt::beside(300.0, 100.0, 140.0, 390.0, 844.0);
+        assert_eq!(px(&high.style(), "top"), 140.0);
     }
 
     #[test]

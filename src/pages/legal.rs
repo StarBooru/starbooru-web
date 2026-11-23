@@ -75,6 +75,7 @@ const PRIVACY: Doc = Doc {
                 || t!("privacy-not-done-tracking"),
                 || t!("privacy-not-done-contacts"),
                 || t!("privacy-not-done-boorus"),
+                || t!("privacy-not-done-reverse"),
                 || t!("privacy-not-done-ai"),
                 || t!("privacy-not-done-library"),
                 || t!("privacy-not-done-logs"),

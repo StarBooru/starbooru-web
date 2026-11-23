@@ -170,9 +170,20 @@ html:has(.stage) { overscroll-behavior-x: none; }
 .bar-acts { display: flex; align-items: center; gap: 4px; }
 .bar-delete { margin-left: auto; }
 .bar-label { display: none; }
+/* Words beside the icons once they all fit on the row: four actions take
+   more room than three. */
 @container (min-width: 620px) {
-  .bar-acts .icon-btn { display: inline-flex; align-items: center; gap: 8px; width: auto; padding: 0 16px 0 12px; font: inherit; text-decoration: none; }
+  .bar-acts:not(:has(> :nth-child(4))) .icon-btn { display: inline-flex; align-items: center; gap: 8px; width: auto; padding: 0 14px 0 10px; font: inherit; text-decoration: none; }
+  .bar-acts:not(:has(> :nth-child(4))) .bar-label { display: inline; font-size: 14px; font-weight: 600; line-height: 1; }
+}
+@container (min-width: 770px) {
+  .bar-acts .icon-btn { display: inline-flex; align-items: center; gap: 8px; width: auto; padding: 0 14px 0 10px; font: inherit; text-decoration: none; }
   .bar-acts .bar-label { display: inline; font-size: 14px; font-weight: 600; line-height: 1; }
+}
+/* A phone: the icons a little closer, so they stay on one row. */
+@container (max-width: 400px) {
+  .post-bar .icon-btn { width: 40px; }
+  .bar-acts { gap: 0; }
 }
 /* The narrowest phones: all of it still on one row. */
 @media (max-width: 360px) {
