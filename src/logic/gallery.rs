@@ -198,6 +198,18 @@ impl Lists {
             list.posts.retain(|p| p.id != id);
         }
     }
+
+    /// Puts `post` as it is now in place of the copy every list has, after a
+    /// vote.
+    pub fn replace(&mut self, post: &Arc<Post>) {
+        for list in &mut self.0 {
+            for p in &mut list.posts {
+                if p.id == post.id {
+                    *p = Arc::clone(post);
+                }
+            }
+        }
+    }
 }
 
 /// Whether less than half of a tile `height` tall, whose top is `top` pixels
@@ -538,6 +550,26 @@ mod tests {
         };
         assert_eq!(ids("cat"), Some(vec![2]));
         assert_eq!(ids("dog"), Some(vec![]));
+    }
+
+    #[test]
+    fn a_vote_reaches_every_kept_copy_of_the_post() {
+        let now = Utc::now();
+        let mut lists = Lists::default();
+        let mut cat = list("cat", "a|1", now);
+        cat.posts.push(Arc::new(post(2)));
+        lists.keep(cat);
+        lists.keep(list("dog", "a|1", now));
+        let mut voted = post(1);
+        voted.my_vote = 1;
+        voted.score = 1;
+        lists.replace(&Arc::new(voted));
+        for q in ["cat", "dog"] {
+            let found = lists.find(q, "a|1", now).unwrap();
+            assert_eq!(found.posts.first().map(|p| p.my_vote), Some(1), "{q}");
+        }
+        let cat = lists.find("cat", "a|1", now).unwrap();
+        assert_eq!(cat.posts.get(1).map(|p| (p.id, p.my_vote)), Some((2, 0)));
     }
 
     #[test]

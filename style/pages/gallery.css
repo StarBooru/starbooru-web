@@ -108,7 +108,15 @@ html.sb-scrolling .thumb img { filter: none; transition: opacity var(--med) var(
 .page-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
 .gallery .page-head { justify-content: flex-start; margin-bottom: 12px; }
 .gallery .page-head .page-title { margin: 0; }
-.gallery .page-head .tag-info { margin-left: -8px; }
+.gallery .page-head .tag-info, .gallery .page-head .save-search { margin-left: -8px; }
+.gallery .page-head .tag-info + .save-search { margin-left: -12px; }
+.save-search.on { color: var(--primary); }
+/* The saved searches, on the plain gallery. */
+.saved-searches { display: flex; flex-wrap: wrap; gap: 8px; margin: 0 0 16px; }
+.saved-searches .chip { max-width: 100%; }
+.saved-searches .chip a { display: inline-flex; align-items: center; gap: 6px; min-width: 0; }
+.saved-searches .chip a .icon { flex: none; color: var(--primary); }
+.saved-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 /* The menus stay together, at the right, on a line of their own when the
    title leaves them no room. */
 .page-tools { display: flex; align-items: center; gap: 12px; margin-left: auto; }

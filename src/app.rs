@@ -8,6 +8,7 @@ use leptos_router::path;
 use crate::components::snackbar::Snackbar;
 use crate::i18n;
 use crate::pages::NotFound;
+use crate::pages::explore::Explore;
 use crate::pages::gallery::Gallery;
 use crate::pages::help::Help;
 use crate::pages::login::OidcReturn;
@@ -66,7 +67,7 @@ fn AppRoutes() -> impl IntoView {
             <Route path=path!("/terms") view=|| view! { <SoonAlone title=|| t!("terms-title") /> } />
             <ParentRoute path=path!("") view=Shell>
                 <Route path=path!("/") view=Gallery />
-                <Route path=path!("/explore") view=|| view! { <Soon title=|| t!("nav-explore") /> } />
+                <Route path=path!("/explore") view=Explore />
                 <Route path=path!("/post/:id") view=PostView />
                 <Route path=path!("/tags") view=Tags />
                 <Route path=path!("/tag") view=TagPage />

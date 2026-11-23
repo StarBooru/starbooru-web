@@ -21,12 +21,15 @@ use send_wrapper::SendWrapper;
 use starbooru_core::color::{NAMED_COLORS, to_hex};
 use starbooru_core::{Post, TagCorrection, parse_query};
 
+use super::post_menu::PostPress;
+use super::saved::{self, SaveToggle, SavedList};
 use super::upload::DropToUpload;
 use crate::api;
 use crate::components::banner::{CorrectionBanner, ErrorBanner, Spinner};
 use crate::components::color_picker::ColorPicker;
 use crate::components::icons::{Ico, Icon};
 use crate::components::select::{Choice, Select};
+use crate::components::snackbar::notify;
 use crate::components::thumb::Thumb;
 use crate::dom;
 use crate::logic::gallery::{
@@ -124,6 +127,22 @@ pub fn posts_arrived() {
 /// Takes a post that went to the recycle bin out of the kept results.
 pub fn forget_post(id: i64) {
     LISTS.with_borrow_mut(|l| l.drop_post(id));
+}
+
+/// Puts a post as it is after a vote in the kept results.
+pub fn update_post(post: Arc<Post>) {
+    LISTS.with_borrow_mut(|l| l.replace(&post));
+}
+
+/// Brings post `id` back from the recycle bin, from the notice after it was
+/// moved there, which outlives the page.
+pub fn undo_delete(id: i64) {
+    spawn_local(async move {
+        match api::call(move |c| async move { c.restore_post(id).await }).await {
+            Ok(_) => forget_lists(),
+            Err(message) => notify(message),
+        }
+    });
 }
 
 /// The grid's measurements as they are now.
@@ -365,6 +384,7 @@ pub fn Gallery() -> impl IntoView {
     ));
     let masonry: NodeRef<html::Div> = NodeRef::new();
     let alive = Arc::new(AtomicBool::new(true));
+    saved::load();
     // Bumped each time the spot has been put back.
     let landed = RwSignal::new(0_u32);
     let seek = StoredValue::new(None::<Seek>);
@@ -816,6 +836,15 @@ pub fn Gallery() -> impl IntoView {
         });
     });
 
+    // The menu of a right-clicked tile.
+    let find = Callback::new(move |id: i64| {
+        posts.with_untracked(|p| p.iter().find(|p| p.id == id).cloned())
+    });
+    let deleted = Callback::new(move |id: i64| {
+        posts.update(|p| p.retain(|p| p.id != id));
+        settled.update(|n| *n = n.saturating_sub(1));
+    });
+
     let retry = Callback::new(move |()| {
         error.set(None);
         load_more();
@@ -864,6 +893,9 @@ pub fn Gallery() -> impl IntoView {
                             }
                         })
                 }}
+                <Show when=move || q.with(|q| !q.trim().is_empty())>
+                    <SaveToggle q=q />
+                </Show>
                 <div class="page-tools">
                     <SortMenu q=q />
                     <ColorMenu q=q />
@@ -875,6 +907,9 @@ pub fn Gallery() -> impl IntoView {
                     corrected=corrected
                     exact=Signal::derive(move || route::exact(&shown_q.get()))
                 />
+            </Show>
+            <Show when=move || q.with(|q| q.trim().is_empty())>
+                <SavedList />
             </Show>
             {move || {
                 error
@@ -924,7 +959,7 @@ pub fn Gallery() -> impl IntoView {
                 </div>
             </Show>
             <div class="masonry-box">
-                <div class="masonry" node_ref=masonry style=masonry_style>
+                <div class="masonry" data-press="post" node_ref=masonry style=masonry_style>
                     <For each=move || shown.get() key=|(index, id)| (*id, *index) children=tile_view />
                 </div>
             </div>
@@ -949,6 +984,7 @@ pub fn Gallery() -> impl IntoView {
         </div>
         <ToTop />
         <DropToUpload />
+        <PostPress find=find on_open=open on_deleted=deleted />
     }
 }
 

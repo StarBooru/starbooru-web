@@ -174,6 +174,47 @@ color-black = Nero
 color-gray = Grigio
 color-white = Bianco
 
+search-save = Salva questa ricerca
+search-forget = Dimentica questa ricerca
+search-save-failed = Impossibile salvare la ricerca: { $reason }
+search-forget-failed = Impossibile dimenticare la ricerca: { $reason }
+saved-searches = Ricerche salvate
+saved-remove = Rimuovi “{ $name }”
+saved-removed = “{ $name }” rimossa
+
+## Esplora
+
+explore-window = Tendenze di
+explore-today = Oggi
+explore-week = Settimana
+explore-month = Mese
+explore-year = Anno
+explore-phrase-today = oggi
+explore-phrase-week = questa settimana
+explore-phrase-month = questo mese
+explore-phrase-year = quest'anno
+explore-phrase-days = negli ultimi { $count } giorni
+explore-nothing = Ancora niente da esplorare
+explore-nothing-body = Carica immagini o video e i migliori compariranno qui.
+explore-everything = Esplora tutto
+nothing-matches = Nessun risultato per “{ $query }”.
+explore-trending = Di tendenza
+explore-no-upvotes = Nessun voto positivo { $when }. Vota i post che ti piacciono e compariranno qui.
+explore-popular-tags = Tag popolari
+explore-tags-note = sui post aggiunti { $when }
+explore-no-tags = Nessun post con tag aggiunto { $when }.
+explore-added = Post aggiunti { $when }
+explore-on-this-day = Accadde oggi
+explore-no-memories = Nessun post aggiunto in questa data negli anni passati.
+explore-years-ago = { $count ->
+    [one] 1 anno fa
+   *[other] { $count } anni fa
+}
+explore-random = Scelti a caso
+explore-shuffle = Mescola
+explore-filter-placeholder = Restringi, ad es. -rating:e
+explore-filter-label = Restringi con una ricerca
+
 ## Viewer
 
 post-missing-title = Nessun post { $id }
@@ -197,6 +238,9 @@ fullscreen = Schermo intero
 post-actions = Azioni sul post
 post-upvote = Voto positivo
 post-downvote = Voto negativo
+post-votes = Voti
+post-score = Punteggio
+vote-failed = Impossibile salvare il voto: { $reason }
 post-download = Scarica
 download-failed = Download non riuscito: { $reason }
 share-button = Condividi
@@ -263,6 +307,14 @@ post-added = Aggiunto
 post-source = Fonte
 post-sample-note = Stai vedendo una copia più leggera. Ingrandendo si carica l’originale.
 post-show-original = Mostra originale
+post-related = Simili
+press-open = Apri
+press-open-tab = Apri in una nuova scheda
+swipe-like = Mi piace
+press-unlike = Togli il mi piace
+press-liked = Ti piace
+press-unliked = Mi piace tolto
+delete-failed = Impossibile spostarlo nel cestino: { $reason }
 
 ## Tag
 

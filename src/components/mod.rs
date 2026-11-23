@@ -8,6 +8,7 @@ pub mod color_picker;
 pub mod download;
 pub mod icons;
 pub mod legal;
+pub mod menu;
 pub mod rating;
 pub mod select;
 pub mod snackbar;

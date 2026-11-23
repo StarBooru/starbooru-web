@@ -85,6 +85,24 @@ pub fn exact(q: &str) -> String {
     gallery(&starbooru_core::with_exact(q))
 }
 
+/// Explore narrowed by search `q`, over a window of `days`. The usual week
+/// leaves the address without one.
+pub fn explore(q: &str, days: u32) -> String {
+    let mut to = "/explore".to_owned();
+    let q = q.trim();
+    let mut sep = '?';
+    if !q.is_empty() {
+        to.push_str("?q=");
+        to.push_str(&query_value(q));
+        sep = '&';
+    }
+    if days != starbooru_core::DEFAULT_EXPLORE_DAYS {
+        to.push(sep);
+        to.push_str(&format!("days={days}"));
+    }
+    to
+}
+
 /// Post `id`, opened from the gallery for search `q`, so the viewer can step
 /// through the same results. `seed` is the shuffle of an `order:random` search.
 pub fn post(id: i64, q: &str, seed: Option<i64>) -> String {
@@ -136,6 +154,19 @@ mod tests {
         assert_eq!(tag("blue_sky"), "/tag?name=blue_sky");
         assert_eq!(tag("a&b"), "/tag?name=a%26b");
         assert_eq!(tab_of(&post(5, "cat", None)), Some(Tab::Gallery));
+    }
+
+    #[test]
+    fn explore_carries_its_filter_and_window() {
+        assert_eq!(explore("", 7), "/explore");
+        assert_eq!(explore("  ", 7), "/explore");
+        assert_eq!(
+            explore("fractal -abstract", 7),
+            "/explore?q=fractal+-abstract"
+        );
+        assert_eq!(explore("", 30), "/explore?days=30");
+        assert_eq!(explore(" fractal ", 1), "/explore?q=fractal&days=1");
+        assert_eq!(explore("a&b", 365), "/explore?q=a%26b&days=365");
     }
 
     #[test]

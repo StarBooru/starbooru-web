@@ -174,6 +174,47 @@ color-black = Black
 color-gray = Gray
 color-white = White
 
+search-save = Save this search
+search-forget = Forget this search
+search-save-failed = Couldn't save the search: { $reason }
+search-forget-failed = Couldn't forget the search: { $reason }
+saved-searches = Saved searches
+saved-remove = Remove “{ $name }”
+saved-removed = Removed “{ $name }”
+
+## Explore
+
+explore-window = Trending over
+explore-today = Today
+explore-week = Week
+explore-month = Month
+explore-year = Year
+explore-phrase-today = today
+explore-phrase-week = this week
+explore-phrase-month = this month
+explore-phrase-year = this year
+explore-phrase-days = in the last { $count } days
+explore-nothing = Nothing to explore yet
+explore-nothing-body = Upload images or videos, and the best of them show up here.
+explore-everything = Explore everything
+nothing-matches = Nothing matches “{ $query }”.
+explore-trending = Trending
+explore-no-upvotes = No upvotes { $when }. Vote on posts you like and they show up here.
+explore-popular-tags = Popular tags
+explore-tags-note = on posts added { $when }
+explore-no-tags = No tagged posts were added { $when }.
+explore-added = Posts added { $when }
+explore-on-this-day = On this day
+explore-no-memories = Nothing was added on this date in earlier years.
+explore-years-ago = { $count ->
+    [one] 1 year ago
+   *[other] { $count } years ago
+}
+explore-random = Random picks
+explore-shuffle = Shuffle
+explore-filter-placeholder = Narrow down, e.g. -rating:e
+explore-filter-label = Narrow down with a search
+
 ## Viewer
 
 post-missing-title = No post { $id }
@@ -197,6 +238,9 @@ fullscreen = Fullscreen
 post-actions = Post actions
 post-upvote = Upvote
 post-downvote = Downvote
+post-votes = Votes
+post-score = Score
+vote-failed = Couldn't save your vote: { $reason }
 post-download = Download
 download-failed = Download failed: { $reason }
 share-button = Share
@@ -263,6 +307,14 @@ post-added = Added
 post-source = Source
 post-sample-note = Showing a smaller copy. Zooming in loads the original.
 post-show-original = Show original
+post-related = Related
+press-open = Open
+press-open-tab = Open in a new tab
+swipe-like = Like
+press-unlike = Remove like
+press-liked = Liked
+press-unliked = Like removed
+delete-failed = Couldn't move it to the recycle bin: { $reason }
 
 ## Tags
 

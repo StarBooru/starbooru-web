@@ -13,6 +13,7 @@ use leptos_router::NavigateOptions;
 use leptos_router::components::Outlet;
 use leptos_router::hooks::{use_location, use_navigate, use_query_map};
 
+use super::explore;
 use super::login::Login;
 use super::search_demo::{SearchDemo, plays_on};
 use crate::activity::{self, Activity};
@@ -461,8 +462,10 @@ fn NavSlider(place: &'static str, here: Memo<Option<Tab>>) -> impl IntoView {
         (at, way(was, at, last_way))
     });
     let cells = Tab::ALL.len();
-    // The gallery goes back to the search it showed last.
+    // The gallery goes back to the search it showed last, and Explore to
+    // where it was left.
     let last = Memo::new(|_| store::last_search());
+    let last_explore = Memo::new(|_| explore::last_route());
     // Uploads and imports still going, on the Upload item.
     let pending = Memo::new(|_| activity::pending());
     view! {
@@ -496,12 +499,10 @@ fn NavSlider(place: &'static str, here: Memo<Option<Tab>>) -> impl IntoView {
                                 // The sheet of files dropped on the gallery comes out of this item.
                                 class:nav-upload=upload
                                 class:active=active
-                                href=move || {
-                                    if tab == Tab::Gallery {
-                                        route::gallery(&last.get())
-                                    } else {
-                                        tab.href().to_owned()
-                                    }
+                                href=move || match tab {
+                                    Tab::Gallery => route::gallery(&last.get()),
+                                    Tab::Explore => last_explore.get(),
+                                    _ => tab.href().to_owned(),
                                 }
                                 title=note
                                 aria-current=move || if active() { "page" } else { "false" }

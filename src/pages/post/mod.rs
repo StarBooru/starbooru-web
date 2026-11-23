@@ -5,6 +5,7 @@
 
 mod edit;
 mod glow;
+mod related;
 mod side;
 mod stage;
 
@@ -21,6 +22,7 @@ use starbooru_core::{EditKind, MediaKind, Neighbors, Post, edit_kind};
 
 use self::edit::EditCard;
 use self::glow::PostGlow;
+use self::related::Related;
 use self::side::{DetailsCard, TagsCard};
 use self::stage::Stage;
 use super::gallery;
@@ -28,12 +30,13 @@ use crate::api::{self, Failure};
 use crate::components::banner::{ErrorBanner, Spinner};
 use crate::components::download::DownloadLink;
 use crate::components::icons::{Ico, Icon};
-use crate::components::snackbar::{notify, notify_undo};
+use crate::components::snackbar::notify_undo;
 use crate::components::tag_menu::TagPress;
 use crate::logic::tags::may_edit_post;
 use crate::logic::viewer::{
     back_through_history, download_name, needs_original, neighbour_href, queued, shown_url,
 };
+use crate::logic::votes::{next_vote, rescored};
 use crate::logic::zoom::Zoom;
 use crate::route;
 use crate::store;
@@ -155,6 +158,12 @@ pub fn PostView() -> impl IntoView {
     let editing = RwSignal::new(false);
     let steps = StoredValue::new(0_i32);
     let generation = StoredValue::new(0_u64);
+    // Votes show at once and go to the server one at a time, the latest
+    // press winning. `vote_before` is the post's score and vote before the first
+    // press the server hasn't answered, to put back if it fails.
+    let vote_wanted = StoredValue::new(None::<(i64, i16)>);
+    let vote_sending = StoredValue::new(false);
+    let vote_before = StoredValue::new(None::<(i64, i32, i16)>);
 
     let navigate = SendWrapper::new(use_navigate());
     let go = Callback::new(move |(to, replace): (String, bool)| {
@@ -357,7 +366,9 @@ pub fn PostView() -> impl IntoView {
                 Ok(()) => {
                     forget(id);
                     gallery::forget_post(id);
-                    notify_undo(t!("press-deleted"), t!("press-undo"), move || undo(id));
+                    notify_undo(t!("press-deleted"), t!("press-undo"), move || {
+                        gallery::undo_delete(id);
+                    });
                     // Only if the page is still on it.
                     if post.try_with_untracked(|p| p.as_ref().map(|p| p.id)) == Some(Some(id)) {
                         match next {
@@ -402,6 +413,84 @@ pub fn PostView() -> impl IntoView {
             }
         });
     };
+
+    // Shows `score` and `vote` on post `of`, if the page still shows it.
+    let show_vote = move |of: i64, score: i32, vote: i16| {
+        post.try_update(|p| {
+            if let Some(p) = p.as_mut().filter(|p| p.id == of) {
+                let p = Arc::make_mut(p);
+                p.score = score;
+                p.my_vote = vote;
+            }
+        });
+    };
+    let send_votes = move || {
+        vote_sending.set_value(true);
+        spawn_local(async move {
+            while let Some((of, vote)) = vote_wanted.try_get_value().flatten() {
+                let result = api::call(move |c| async move { c.vote(of, vote).await }).await;
+                let still = vote_wanted.try_get_value().flatten();
+                match result {
+                    Ok(fresh) => {
+                        let fresh = Arc::new(fresh);
+                        keep(Arc::clone(&fresh));
+                        gallery::update_post(Arc::clone(&fresh));
+                        if still != Some((of, vote)) {
+                            // Pressed again meanwhile: that one goes next,
+                            // and a failure puts back what the server has now.
+                            if still.is_some_and(|(id, _)| id == of) {
+                                vote_before.try_set_value(Some((of, fresh.score, fresh.my_vote)));
+                            }
+                            continue;
+                        }
+                        vote_wanted.try_set_value(None);
+                        vote_before.try_set_value(None);
+                        post.try_update(|p| {
+                            if let Some(p) = p.as_mut().filter(|p| p.id == of) {
+                                *p = fresh;
+                            }
+                        });
+                    }
+                    Err(message) => {
+                        if still.is_some_and(|(id, _)| id != of) {
+                            continue;
+                        }
+                        vote_wanted.try_set_value(None);
+                        if let Some((_, score, mine)) = vote_before
+                            .try_update_value(Option::take)
+                            .flatten()
+                            .filter(|(id, ..)| *id == of)
+                        {
+                            show_vote(of, score, mine);
+                        }
+                        action_error.try_set(Some(t!("vote-failed", reason = message)));
+                    }
+                }
+                break;
+            }
+            vote_sending.try_set_value(false);
+        });
+    };
+    // Up (`1`) or down (`-1`); pressing the vote already cast takes it back.
+    let vote = Callback::new(move |pressed: i16| {
+        let Some(p) = post.get_untracked() else {
+            return;
+        };
+        // Not while the page still shows the post before, nor in the bin.
+        if Some(p.id) != id.get_untracked() || p.deleted {
+            return;
+        }
+        let new = next_vote(p.my_vote, pressed);
+        if vote_before.get_value().map(|(of, ..)| of) != Some(p.id) {
+            vote_before.set_value(Some((p.id, p.score, p.my_vote)));
+        }
+        show_vote(p.id, rescored(p.score, p.my_vote, new), new);
+        action_error.set(None);
+        vote_wanted.set_value(Some((p.id, new)));
+        if !vote_sending.get_value() {
+            send_votes();
+        }
+    });
 
     // Anyone signed in may edit a post, unless it's in the recycle bin.
     let editable = Memo::new(move |_| {
@@ -492,7 +581,12 @@ pub fn PostView() -> impl IntoView {
                         on_back=Callback::new(move |()| back())
                         on_edit=start_edit
                     />
-                    <PostBar post=post busy=busy on_delete=Callback::new(move |()| delete()) />
+                    <PostBar
+                        post=post
+                        busy=busy
+                        on_vote=vote
+                        on_delete=Callback::new(move |()| delete())
+                    />
                     {move || {
                         problem
                             .get()
@@ -520,6 +614,13 @@ pub fn PostView() -> impl IntoView {
                             </button>
                         </div>
                     </Show>
+                    <Related
+                        id=id
+                        on_open=Callback::new(move |p: Arc<Post>| {
+                            keep(p);
+                            enter.set(None);
+                        })
+                    />
                 </div>
                 <aside class="side">
                     {move || {
@@ -570,11 +671,12 @@ pub fn PostView() -> impl IntoView {
 
 /// What can be done with the post, apart from looking at it: an opinion, what
 /// leaves with the file, and, away from the rest, the one that removes it.
-/// Votes, sharing and the editor come later; their buttons hold their places.
+/// Sharing and the editor come later; their buttons hold their places.
 #[component]
 fn PostBar(
     post: Signal<Option<Arc<Post>>>,
     busy: RwSignal<bool>,
+    on_vote: Callback<i16>,
     on_delete: Callback<()>,
 ) -> impl IntoView {
     let bar = move || {
@@ -635,25 +737,31 @@ fn PostBar(
         });
         let (up, down) = (p.my_vote > 0, p.my_vote < 0);
         Some(view! {
-            <div class="vote">
+            <div class="vote" role="group" aria-label=move || t!("post-votes")>
                 <button
                     type="button"
                     class="icon-btn"
                     class:on=up
-                    disabled=true
+                    disabled=deleted
                     aria-pressed=up.to_string()
+                    title=move || t!("post-upvote")
                     aria-label=move || t!("post-upvote")
+                    on:click=move |_| on_vote.run(1)
                 >
                     <Ico icon=Icon::ThumbUp />
                 </button>
-                <span class="score">{p.score}</span>
+                <span class="score" title=move || t!("post-score")>
+                    {p.score}
+                </span>
                 <button
                     type="button"
                     class="icon-btn"
                     class:on=down
-                    disabled=true
+                    disabled=deleted
                     aria-pressed=down.to_string()
+                    title=move || t!("post-downvote")
                     aria-label=move || t!("post-downvote")
+                    on:click=move |_| on_vote.run(-1)
                 >
                     <Ico icon=Icon::ThumbDown />
                 </button>
@@ -674,14 +782,4 @@ fn PostBar(
             {bar}
         </div>
     }
-}
-
-/// From the notice after a delete, which outlives the page.
-fn undo(id: i64) {
-    spawn_local(async move {
-        match api::call(move |c| async move { c.restore_post(id).await }).await {
-            Ok(_) => gallery::forget_lists(),
-            Err(message) => notify(message),
-        }
-    });
 }

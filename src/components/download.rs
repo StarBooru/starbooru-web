@@ -44,6 +44,20 @@ pub fn DownloadLink(href: String, name: String) -> impl IntoView {
     }
 }
 
+/// Saves `href`, a signed media address, as `name`, as the button does: for
+/// a menu, which has no link of its own to click.
+pub fn start(href: String, name: String) {
+    if same_origin(&href, &page_origin()) {
+        click_link(&href, &name);
+        return;
+    }
+    spawn_local(async move {
+        if let Err(reason) = save(&href, &name).await {
+            notify(t!("download-failed", reason = reason));
+        }
+    });
+}
+
 fn page_origin() -> String {
     web_sys::window()
         .and_then(|w| w.location().origin().ok())

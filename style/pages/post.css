@@ -173,6 +173,25 @@ html:has(.stage) { overscroll-behavior-x: none; }
   .stage { --tool-w: 36px; }
 }
 
+/* ---------- related posts (post/related.rs) ---------- */
+
+/* Just under the bar, a row of the gallery's tiles. */
+.related { container-type: inline-size; margin-top: 4px; }
+.related .card-title { margin: 0 0 10px 8px; }
+.related-grid { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 8px; }
+.related-grid .thumb { border-radius: min(var(--tile-radius), var(--radius-m)); }
+@container (max-width: 620px) {
+  .related-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+}
+/* On a phone, one row to run a thumb along, so the tags stay close. */
+@media (max-width: 760px) {
+  .related-grid {
+    display: flex; overflow-x: auto; scroll-snap-type: x proximity; scrollbar-width: none;
+    margin-inline: calc(var(--pad-x) * -1); padding-inline: var(--pad-x); scroll-padding-inline: var(--pad-x);
+  }
+  .related-grid .thumb { flex: 0 0 96px; scroll-snap-align: start; }
+}
+
 /* ---------- the side column ---------- */
 
 .card-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 12px; min-height: 36px; }

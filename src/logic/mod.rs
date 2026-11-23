@@ -1,12 +1,15 @@
 //! Plain Rust with no browser in it, tested on the host.
 
 pub mod address;
+pub mod explore;
 pub mod gallery;
 pub mod jobs;
 pub mod layout;
 pub mod queue;
+pub mod saved;
 pub mod search;
 pub mod tags;
 pub mod upload;
 pub mod viewer;
+pub mod votes;
 pub mod zoom;

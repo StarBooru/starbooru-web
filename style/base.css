@@ -356,10 +356,10 @@ button.chip:disabled:hover { background: var(--surface-2); color: var(--on-surfa
   transform-origin: left; animation: run-out var(--notice-ms, 6s) linear forwards;
 }
 
-/* ---------- menus (components/tag_menu.rs) ---------- */
+/* ---------- menus (components/menu.rs) ---------- */
 
-/* A right-clicked tag opens a menu at the point, over a backdrop that closes
-   it. Glass is kept for the bars, so the menu is a plain surface. */
+/* A right-clicked tag or tile opens a menu at the point, over a backdrop that
+   closes it. Glass is kept for the bars, so the menu is a plain surface. */
 .press-backdrop { position: fixed; inset: 0; z-index: 60; }
 .press-menu {
   position: fixed; z-index: 61; display: grid; align-content: start; gap: 2px; padding: 6px; overflow-y: auto; overscroll-behavior: contain;
@@ -384,10 +384,13 @@ button.chip:disabled:hover { background: var(--surface-2); color: var(--on-surfa
 .menu-item:nth-child(5) { animation-delay: 60ms; }
 .menu-item:nth-child(6) { animation-delay: 80ms; }
 .menu-item:nth-child(n + 7) { animation-delay: 100ms; }
+.menu-item.danger { color: var(--danger); }
 .menu-item:active { background: var(--primary-container); color: var(--on-primary-container); }
+.menu-item.danger:active { background: var(--danger-container); color: var(--on-danger-container); }
 .menu-item:focus-visible { outline-offset: -2px; }
 @media (hover: hover) {
   .menu-item:hover { background: var(--glass-line); }
+  .menu-item.danger:hover { background: var(--danger-container); color: var(--on-danger-container); }
 }
 @keyframes menu-in { from { opacity: 0; scale: 0.6; } }
 @keyframes menu-item-in { from { opacity: 0; translate: 0 -6px; } }

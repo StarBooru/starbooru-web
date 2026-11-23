@@ -1,6 +1,7 @@
 //! A post in the gallery's grid: a link to the post that waits in the
 //! picture's main colour and fades the thumbnail in once it has come. A video
 //! says how long it runs and plays, muted, under a mouse; a GIF says so.
+//! Under `data-press="post"` a right click opens its menu (`pages/post_menu.rs`).
 
 use std::cell::RefCell;
 use std::rc::Rc;
@@ -159,6 +160,7 @@ pub fn Thumb(
             style=style
             href=move || href.get()
             aria-label=label
+            data-post=id
             on:click=click
         >
             <div
