@@ -1,0 +1,219 @@
+/* The video player (components/player.rs), in the viewer's stage and on the
+   share page: a glass bar along the video's foot, a big play button over the
+   still, the time under the pointer above the seek bar. On a narrow player
+   the speed, loop and picture in picture go into the panel its settings
+   button opens; on the narrowest the seek bar takes a row of its own. */
+
+.player {
+  container: player / inline-size;
+  position: relative; display: grid; grid-template: minmax(0, 1fr) / minmax(0, 1fr);
+  max-width: 100%; border-radius: inherit;
+  --btn: 40px; --bar-gap: 8px;
+}
+/* No known size: as big as the room, the video fitted inside. */
+.player:not([style*="aspect-ratio"]) { width: 100%; height: var(--fit-h, 100%); }
+.player > video {
+  grid-area: 1 / 1; display: block; width: 100%; height: 100%; min-height: 0;
+  object-fit: contain; border-radius: inherit; background: var(--stage);
+}
+.player.idle { cursor: none; }
+@media (pointer: coarse) {
+  .player { --btn: 44px; }
+}
+
+/* ---------- the bar ---------- */
+
+.player-bar {
+  position: absolute; left: var(--bar-gap); right: var(--bar-gap); bottom: var(--bar-gap); z-index: 3;
+  display: flex; align-items: center; column-gap: 2px; padding: 2px; border-radius: 999px;
+  color: var(--on-surface); touch-action: manipulation;
+  transition: opacity var(--med) var(--ease), translate var(--med) var(--ease);
+}
+/* Resting: it sinks away, and comes back on any input. Still there for the
+   keyboard, which brings it back as the focus lands on it. */
+.player.idle .player-bar { opacity: 0; translate: 0 8px; pointer-events: none; }
+.player.failed .player-bar { display: none; }
+@container player (width >= 560px) {
+  .player-bar { --bar-gap: 12px; }
+}
+
+.player-btn {
+  flex: none; display: inline-grid; place-items: center; width: var(--btn); height: var(--btn);
+  padding: 0; border: 0; border-radius: 999px; background: transparent; color: inherit; font: inherit; cursor: pointer;
+  transition: transform var(--med) var(--ease-spring), background-color var(--fast) var(--ease), color var(--fast) var(--ease);
+}
+.player-btn:active { transform: scale(0.88); }
+.player-btn.on { background: var(--primary-container); color: var(--on-primary-container); }
+@media (hover: hover) {
+  .player-btn:hover:not(.on) { background: var(--glass-line); }
+}
+/* The speed, in words: what it is now. */
+.player-rate {
+  width: auto; min-width: var(--btn); padding: 0 10px;
+  font-size: 13px; font-weight: 700; font-variant-numeric: tabular-nums;
+}
+.player-time {
+  flex: none; min-width: 4ch; padding: 0 2px; text-align: center;
+  font-size: 13px; font-weight: 600; font-variant-numeric: tabular-nums; color: var(--on-surface-2);
+}
+
+/* The seek bar: what has played in the accent, what has loaded fainter, and
+   a knob to take hold of. */
+.player-seek {
+  position: relative; flex: 1 1 0; min-width: 48px; height: var(--btn); margin: 0 6px;
+  display: grid; align-items: center; border-radius: 999px; cursor: pointer; touch-action: none;
+}
+.player-seek:focus-visible { outline-offset: 0; }
+.player-track {
+  position: relative; height: 4px; border-radius: 999px; overflow: hidden;
+  background: oklch(from var(--on-surface) l c h / 0.18);
+  transition: height var(--fast) var(--ease);
+}
+.player-loaded { position: absolute; top: 0; bottom: 0; background: oklch(from var(--on-surface) l c h / 0.22); }
+.player-played {
+  position: absolute; inset: 0; background: var(--primary);
+  transform-origin: left; transform: scaleX(var(--played, 0));
+}
+.player-knob {
+  position: absolute; top: 50%; left: calc(var(--played, 0) * 100%);
+  width: 14px; height: 14px; margin: -7px 0 0 -7px; border-radius: 50%;
+  background: var(--primary); box-shadow: 0 0 0 2px var(--glass-edge), var(--shadow-1); pointer-events: none;
+  transition: scale var(--fast) var(--ease);
+}
+:is(.player-seek:hover, .player-seek:focus-visible, .player.scrubbing .player-seek) .player-track { height: 6px; }
+.player.scrubbing .player-knob { scale: 1.3; }
+/* The time under the pointer, or the finger. */
+.player-tip {
+  position: absolute; bottom: calc(100% + 8px); left: clamp(22px, calc(var(--at, 0) * 100%), calc(100% - 22px));
+  translate: -50% 0; padding: 2px 8px; border-radius: 999px; background: var(--scrim); color: var(--on-scrim);
+  font-size: 12px; font-weight: 600; font-variant-numeric: tabular-nums; white-space: nowrap; pointer-events: none;
+}
+
+/* Sound: the mute button, and the volume sliding out beside it under the
+   mouse or the focus. On a touch screen the device sets the volume. */
+.player-sound { flex: none; display: flex; align-items: center; }
+.player-sound .player-volume {
+  -webkit-appearance: none; appearance: none; width: 0; height: var(--btn); margin: 0; padding: 0; opacity: 0;
+  background: transparent; cursor: pointer;
+  transition: width var(--med) var(--ease), margin var(--med) var(--ease), opacity var(--fast) var(--ease);
+}
+.player-volume::-webkit-slider-runnable-track {
+  height: 4px; border-radius: 999px;
+  background: linear-gradient(to right, var(--primary) calc(var(--level, 1) * 100%), oklch(from var(--on-surface) l c h / 0.2) 0);
+}
+.player-volume::-moz-range-track {
+  height: 4px; border-radius: 999px;
+  background: linear-gradient(to right, var(--primary) calc(var(--level, 1) * 100%), oklch(from var(--on-surface) l c h / 0.2) 0);
+}
+.player-volume::-webkit-slider-thumb {
+  -webkit-appearance: none; appearance: none; width: 12px; height: 12px; margin-top: -4px; border: 0; border-radius: 50%; background: var(--primary);
+}
+.player-volume::-moz-range-thumb { width: 12px; height: 12px; border: 0; border-radius: 50%; background: var(--primary); }
+@media (hover: hover) and (pointer: fine) {
+  .player-sound:is(:hover, :focus-within) .player-volume { width: 72px; margin: 0 8px 0 2px; opacity: 1; }
+}
+@media not ((hover: hover) and (pointer: fine)) {
+  .player-sound .player-volume { display: none; }
+}
+
+/* The panel over the bar, on its own surface: glass on glass has nothing
+   behind it to blur. */
+.player-panel {
+  position: absolute; right: 0; bottom: calc(100% + 8px); display: grid; gap: 4px; max-width: 100%; padding: 4px;
+  border-radius: var(--radius-m); background: oklch(from var(--glass) l c h / 1); color: var(--on-surface);
+  transform-origin: bottom right; animation: menu-in var(--med) var(--ease-spring);
+}
+.player-speeds, .player-extras { display: flex; flex-wrap: wrap; gap: 2px; }
+.player-chip {
+  display: inline-flex; align-items: center; justify-content: center; gap: 6px; min-width: 48px; height: 36px;
+  padding: 0 10px; border: 0; border-radius: 999px; background: transparent; color: inherit; cursor: pointer;
+  font: inherit; font-size: 13px; font-weight: 700; font-variant-numeric: tabular-nums; white-space: nowrap;
+  transition: background-color var(--fast) var(--ease), color var(--fast) var(--ease);
+}
+.player-chip[aria-pressed="true"] { background: var(--primary); color: var(--on-primary); }
+.player-chip:focus-visible { outline-offset: -3px; }
+@media (hover: hover) {
+  .player-chip:hover:not([aria-pressed="true"]) { background: var(--glass-line); }
+}
+@media (pointer: coarse) {
+  .player-chip { height: 44px; }
+}
+
+/* A narrow player: the speed, loop and picture in picture behind the
+   settings button. */
+.player-more, .player-extras { display: none; }
+@container player (width < 560px) {
+  .player-rate, .player-loop, .player-pip { display: none; }
+  .player-more { display: inline-grid; }
+  .player-extras { display: flex; }
+}
+/* Narrower, the times give way to the seek bar, whose tip still tells the
+   time. Only a tall video gets narrower still, with height to spare: the
+   seek bar and both times then take a row of their own. */
+@container player (width < 360px) {
+  .player-time + .player-seek + .player-time { display: none; }
+}
+@container player (width < 300px) {
+  .player-bar > .player-time { display: none; }
+}
+@container player (width < 240px) {
+  .player-bar { flex-wrap: wrap; padding: 2px 4px; border-radius: var(--radius-l); }
+  .player-bar > .player-time, .player-time + .player-seek + .player-time { display: block; order: -1; width: 40px; }
+  .player-seek { order: -1; flex: 0 0 calc(100% - 96px); }
+  .player-bar > .player-btn:first-child { margin-right: auto; }
+}
+
+/* ---------- over the picture ---------- */
+
+/* Play, over the still until it first plays and at the end; for a finger,
+   whenever the controls are up, as the way to pause. */
+.player-big {
+  position: absolute; left: 50%; top: 50%; z-index: 1; translate: -50% -50%;
+  display: none; place-items: center; width: 64px; height: 64px; padding: 0; border: 0; border-radius: 50%;
+  color: var(--on-surface); cursor: pointer;
+  transition: scale var(--med) var(--ease-spring);
+}
+.player:not(.started) .player-big, .player.ended .player-big { display: grid; }
+@media (hover: none) {
+  .player.started:not(.idle) .player-big { display: grid; }
+}
+.player.failed .player-big { display: none; }
+.player-big:active { scale: 0.9; }
+@media (hover: hover) {
+  .player-big:hover { scale: 1.06; }
+}
+
+/* What a click or a key just did: play or pause, puffing away. */
+.player-flash {
+  position: absolute; left: 50%; top: 50%; width: 64px; height: 64px; margin: -32px 0 0 -32px;
+  display: grid; place-items: center; border-radius: 50%; background: var(--scrim); color: var(--on-scrim);
+  pointer-events: none; animation: player-flash 600ms var(--ease) forwards;
+}
+/* How far a key seeked, on the side it went. */
+.player-badge {
+  position: absolute; top: 50%; left: 75%; translate: -50% -50%; padding: 6px 14px; border-radius: 999px;
+  background: var(--scrim); color: var(--on-scrim); font-weight: 700; font-variant-numeric: tabular-nums;
+  white-space: nowrap; pointer-events: none; animation: player-badge var(--med) var(--ease-spring);
+}
+.player-badge.back { left: 25%; }
+/* Waiting for the file: the ring shows only if it takes a moment. */
+.player-wait {
+  position: absolute; inset: 0; display: grid; place-items: center; pointer-events: none;
+  animation: fade-in var(--fast) 300ms both;
+}
+.player-wait .spinner { background: var(--scrim); box-shadow: 0 0 0 10px var(--scrim); }
+.player-error { position: absolute; inset: 0; z-index: 3; display: grid; place-items: center; padding: 12px; }
+.player-error .banner { margin: 0; max-width: 480px; box-shadow: var(--shadow-2); }
+
+@keyframes player-flash { from { opacity: 1; scale: 0.8; } to { opacity: 0; scale: 1.4; } }
+@keyframes player-badge { from { opacity: 0; scale: 0.8; } }
+
+/* Less motion: things show and hide without fading or moving. */
+@media (prefers-reduced-motion: reduce) {
+  .player-bar, .player-btn, .player-big, .player-track, .player-knob, .player-chip, .player-sound .player-volume { transition: none; }
+  .player.idle .player-bar { translate: none; }
+  .player-badge, .player-panel { animation: none; }
+  .player-flash { display: none; }
+}
+.app:is([data-saver="on"], [data-effects="lite"]) .player-flash { display: none; }
+.app:is([data-saver="on"], [data-effects="lite"]) .player.idle .player-bar { translate: none; }

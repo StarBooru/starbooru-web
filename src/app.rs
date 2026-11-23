@@ -148,15 +148,26 @@ mod tests {
             assert!(stage.contains(class), "{class}");
         }
         assert!(page.contains("post-bar glass float"));
+        // A video's controls float over it the same way; their panel stands on
+        // its own surface, as there's nothing behind it to blur.
+        let player = include_str!("components/player.rs");
+        assert!(player.contains("player-bar glass float"));
+        assert!(player.contains("player-big glass float"));
+        assert!(player.contains(r#"class="player-panel float""#));
+        assert!(!include_str!("../style/player.css").contains("backdrop-filter"));
         // Fullscreen is dark in both themes, glass included.
         let full = rule(post, ".stage.full");
         for token in [
             "background: var(--stage)",
             "--glass: var(--stage-glass)",
             "--on-surface: var(--on-stage)",
+            "--primary: var(--stage-primary)",
         ] {
             assert!(full.contains(token), "{token}");
         }
+        // The share page's lightbox is the same stage.
+        let lightbox = rule(include_str!("../style/pages/share.css"), ".lightbox");
+        assert!(lightbox.contains("--primary: var(--stage-primary)"));
     }
 
     #[test]
@@ -201,7 +212,9 @@ mod tests {
         assert!(stage.contains("height: var(--fit-h)"));
         assert!(rule(post, ".stage-tools .stage-btn").contains("width: var(--tool-w)"));
         assert!(rule(post, ".stage-zoom").contains("width: var(--zoom-w)"));
-        assert!(rule(post, ".stage.full[data-rest]").contains("cursor: none"));
+        // Resting, unless a video's player still shows its controls.
+        let resting = ".stage.full[data-rest]:not(:has(.player:not(.idle)))";
+        assert!(rule(post, resting).contains("cursor: none"));
     }
     /// What `name: ` is set to in the first rule of `css` that starts with `rule`.
     fn token<'a>(css: &'a str, rule: &str, name: &str) -> &'a str {
@@ -289,14 +302,17 @@ mod tests {
         let tokens = at(r#"<link data-trunk rel="css" href="style/tokens.css">"#);
         let base = at(r#"<link data-trunk rel="css" href="style/base.css">"#);
         let shell = at(r#"<link data-trunk rel="css" href="style/shell.css">"#);
+        let player = at(r#"<link data-trunk rel="css" href="style/player.css">"#);
         let login = at(r#"<link data-trunk rel="css" href="style/pages/login.css">"#);
         let gallery = at(r#"<link data-trunk rel="css" href="style/pages/gallery.css">"#);
         let post = at(r#"<link data-trunk rel="css" href="style/pages/post.css">"#);
         let help = at(r#"<link data-trunk rel="css" href="style/pages/help.css">"#);
+        // The player's before the pages', which place it on their stages.
         assert!(
             tokens < base
                 && base < shell
-                && shell < login
+                && shell < player
+                && player < login
                 && login < gallery
                 && gallery < post
                 && post < help
@@ -333,6 +349,7 @@ mod tests {
             include_str!("../style/tokens.css"),
             include_str!("../style/base.css"),
             include_str!("../style/shell.css"),
+            include_str!("../style/player.css"),
             include_str!("../style/pages/login.css"),
             include_str!("../style/pages/gallery.css"),
             include_str!("../style/pages/post.css"),
@@ -352,6 +369,7 @@ mod tests {
         for (name, css) in [
             ("base", include_str!("../style/base.css")),
             ("shell", include_str!("../style/shell.css")),
+            ("player", include_str!("../style/player.css")),
             ("login", include_str!("../style/pages/login.css")),
             ("gallery", include_str!("../style/pages/gallery.css")),
             ("post", include_str!("../style/pages/post.css")),

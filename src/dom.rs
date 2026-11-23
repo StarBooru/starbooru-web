@@ -235,6 +235,24 @@ pub fn on_near(el: &Element, margin: &str, mut cb: impl FnMut() + 'static) -> Wa
     })
 }
 
+/// Calls a browser method that answers with a promise, and lets a refusal go
+/// quietly: fullscreen, playing and picture in picture can all be refused.
+pub fn call_quietly(target: &JsValue, method: &str) {
+    let Ok(f) = js_sys::Reflect::get(target, &JsValue::from_str(method)) else {
+        return;
+    };
+    let Some(f) = f.dyn_ref::<js_sys::Function>() else {
+        return;
+    };
+    if let Ok(answer) = f.call0(target)
+        && let Ok(promise) = answer.dyn_into::<js_sys::Promise>()
+    {
+        leptos::task::spawn_local(async move {
+            let _ = wasm_bindgen_futures::JsFuture::from(promise).await;
+        });
+    }
+}
+
 /// Whether the user asked for less motion.
 pub fn reduced_motion() -> bool {
     web_sys::window()

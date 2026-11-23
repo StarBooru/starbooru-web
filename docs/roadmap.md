@@ -79,7 +79,7 @@ Both modes:
 
 - [x] Any accent colour, greys and white included
 - [x] OLED mode, with a black background
-- [ ] A video player of our own design
+- [x] A video player of our own design
 - [ ] Redesign Settings, the Tags page, the tag editor in the viewer and saved searches
 
 ## 8. Polish

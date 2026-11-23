@@ -42,9 +42,10 @@ src/
                   admin/ the administration's tabs, legal.rs the privacy policy and the terms
   components/   icons, brand, snackbar, tiles and their swipes, downloads, the tag box and its grip, a tag's menu,
                   the button that asks "Sure?", the links to the legal pages, the menu that looks a picture up on
-                  other sites
+                  other sites, the video player
   logic/        pure Rust with unit tests: server addresses, the gallery's lists and layout, zoom, the viewer's
-                  tags, people, details and file names, the word at the caret, the tag editor's text and who may edit,
+                  tags, people, details and file names, the video player's clock, seek bar, keys and resting
+                  controls, the word at the caret, the tag editor's text and who may edit,
                   the gallery's selection, picking by dragging and the mass edit it sends, which places in the gallery it remembers and
                   when two searches are the same, the posts opened lately, the booru browser's sites, addresses and
                   results, the library import's text, the media editor's crop, turns and trim, share links'
@@ -52,7 +53,7 @@ src/
                   send and how each site gets it, Settings' accent, lists and password checks, swipes, and the
                   administration's limits, chart, form checks and AI requests
 locales/        en.ftl, it.ftl
-style/          tokens.css, base.css, shell.css, pages/<page>.css
+style/          tokens.css, base.css, shell.css, player.css, pages/<page>.css
 index.html      Trunk's entry, with the loading screen
 ```
 
@@ -67,13 +68,15 @@ Plain CSS, split by role. `index.html` links each file with `<link data-trunk re
 | `style/tokens.css` | Colour roles for light, dark and the system's dark, all in OKLCH from the accent's hue (`--seed-hue`) and, for a picked colour, its chroma and lightness (`--seed-chroma`, `--seed-lightness`): a grey makes a palette without a tint. `[data-oled]` blacks out the dark roles. Radii, easing, durations, shadows; `.glass` |
 | `style/base.css` | Base elements and the shared components: buttons, switches, fields and the tag box, segmented choices, chips, cards, banners, spinners, the snackbar, the tag menu, keyframes and the reduced-motion fallback |
 | `style/shell.css` | The top bar, the brand and search capsules, the navigation slider in its three places, the content area |
-| `style/pages/<page>.css` | One per page, linked after the three above when the page lands |
+| `style/player.css` | The video player, shared by the viewer and the share page; its narrow layouts are container queries on the player's own width |
+| `style/pages/<page>.css` | One per page, linked after the four above when the page lands |
 
 Component CSS uses only the role variables, never a literal colour. The navigation sits at the top right from 1530 px, as a rail at the side from 761 to 1529 px, and at the bottom at 760 px and below.
 
 ## How it works
 
 - **Media.** `<img>` and `<video>` load signed `/media` URLs directly, so the browser cache does the caching. The server rounds their expiry to 6-hour buckets, so a URL stays the same, and cached, that long.
+- **Video.** The viewer and the share page play videos in `components/player.rs`, with the app's controls in place of the browser's. The page around it owns fullscreen, so the viewer's arrows and keys keep working there. The player hears keys on the document in the capture phase, before the viewer's on the window, and the viewer skips the ones it took: the arrows step between posts, Shift with them (or J and L) seeks. Videos up to a minute long loop unless told otherwise. Volume and mute are kept in the store; the speed is kept for the tab.
 - **Long lists.** Only the tiles within a screen and a half of the view are in the DOM. A tile shows its post's main colour until the thumbnail arrives. A drag across tiles to pick them finds the tile under the pointer from the layout, by its place in the list, so tiles that scroll out of the DOM stay in the range. The tile the drag started on stays in the DOM until it ends, as a finger's events go to it.
 - **Motion.** CSS transitions and the Web Animations API. View Transitions where the browser has them, with a plain fallback. Everything heavy goes quiet under `prefers-reduced-motion` and the battery saver.
 - **Uploads.** `Client::upload_file` sends files in chunks and resends a failed one. The queue lives in a signal at the root, so it keeps going while the user moves between pages.

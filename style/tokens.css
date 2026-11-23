@@ -63,6 +63,11 @@
   --stage-glass-line: oklch(1 0 0 / 0.08);
   --on-stage: oklch(0.96 calc(0.01 * var(--k)) var(--h));
   --on-stage-2: oklch(0.86 calc(0.015 * var(--k)) var(--h));
+  /* its accent: the dark theme's, which reads on it */
+  --stage-primary: oklch(calc(0.8 + var(--pull) * (0.68 + 0.28 * var(--l) - 0.8)) min(0.11, var(--c)) var(--h));
+  --on-stage-primary: oklch(0.25 min(0.09, var(--c)) var(--h));
+  --stage-primary-container: oklch(0.37 min(0.1, var(--c)) var(--h));
+  --on-stage-primary-container: oklch(0.92 min(0.05, var(--c)) var(--h));
   /* controls over media: the stage is dark in both themes */
   --scrim: oklch(0.12 calc(0.01 * var(--k)) var(--h) / 0.55);
   --on-scrim: oklch(0.97 calc(0.01 * var(--k)) var(--h));

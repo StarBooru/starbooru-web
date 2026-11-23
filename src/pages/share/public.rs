@@ -23,8 +23,9 @@ use crate::components::banner::{ErrorBanner, Spinner};
 use crate::components::brand::{Mark, Wordmark};
 use crate::components::focus::hold_focus;
 use crate::components::icons::{Ico, Icon};
+use crate::components::player::Player;
 use crate::logic::share::{Item, Layout, heading, items, layout, step};
-use crate::logic::viewer::{format_duration, when};
+use crate::logic::viewer::{fit_style, format_duration, when};
 use crate::logic::zoom::Zoom;
 use crate::pages::post::glow::PostGlow;
 use crate::pages::post::stage::{Shown, Stage};
@@ -362,6 +363,19 @@ fn Lightbox(
     });
     // Closing puts the focus on the tile last shown, not the one opened.
     hold_focus(root, false);
+    // A video's fullscreen takes the whole lightbox, so its buttons and keys
+    // come along.
+    let full = RwSignal::new(false);
+    let toggle_full = Callback::new(move |()| {
+        let Some(doc) = web_sys::window().and_then(|w| w.document()) else {
+            return;
+        };
+        if doc.fullscreen_element().is_some() {
+            dom::call_quietly(&doc, "exitFullscreen");
+        } else if let Some(el) = root.try_get_untracked().flatten() {
+            dom::call_quietly(&el, "requestFullscreen");
+        }
+    });
     let at = move || open.get().unwrap_or(0);
     let close = move || {
         let from = open.get_untracked();
@@ -379,36 +393,49 @@ fn Lightbox(
             }
         }
     };
-    // On the document, so the keys work wherever the focus is.
+    // On the document, so the keys work wherever the focus is. A video's
+    // player hears them first, and keeps the ones it takes.
     let keys = web_sys::window().and_then(|w| w.document()).map(|doc| {
-        dom::listen(&doc, "keydown", false, move |e| {
-            let Some(k) = e.dyn_ref::<KeyboardEvent>() else {
-                return;
-            };
-            if k.default_prevented() || k.ctrl_key() || k.meta_key() || k.alt_key() {
-                return;
-            }
-            // A video's own controls take the arrows.
-            let on_video = e
-                .target()
-                .and_then(|t| t.dyn_into::<web_sys::HtmlVideoElement>().ok())
-                .is_some();
-            match k.key().as_str() {
-                "Escape" => close(),
-                "ArrowLeft" if !on_video => go(false),
-                "ArrowRight" if !on_video => go(true),
-                _ => return,
-            }
-            e.prevent_default();
-        })
+        let watches = [
+            dom::listen(&doc, "keydown", false, move |e| {
+                let Some(k) = e.dyn_ref::<KeyboardEvent>() else {
+                    return;
+                };
+                if k.default_prevented() || k.ctrl_key() || k.meta_key() || k.alt_key() {
+                    return;
+                }
+                match k.key().as_str() {
+                    "Escape" if full.try_get_untracked() == Some(true) => {
+                        toggle_full.try_run(());
+                    }
+                    "Escape" => close(),
+                    "ArrowLeft" => go(false),
+                    "ArrowRight" => go(true),
+                    _ => return,
+                }
+                e.prevent_default();
+            }),
+            dom::listen(&doc, "fullscreenchange", true, move |_| {
+                let on = web_sys::window()
+                    .and_then(|w| w.document())
+                    .is_some_and(|d| d.fullscreen_element().is_some());
+                full.try_set(on);
+            }),
+        ];
+        (watches, SendWrapper::new(doc))
     });
     on_cleanup(move || {
         // Escape closes the lightbox from inside this very listener, which
         // can't be dropped while it runs.
         set_timeout(
             move || {
-                if let Some(keys) = keys {
-                    keys.stop();
+                if let Some((watches, doc)) = keys {
+                    for watch in watches {
+                        watch.stop();
+                    }
+                    if doc.fullscreen_element().is_some() {
+                        dom::call_quietly(&doc, "exitFullscreen");
+                    }
                 }
             },
             Duration::ZERO,
@@ -419,13 +446,15 @@ fn Lightbox(
         let item = items.with_value(|all| all.get(index).cloned())?;
         Some(match item.kind {
             MediaKind::Video => view! {
-                <video
+                <Player
                     src=item.file
                     poster=item.sample.or(item.thumb)
-                    controls=true
+                    style=fit_style(item.size)
+                    full=full
+                    on_full=toggle_full
+                    keys=true
                     autoplay=!dom::reduced_motion() && !power::active_untracked()
-                    playsinline=true
-                ></video>
+                />
             }
             .into_any(),
             MediaKind::Image | MediaKind::Animation => view! {

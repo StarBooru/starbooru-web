@@ -15,6 +15,7 @@ pub mod layout;
 pub mod legal;
 pub mod library;
 pub mod people;
+pub mod player;
 pub mod queue;
 pub mod reverse;
 pub mod saved;

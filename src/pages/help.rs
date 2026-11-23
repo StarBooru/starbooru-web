@@ -148,9 +148,10 @@ fn sections() -> [(String, Vec<(&'static str, String)>); 5] {
     ]
 }
 
-/// The viewer's keys and gestures, as they work in this app. Selection and
-/// the thumbnails' gestures add theirs when they land.
-fn shortcuts() -> [(String, String); 8] {
+/// The viewer's keys and gestures, as they work in this app, a video's
+/// among them. Selection and the thumbnails' gestures add theirs when they
+/// land.
+fn shortcuts() -> [(String, String); 12] {
     [
         ("← →".into(), t!("key-prev-next")),
         ("E".into(), t!("key-edit")),
@@ -158,6 +159,10 @@ fn shortcuts() -> [(String, String); 8] {
         ("+ −".into(), t!("key-zoom")),
         ("0".into(), t!("key-fit")),
         ("Esc".into(), t!("key-escape")),
+        (format!("{} K", t!("key-space")), t!("key-play")),
+        ("J L".into(), t!("key-seek")),
+        ("M".into(), t!("key-mute")),
+        ("0 – 9".into(), t!("key-jump")),
         (t!("key-double-click"), t!("key-double-click-action")),
         (t!("key-swipe"), t!("key-swipe-action")),
     ]
@@ -572,5 +577,27 @@ mod tests {
         ] {
             assert!(stage.contains(key), "{key}");
         }
+        // And a video's, which its player answers.
+        use crate::logic::player::{Act, Press, act};
+        let press = |key| {
+            act(Press {
+                key,
+                ..Press::default()
+            })
+        };
+        assert_eq!(press(" "), Some(Act::TogglePlay));
+        assert_eq!(press("k"), Some(Act::TogglePlay));
+        assert_eq!(press("j"), Some(Act::Seek(-5)));
+        assert_eq!(press("l"), Some(Act::Seek(5)));
+        assert_eq!(press("m"), Some(Act::ToggleMute));
+        assert_eq!(press("9"), Some(Act::Jump(0.9)));
+        let shifted = act(Press {
+            key: "ArrowRight",
+            shift: true,
+            ..Press::default()
+        });
+        assert_eq!(shifted, Some(Act::Seek(5)));
+        let player = include_str!("../components/player.rs");
+        assert!(player.contains("on:dblclick"));
     }
 }

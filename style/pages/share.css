@@ -78,17 +78,25 @@
 .shared-grid .thumb { width: 100%; padding: 0; border: 0; font: inherit; cursor: zoom-in; }
 
 /* One of them over the whole window. Dark in both themes, as media looks
-   best on it; its buttons sit on the scrim, not on glass. */
+   best on it; its buttons sit on the scrim, not on glass. A video's player
+   (style/player.css) takes the dark glass of the viewer's fullscreen. */
 .lightbox {
   position: fixed; inset: 0; z-index: 50; display: grid; place-items: center;
   background: var(--stage); outline: none; animation: fade-in var(--med) var(--ease);
+  --fit-h: 100dvh;
+  --glass: var(--stage-glass); --glass-edge: var(--stage-glass-edge); --glass-line: var(--stage-glass-line);
+  --on-surface: var(--on-stage); --on-surface-2: var(--on-stage-2);
+  --primary: var(--stage-primary); --on-primary: var(--on-stage-primary);
+  --primary-container: var(--stage-primary-container); --on-primary-container: var(--on-stage-primary-container);
 }
 html:has(.lightbox) { overflow-y: hidden; }
 .lightbox-media { display: contents; }
-.lightbox img, .lightbox video {
+.lightbox img, .lightbox .player {
   max-width: 100vw; max-height: 100vh; max-height: 100dvh; object-fit: contain;
   animation: zoom-in var(--med) var(--ease);
 }
+/* The count steps up out of the way of a video's controls. */
+.lightbox:has(.player) .lightbox-count { top: max(12px, env(safe-area-inset-top)); bottom: auto; }
 .lightbox-btn {
   position: absolute; display: inline-grid; place-items: center; width: 44px; height: 44px; padding: 0; border: 0; border-radius: 999px;
   background: var(--scrim); color: var(--on-scrim); cursor: pointer;
@@ -112,6 +120,6 @@ html:has(.lightbox) { overflow-y: hidden; }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .lightbox, .lightbox img, .lightbox video, .shared-missing { animation: none; }
+  .lightbox, .lightbox img, .lightbox .player, .shared-missing { animation: none; }
   .lightbox-btn, .share-lifetime, .share-day, .share-lifetime.picking .share-day { transition: none; }
 }

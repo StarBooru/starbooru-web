@@ -1,21 +1,22 @@
 //! The stage: the picture or video, with zoom and pan for pictures, previous
-//! and next, fullscreen, and the keys and gestures for all of them. The booru
-//! browser's post page has it too.
+//! and next, fullscreen, and the keys and gestures for all of them. A video
+//! plays in the app's own player, which takes the stage's fullscreen. The
+//! booru browser's post page has it too.
 
 use std::time::Duration;
 
 use leptos::ev::{MouseEvent, PointerEvent};
 use leptos::html;
 use leptos::prelude::*;
-use leptos::task::spawn_local;
 use send_wrapper::SendWrapper;
 use starbooru_core::{MediaKind, Post};
-use wasm_bindgen::{JsCast, JsValue};
+use wasm_bindgen::JsCast;
 use web_sys::{Element, KeyboardEvent, WheelEvent};
 
 use crate::components::banner::ErrorBanner;
 use crate::components::icons::{Ico, Icon};
-use crate::dom;
+use crate::components::player::Player;
+use crate::dom::{self, call_quietly};
 use crate::logic::gallery::tint;
 use crate::logic::viewer::{
     Tap, css_url, double_tap, enter_class, fit_style, resist, sideways, speed, swipe_turns,
@@ -26,11 +27,10 @@ use crate::logic::zoom::{MAX_SCALE, STEP, WheelDelta, WheelTurn, Zoom, wheel_fac
 const REST_MS: u64 = 2800;
 /// A touch that lifts within this long, without moving, is a tap.
 const TAP_MS: f64 = 300.0;
-/// The strip at the foot of a video where its own controls are, in pixels.
-const VIDEO_CONTROLS: f64 = 64.0;
 /// What on the stage keeps its own presses, which aren't fingers on the
 /// picture.
-const CONTROLS: &str = ".stage-btn, .stage-tools, .stage-error";
+const CONTROLS: &str =
+    ".stage-btn, .stage-tools, .stage-error, .player-bar, .player-big, .player-error";
 
 /// What the fingers on the stage are doing. Kept out of signals: nothing on
 /// the page needs to follow each move.
@@ -111,24 +111,6 @@ impl Shown {
 
 fn document() -> Option<web_sys::Document> {
     web_sys::window()?.document()
-}
-
-/// Calls a browser method that answers with a promise, and lets a refusal go
-/// quietly: fullscreen can be refused, and the stage then covers the window.
-fn call_quietly(target: &JsValue, method: &str) {
-    let Ok(f) = js_sys::Reflect::get(target, &JsValue::from_str(method)) else {
-        return;
-    };
-    let Some(f) = f.dyn_ref::<js_sys::Function>() else {
-        return;
-    };
-    if let Ok(answer) = f.call0(target)
-        && let Ok(promise) = answer.dyn_into::<js_sys::Promise>()
-    {
-        spawn_local(async move {
-            let _ = wasm_bindgen_futures::JsFuture::from(promise).await;
-        });
-    }
 }
 
 /// Whether `target` is inside an element `selector` matches.
@@ -359,11 +341,11 @@ pub fn Stage(
                 {
                     return;
                 }
-                // A video's own controls take the arrows.
-                let on_video = within(e.target(), "video");
+                // A video's player has had the keys first, and kept the
+                // ones it took (the arrows with Shift or on its seek bar).
                 match e.key().as_str() {
-                    "ArrowLeft" if !on_video => press(false),
-                    "ArrowRight" if !on_video => press(true),
+                    "ArrowLeft" => press(false),
+                    "ArrowRight" => press(true),
                     "+" | "=" if zoomable() => zoom_by(STEP, (0.0, 0.0)),
                     "-" | "_" if zoomable() => zoom_by(1.0 / STEP, (0.0, 0.0)),
                     "0" if zoomable() => zoom.set(Zoom::default()),
@@ -419,14 +401,6 @@ pub fn Stage(
         let mouse = e.pointer_type() == "mouse";
         fingers.update_value(|f| f.mouse = mouse);
         if within(e.target(), CONTROLS) {
-            return;
-        }
-        // A video's own controls, along its foot, keep their drags.
-        if let Some(video) = e
-            .target()
-            .and_then(|t| t.dyn_into::<web_sys::HtmlVideoElement>().ok())
-            && f64::from(e.client_y()) > video.get_bounding_client_rect().bottom() - VIDEO_CONTROLS
-        {
             return;
         }
         let (x, y) = (f64::from(e.client_x()), f64::from(e.client_y()));
@@ -575,18 +549,16 @@ pub fn Stage(
         move |_, _, _| failed.set(false),
         false,
     );
-    // Loads the file shown again. Setting a picture's address anew does,
-    // even when it's the same one.
+    // Loads the picture shown again. Setting its address anew does, even
+    // when it's the same one. A video's player has its own.
     let reload = Callback::new(move |()| {
         let Some(el) = stage
             .get_untracked()
-            .and_then(|s| s.query_selector("#stage-img, video").ok().flatten())
+            .and_then(|s| s.query_selector("#stage-img").ok().flatten())
         else {
             return;
         };
-        if let Some(video) = el.dyn_ref::<web_sys::HtmlMediaElement>() {
-            video.load();
-        } else if let Some(address) = el.get_attribute("src") {
+        if let Some(address) = el.get_attribute("src") {
             let _ = el.set_attribute("src", &address);
         }
     });
@@ -625,22 +597,32 @@ pub fn Stage(
                 .unwrap_or_default()
         };
         Some(match kind {
-            MediaKind::Video => view! {
-                <video
-                    class=entrance
-                    src=move || src.get()
-                    poster=move || {
-                        shown.with(|s| s.as_ref().and_then(|s| s.poster.clone())).or_else(|| thumb.get())
-                    }
-                    style=move || format!("{}{colour}{}", fit_style(size), swiped())
-                    controls=true
-                    playsinline=true
-                    preload="metadata"
-                    loop=true
-                    on:error=move |_| failed.set(true)
-                ></video>
+            MediaKind::Video => {
+                // Sized to the video in fullscreen too, so its controls stay
+                // at the video's foot and not the display's.
+                let style = Signal::derive(move || format!("{}{}", fit_style(size), swiped()));
+                let poster = Signal::derive(move || {
+                    shown
+                        .with(|s| s.as_ref().and_then(|s| s.poster.clone()))
+                        .or_else(|| thumb.get())
+                });
+                view! {
+                    <Player
+                        src=src
+                        poster=poster
+                        class=entrance
+                        style=style
+                        full=full
+                        on_full=Callback::new(move |()| set_full(!full.get_untracked()))
+                        keys=Signal::derive(move || !editing.get())
+                        on_retry=Callback::new(move |reload: Callback<()>| match on_retry {
+                            Some(again) => again.run(reload),
+                            None => reload.run(()),
+                        })
+                    />
+                }
+                .into_any()
             }
-            .into_any(),
             MediaKind::Image | MediaKind::Animation => {
                 let loaded = RwSignal::new(false);
                 let style = move || {
@@ -736,8 +718,10 @@ pub fn Stage(
                     <Ico icon=Icon::ChevronRight size=32 />
                 </button>
             </Show>
-            <div class="stage-tools glass float">
-                <Show when=zoomable>
+            // A video's player has its own fullscreen button, by its other
+            // controls.
+            <Show when=zoomable>
+                <div class="stage-tools glass float">
                     <button
                         type="button"
                         class="stage-btn"
@@ -770,20 +754,20 @@ pub fn Stage(
                     >
                         <Ico icon=Icon::ZoomIn />
                     </button>
-                </Show>
-                <button
-                    type="button"
-                    class="stage-btn"
-                    title=move || if full.get() { t!("fullscreen-exit-title") } else { t!("fullscreen-title") }
-                    aria-label=move || if full.get() { t!("fullscreen-exit") } else { t!("fullscreen") }
-                    on:click=move |_| set_full(!full.get_untracked())
-                >
-                    {move || {
-                        let icon = if full.get() { Icon::FullscreenExit } else { Icon::Fullscreen };
-                        view! { <Ico icon=icon /> }
-                    }}
-                </button>
-            </div>
+                    <button
+                        type="button"
+                        class="stage-btn"
+                        title=move || if full.get() { t!("fullscreen-exit-title") } else { t!("fullscreen-title") }
+                        aria-label=move || if full.get() { t!("fullscreen-exit") } else { t!("fullscreen") }
+                        on:click=move |_| set_full(!full.get_untracked())
+                    >
+                        {move || {
+                            let icon = if full.get() { Icon::FullscreenExit } else { Icon::Fullscreen };
+                            view! { <Ico icon=icon /> }
+                        }}
+                    </button>
+                </div>
+            </Show>
         </section>
     }
 }

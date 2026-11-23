@@ -249,6 +249,12 @@ pub struct Prefs {
     /// The viewer shows originals even where the server has a smaller copy.
     #[serde(deserialize_with = "lenient")]
     pub originals: bool,
+    /// The video player's volume, 0 to 1, as it was left.
+    #[serde(deserialize_with = "lenient_volume")]
+    pub video_volume: f64,
+    /// The video player was left muted.
+    #[serde(deserialize_with = "lenient")]
+    pub video_muted: bool,
     /// The boorus the user added by their address, in the order of their
     /// chips: the latest last.
     #[serde(deserialize_with = "lenient")]
@@ -307,6 +313,8 @@ impl Default for Prefs {
             gallery_columns: None,
             flush_tiles: false,
             originals: false,
+            video_volume: 1.0,
+            video_muted: false,
             boorus: Vec::new(),
             booru_sites: Vec::new(),
             booru_dedupe: true,
@@ -510,6 +518,18 @@ where
 {
     let value = Value::deserialize(d)?;
     Ok(bool::deserialize(value).unwrap_or(true))
+}
+
+/// A volume from 0 to 1, or full volume when the value is no volume at all.
+fn lenient_volume<'de, D>(d: D) -> Result<f64, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    let value = Value::deserialize(d)?;
+    Ok(f64::deserialize(value)
+        .ok()
+        .filter(|v| v.is_finite())
+        .map_or(1.0, |v| v.clamp(0.0, 1.0)))
 }
 
 /// The post ids in a list, leaving out what isn't one.
@@ -1011,6 +1031,8 @@ mod tests {
                 gallery_columns: Some(4),
                 flush_tiles: true,
                 originals: true,
+                video_volume: 0.4,
+                video_muted: true,
                 boorus: vec![SavedBooru {
                     api: "danbooru".into(),
                     base: "http://nas:8000".into(),
@@ -1071,6 +1093,8 @@ mod tests {
         assert_eq!(value["prefs"]["swipe_left"], "delete");
         assert_eq!(value["prefs"]["swipe_right"], "like");
         assert_eq!(value["prefs"]["people"], false);
+        assert_eq!(value["prefs"]["video_volume"], 0.4);
+        assert_eq!(value["prefs"]["video_muted"], true);
         assert_eq!(
             value["prefs"]["boorus"][0],
             serde_json::json!({"api": "danbooru", "base": "http://nas:8000"})
@@ -1558,6 +1582,38 @@ mod tests {
         assert_eq!(prefs.swipe_right, SwipeAction::Off);
         assert!(!prefs.effects_reduced);
         assert_eq!(prefs.theme, Theme::Light);
+    }
+
+    #[test]
+    fn the_players_volume_starts_full_and_stays_in_range() {
+        // Settings stored before the player kept its volume.
+        let prefs = parse(r#"{"prefs":{"theme":"dark","originals":true}}"#).prefs;
+        assert_eq!((prefs.video_volume, prefs.video_muted), (1.0, false));
+        assert!(prefs.originals);
+        let prefs = parse(r#"{"prefs":{"video_volume":0.25,"video_muted":true}}"#).prefs;
+        assert_eq!((prefs.video_volume, prefs.video_muted), (0.25, true));
+        // Past either end: the end.
+        assert_eq!(
+            parse(r#"{"prefs":{"video_volume":7}}"#).prefs.video_volume,
+            1.0
+        );
+        assert_eq!(
+            parse(r#"{"prefs":{"video_volume":-1}}"#).prefs.video_volume,
+            0.0
+        );
+        // Odd values cost only themselves.
+        for odd in [r#""loud""#, "null", "[]", "{}"] {
+            let prefs = parse(&format!(
+                r#"{{"prefs":{{"video_volume":{odd},"video_muted":{odd},"theme":"light"}}}}"#
+            ))
+            .prefs;
+            assert_eq!(
+                (prefs.video_volume, prefs.video_muted),
+                (1.0, false),
+                "{odd}"
+            );
+            assert_eq!(prefs.theme, Theme::Light);
+        }
     }
 
     #[test]
