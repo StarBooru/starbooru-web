@@ -1,6 +1,6 @@
 # Roadmap
 
-_Status as of 2026-11-23: sections 1 and 2 are done; section 3 has only the privacy and terms pages left. Scope comes from starbooru-server's `docs/checklist.md`; the target is everything the reference web app did._
+_Status as of 2026-11-23: sections 1 to 3 are done: the app does everything the reference did. Section 4 (polish) is next. Scope comes from starbooru-server's `docs/checklist.md`; the target is everything the reference web app did._
 
 ## 1. Foundation
 
@@ -27,7 +27,7 @@ _Status as of 2026-11-23: sections 1 and 2 are done; section 3 has only the priv
 - [x] Share links and the public share page (`/s/:token`)
 - [x] Settings: theme, accent, language, sessions, password, API keys
 - [x] Administration: overview, accounts, server, AI, backups
-- [ ] Privacy and terms pages
+- [x] Privacy and terms pages
 
 ## 4. Polish
 

@@ -32,6 +32,14 @@ pub fn normalize_server(input: &str) -> String {
     format!("{scheme}://{s}")
 }
 
+/// A kept address as the pages show it, without its scheme or a slash at
+/// its end: `https://booru.example/` is `booru.example`.
+pub fn shown(address: &str) -> &str {
+    let address = address.trim();
+    let bare = address.split_once("://").map_or(address, |(_, rest)| rest);
+    bare.trim_end_matches('/')
+}
+
 /// The host of an address with no scheme: before its port and its path.
 fn host(address: &str) -> &str {
     let authority = address.split(['/', '?', '#']).next().unwrap_or_default();
@@ -92,6 +100,15 @@ mod tests {
         );
         assert_eq!(normalize_server(""), "");
         assert_eq!(normalize_server(" / "), "");
+    }
+
+    #[test]
+    fn an_address_shows_without_its_scheme() {
+        assert_eq!(shown("https://booru.example/"), "booru.example");
+        assert_eq!(shown(" http://127.0.0.1:8088 "), "127.0.0.1:8088");
+        assert_eq!(shown("https://x.example/booru"), "x.example/booru");
+        assert_eq!(shown("nas:8080"), "nas:8080");
+        assert_eq!(shown(""), "");
     }
 
     #[test]

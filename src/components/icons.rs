@@ -4,7 +4,6 @@
 
 use leptos::prelude::*;
 
-#[allow(dead_code, reason = "the pages still to come use the rest")]
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Icon {
     Add,

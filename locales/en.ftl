@@ -8,7 +8,6 @@ notfound-title = Nothing here
 notfound-body = There is no page at { $path }.
 notfound-back = Back to the gallery
 notice-close = Close
-soon-body = This page is still being built. Check back soon.
 
 ## Navigation
 
@@ -914,6 +913,57 @@ explain-order-tags-desc = By tag count, most first
 explain-order-tags-asc = By tag count, fewest first
 explain-order-updated-desc = By last edit, latest first
 explain-order-updated-asc = By last edit, earliest first
+
+## Privacy Policy and Terms of Service
+
+legal-back-sign-in = Back to sign-in
+legal-back-settings = Back to Settings
+legal-server = For { $name } at { $address }
+legal-server-address = For the server at { $address }
+legal-section-link = Link to this section
+privacy-lead = StarBooru is software that runs on a server chosen by you or someone you trust. Nothing you store is sent to the StarBooru project, or to anyone else except as this page says.
+privacy-responsible = Who is responsible
+privacy-responsible-body = The person or organisation that runs this server (the operator) decides who may sign up and is responsible for the data on it. Questions about your data go to them.
+privacy-server = What the server stores
+privacy-server-account = Your account: username, role and a salted Argon2id hash of your password. The password itself is never stored. If you sign in through the operator’s identity provider, the server keeps that provider’s id for you and the username or email it reports, to recognise you next time.
+privacy-server-sessions = Your sessions: a hash of each sign-in token, the kind of device it came from (for example “Firefox on Linux” or “StarBooru app on Android”), when it was created and last used, and when it expires. API keys you create are kept the same way: a hash of the key, its first characters to tell it apart, its name, and when it was last used.
+privacy-server-files = Your uploads: each file with its size, dimensions, checksum and a visual fingerprint for the duplicate finder, and what the server reads from it: the date in the file, its main colours and any text in a still image. The server notes who uploaded each post.
+privacy-server-content = What you add: tags, the people marked in a post, ratings, sources, translations of comic pages, votes with when you cast them, and saved searches.
+privacy-server-shares = For each share link you make: the posts in it, its title, when it expires, and how many times and when it was last opened (not by whom).
+privacy-server-sites = For other sites: the searches you save on other boorus, the accounts you save for them (the login as you typed it, the key encrypted with the server’s secret), the addresses you import, kept for 7 days after they finish, and each library import with its counts until you remove it.
+privacy-server-limits = To slow down password guessing, the server counts failed sign-ins per account and per network address, and sign-ups per address. These counts are kept in memory for at most an hour and never written to disk.
+privacy-device = What stays on your device
+privacy-device-storage = This app keeps one entry in the browser’s local storage: the server address, your sign-in token, your username and role, your preferences (such as the theme, the language, the gallery’s layout and the boorus you added by address), and where the gallery was in your last 30 searches.
+privacy-device-sign-in = While you sign in through an identity provider, the tab keeps a one-time handle in its session storage, removed when you come back.
+privacy-device-sign-out = Signing out removes the token, your username and role, and the searches the gallery remembered. The server address and the preferences stay until you clear this site’s data in the browser.
+privacy-device-cache = StarBooru sets no cookies. Pictures and videos go into the browser’s cache, as on any website, and everything else the app loads stays in the tab’s memory until you close it.
+privacy-not-done = What StarBooru does not do
+privacy-not-done-tracking = No analytics, advertising or tracking, and no third-party services beyond an identity provider or an AI provider the operator chooses to set up. This app loads its code, styles and icons from this server alone.
+privacy-not-done-contacts = The server contacts other sites only when you search, browse or import from another booru, import from a URL or sign in through the operator’s identity provider, and when an administrator installs a local AI model, which it downloads from where the model is published. Its requests name StarBooru as the client and carry none of your details, except the account you saved for that site, which goes to that site alone.
+privacy-not-done-boorus = When you browse another booru here, your browser loads that site’s pictures from the site itself, without saying which page asked for them, so the site sees your network address as it would on its own pages. Pictures from sites that serve them only to their own pages come through this server instead.
+privacy-not-done-ai = If an administrator sets up an AI provider, it gets thumbnails of posts to suggest tags (new uploads too, when automatic tagging is on), the text read in an image when you translate it, and the image itself when its comic or manga panels are translated, by hand or for new uploads when automatic translation is on. A provider on the operator’s own network keeps them there; local models run on the server, and nothing leaves it.
+privacy-not-done-library = While a whole library is being imported, the key you gave for that site is kept on the server, and in any backup taken meanwhile; it’s erased when the import ends.
+privacy-not-done-logs = File contents, the text read in images, passwords and tokens are never written to the server’s logs.
+privacy-who-sees = Who can see your posts
+privacy-who-sees-body = Everyone with an account on this server can see the posts on it, and download the original files with anything they hold, such as where a photo was taken. A post shows its score, not who voted. Media links handed to the app are signed and expire, so a copied link stops working within 12 hours. If you make a share link, anyone who has it can see the posts in it, without their tags, until it expires or you remove it.
+privacy-keeping = Keeping and deleting
+privacy-keeping-bin = Deleted posts go to the recycle bin. From there an administrator, or whoever uploaded them, can erase them with their files, and the operator can have the bin emptied by itself after a set number of days.
+privacy-keeping-sessions = Sessions end when you sign out, after 90 days, or when you sign out other devices in Settings. Changing your password signs out every other device; API keys keep working until you remove them or they expire.
+privacy-keeping-admins = Administrators of this server see each account’s username, role, when it joined and was last active, and how much it has uploaded. They can set a storage limit, reset a forgotten password, disable an account or delete it. To delete your account, ask one of them: that removes its sessions, keys, votes and saved searches, while its posts stay.
+privacy-keeping-backups = Administrators can back up the database, by hand or on a schedule. A backup holds everything listed above except the files, so something erased here stays in older backups until they are deleted. The operator may keep other copies on their own schedule.
+terms-lead = These terms cover your use of this StarBooru server. The operator who runs it may add to them.
+terms-account = Your account
+terms-account-keys = Keep your password and API keys to yourself, and sign out devices you no longer use (Settings › Signed-in devices).
+terms-account-admins = The first account on a server is its administrator. Administrators can manage tags, aliases and implications, empty the recycle bin, change the server’s settings, set up AI tools, make backups, and manage accounts: roles, storage limits, password resets, disabling and deleting.
+terms-content = Your content
+terms-content-rights = Upload and import only what you have the right to keep and to share with the people on this server and anyone you send a share link to, and what is legal where the server runs.
+terms-content-yours = You keep every right to what you upload. You let the server store it, make thumbnails and previews, and show it to the accounts on this server and to the people you share it with.
+terms-content-originals = Originals are kept byte for byte. Rate posts honestly, so that rating filters work for everyone.
+terms-fair = Fair use
+terms-fair-access = Don't try to reach other people's accounts or data, or to get around the server's limits.
+terms-fair-load = Don't overload the server, or the sites it reaches for you, with automated requests.
+terms-warranty = No warranty
+terms-warranty-body = StarBooru is provided as is, without warranty of any kind. Keep your own copy of anything you can't afford to lose. The operator can suspend accounts that break these terms and can change them; the current version is always on this page.
 
 ## Other boorus
 

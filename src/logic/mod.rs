@@ -10,6 +10,7 @@ pub mod explore;
 pub mod gallery;
 pub mod jobs;
 pub mod layout;
+pub mod legal;
 pub mod library;
 pub mod people;
 pub mod queue;

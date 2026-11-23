@@ -38,14 +38,12 @@ thread_local! {
 }
 
 /// Shows `message` for a few seconds.
-#[allow(dead_code, reason = "pages call it for work that finishes later")]
 pub fn notify(message: String) {
     show(message, None, NOTICE_MS);
 }
 
 /// A notice with a button that takes back what just happened. It stays a
 /// little longer than others, and a line under it runs out with the time.
-#[allow(dead_code, reason = "pages call it after a step that can be undone")]
 pub fn notify_undo(message: String, label: String, run: impl Fn() + 'static) {
     let action = Action {
         label,

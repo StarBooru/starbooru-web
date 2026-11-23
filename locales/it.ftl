@@ -8,7 +8,6 @@ notfound-title = Qui non c'è niente
 notfound-body = Non esiste una pagina { $path }.
 notfound-back = Torna alla galleria
 notice-close = Chiudi
-soon-body = Questa pagina è ancora in costruzione. Torna a trovarci presto.
 
 ## Navigation
 
@@ -923,6 +922,57 @@ explain-order-tags-desc = Per numero di tag, prima i più numerosi
 explain-order-tags-asc = Per numero di tag, prima i meno numerosi
 explain-order-updated-desc = Per ultima modifica, prima la più recente
 explain-order-updated-asc = Per ultima modifica, prima la meno recente
+
+## Informativa sulla privacy e termini di servizio
+
+legal-back-sign-in = Torna all’accesso
+legal-back-settings = Torna alle Impostazioni
+legal-server = Per { $name } all’indirizzo { $address }
+legal-server-address = Per il server all’indirizzo { $address }
+legal-section-link = Link a questa sezione
+privacy-lead = StarBooru è un software che gira su un server scelto da te o da qualcuno di cui ti fidi. Niente di ciò che salvi viene inviato al progetto StarBooru, né ad altri, se non come descritto in questa pagina.
+privacy-responsible = Chi è responsabile
+privacy-responsible-body = La persona o l'organizzazione che gestisce questo server (il gestore) decide chi può registrarsi ed è responsabile dei dati che contiene. Le domande sui tuoi dati vanno rivolte a lei.
+privacy-server = Cosa salva il server
+privacy-server-account = Il tuo account: nome utente, ruolo e un hash Argon2id con sale della tua password. La password in sé non viene mai salvata. Se accedi tramite il provider di identità del gestore, il server conserva l'identificativo che quel provider ti assegna e il nome utente o l'email che riporta, per riconoscerti la volta successiva.
+privacy-server-sessions = Le tue sessioni: un hash di ogni token di accesso, il tipo di dispositivo da cui proviene (ad esempio “Firefox on Linux” o “StarBooru app on Android”), quando è stata creata e usata l'ultima volta, e quando scade. Le chiavi API che crei sono conservate allo stesso modo: un hash della chiave, i primi caratteri per distinguerla, il suo nome e quando è stata usata l'ultima volta.
+privacy-server-files = I tuoi caricamenti: ogni file con dimensione, risoluzione, checksum e un'impronta visiva per la ricerca dei duplicati, e ciò che il server ne ricava: la data contenuta nel file, i colori principali e l'eventuale testo in un'immagine statica. Il server registra chi ha caricato ogni post.
+privacy-server-content = Ciò che aggiungi: tag, le persone segnate in un post, classificazioni, fonti, traduzioni delle pagine di fumetti, voti con il momento in cui li hai dati, e ricerche salvate.
+privacy-server-shares = Per ogni link di condivisione che crei: i post che contiene, il titolo, la scadenza, e quante volte e quando è stato aperto l'ultima volta (non da chi).
+privacy-server-sites = Per gli altri siti: le ricerche che salvi su altri booru, gli account che salvi per loro (il nome utente come l'hai scritto, la chiave cifrata con il segreto del server), gli indirizzi che importi, tenuti 7 giorni dopo la fine, e ogni importazione di raccolte con i suoi conteggi finché non la rimuovi.
+privacy-server-limits = Per rallentare i tentativi di indovinare le password, il server conta gli accessi falliti per account e per indirizzo di rete, e le registrazioni per indirizzo. Questi conteggi restano in memoria al massimo un'ora e non vengono mai scritti su disco.
+privacy-device = Cosa resta sul tuo dispositivo
+privacy-device-storage = Questa app tiene una sola voce nella memoria locale del browser: l'indirizzo del server, il tuo token di accesso, il tuo nome utente e ruolo, le tue preferenze (come il tema, la lingua, l'aspetto della galleria e i booru aggiunti per indirizzo) e il punto in cui era la galleria nelle tue ultime 30 ricerche.
+privacy-device-sign-in = Mentre accedi tramite un provider di identità, la scheda tiene un codice monouso nella sua memoria di sessione, rimosso quando torni.
+privacy-device-sign-out = Uscendo vengono rimossi il token, il nome utente e il ruolo, e le ricerche ricordate dalla galleria. L'indirizzo del server e le preferenze restano finché non cancelli i dati di questo sito nel browser.
+privacy-device-cache = StarBooru non usa cookie. Immagini e video finiscono nella cache del browser, come su qualsiasi sito, e tutto il resto che l'app carica resta nella memoria della scheda finché non la chiudi.
+privacy-not-done = Cosa StarBooru non fa
+privacy-not-done-tracking = Niente statistiche d'uso, pubblicità o tracciamento, e nessun servizio di terze parti oltre a un provider di identità o a un fornitore di IA che il gestore sceglie di configurare. Questa app carica codice, stili e icone solo da questo server.
+privacy-not-done-contacts = Il server contatta altri siti solo quando cerchi, sfogli o importi da un altro booru, importi da un URL o accedi tramite il provider di identità del gestore, e quando un amministratore installa un modello di IA locale, che scarica da dove è pubblicato. Le sue richieste si presentano come StarBooru e non portano nessuno dei tuoi dati, tranne l'account che hai salvato per quel sito, che va solo a quel sito.
+privacy-not-done-boorus = Quando sfogli un altro booru qui, il browser carica le immagini direttamente da quel sito, senza dire quale pagina le ha chieste, quindi il sito vede il tuo indirizzo di rete come lo vedrebbe sulle sue pagine. Le immagini dei siti che le mostrano solo sulle proprie pagine passano invece da questo server.
+privacy-not-done-ai = Se un amministratore configura un fornitore di IA, gli vengono inviate le miniature dei post per suggerire i tag (anche dei nuovi caricamenti, quando il tagging automatico è attivo), il testo letto in un’immagine quando lo traduci, e l’immagine stessa quando se ne traducono le vignette di fumetti o manga, a mano o per i nuovi caricamenti quando la traduzione automatica è attiva. Un fornitore sulla rete del gestore le tiene lì; i modelli locali girano sul server e niente ne esce.
+privacy-not-done-library = Mentre si importa un’intera raccolta, la chiave che hai dato per quel sito resta sul server, e in ogni backup fatto nel frattempo; viene cancellata quando l’importazione finisce.
+privacy-not-done-logs = Il contenuto dei file, il testo letto nelle immagini, le password e i token non vengono mai scritti nei log del server.
+privacy-who-sees = Chi può vedere i tuoi post
+privacy-who-sees-body = Chiunque abbia un account su questo server può vedere i post che contiene, e scaricarne i file originali con tutto ciò che contengono, come il luogo in cui è stata scattata una foto. Un post mostra il suo punteggio, non chi l'ha votato. I link ai file forniti all'app sono firmati e scadono, quindi un link copiato smette di funzionare entro 12 ore. Se crei un link di condivisione, chiunque lo abbia può vedere i post che contiene, senza i loro tag, finché non scade o non lo rimuovi.
+privacy-keeping = Conservazione ed eliminazione
+privacy-keeping-bin = I post eliminati finiscono nel cestino. Da lì un amministratore, o chi li ha caricati, può cancellarli insieme ai file, e il gestore può far svuotare il cestino da solo dopo un certo numero di giorni.
+privacy-keeping-sessions = Le sessioni terminano quando esci, dopo 90 giorni, o quando disconnetti gli altri dispositivi dalle Impostazioni. Cambiare la password disconnette tutti gli altri dispositivi; le chiavi API continuano a funzionare finché non le rimuovi o scadono.
+privacy-keeping-admins = Gli amministratori di questo server vedono di ogni account il nome utente, il ruolo, quando si è iscritto ed è stato attivo l'ultima volta, e quanto ha caricato. Possono impostare un limite di spazio, reimpostare una password dimenticata, disattivare un account o eliminarlo. Per eliminare il tuo account, chiedi a uno di loro: ne verranno rimossi le sessioni, le chiavi, i voti e le ricerche salvate, mentre i suoi post restano.
+privacy-keeping-backups = Gli amministratori possono fare backup del database, a mano o a intervalli regolari. Un backup contiene tutto quanto elencato sopra tranne i file, quindi ciò che viene cancellato qui resta nei backup precedenti finché non vengono eliminati. Il gestore può conservare altre copie, con i suoi tempi.
+terms-lead = Questi termini regolano l'uso di questo server StarBooru. Il gestore che lo amministra può aggiungerne altri.
+terms-account = Il tuo account
+terms-account-keys = Non condividere la tua password né le tue chiavi API, e disconnetti i dispositivi che non usi più (Impostazioni › Dispositivi connessi).
+terms-account-admins = Il primo account di un server ne è l'amministratore. Gli amministratori possono gestire tag, alias e implicazioni, svuotare il cestino, cambiare le impostazioni del server, configurare gli strumenti di IA, fare backup e gestire gli account: ruoli, limiti di spazio, reimpostazione delle password, disattivazione ed eliminazione.
+terms-content = I tuoi contenuti
+terms-content-rights = Carica e importa solo ciò che hai il diritto di conservare e condividere con le persone di questo server e con chiunque riceva un tuo link di condivisione, e ciò che è legale dove si trova il server.
+terms-content-yours = Mantieni ogni diritto su ciò che carichi. Consenti al server di conservarlo, crearne miniature e anteprime, e mostrarlo agli account di questo server e alle persone con cui lo condividi.
+terms-content-originals = Gli originali sono conservati byte per byte. Classifica i post con onestà, così i filtri per classificazione funzionano per tutti.
+terms-fair = Uso corretto
+terms-fair-access = Non tentare di accedere ad account o dati altrui, né di aggirare i limiti del server.
+terms-fair-load = Non sovraccaricare il server, né i siti che contatta per te, con richieste automatiche.
+terms-warranty = Nessuna garanzia
+terms-warranty-body = StarBooru è fornito così com'è, senza garanzie di alcun tipo. Tieni una tua copia di tutto ciò che non puoi permetterti di perdere. Il gestore può sospendere gli account che violano questi termini e può modificarli; la versione in vigore è sempre su questa pagina.
 
 ## Altri booru
 

@@ -22,6 +22,7 @@ use super::library::LibraryImportCard;
 use super::share::SharesCard;
 use crate::api;
 use crate::components::icons::{Ico, Icon};
+use crate::components::legal::note_opener;
 use crate::logic::settings::{Sections, sections, version};
 use crate::route;
 use crate::store;
@@ -114,12 +115,12 @@ pub fn Settings() -> impl IntoView {
                     <span>{move || t!("help-title")}</span>
                     <span class="muted">{move || t!("settings-help-note")}</span>
                 </a>
-                <a class="list-link" href=route::PRIVACY>
+                <a class="list-link" href=route::PRIVACY on:click=move |e| note_opener(&e)>
                     <Ico icon=Icon::Shield />
                     <span>{move || t!("privacy-title")}</span>
                     <span class="muted">{move || t!("settings-privacy-note")}</span>
                 </a>
-                <a class="list-link" href=route::TERMS>
+                <a class="list-link" href=route::TERMS on:click=move |e| note_opener(&e)>
                     <Ico icon=Icon::Article />
                     <span>{move || t!("terms-title")}</span>
                     <span class="muted">{move || t!("settings-terms-note")}</span>

@@ -14,12 +14,12 @@ use crate::pages::duplicates::Duplicates;
 use crate::pages::explore::Explore;
 use crate::pages::gallery::Gallery;
 use crate::pages::help::Help;
+use crate::pages::legal::{Privacy, Terms};
 use crate::pages::login::OidcReturn;
 use crate::pages::post::PostView;
 use crate::pages::settings::Settings;
 use crate::pages::share::SharedPage;
 use crate::pages::shell::Shell;
-use crate::pages::soon::SoonAlone;
 use crate::pages::tags::{TagPage, Tags};
 use crate::pages::trash::Trash;
 use crate::pages::upload::Upload;
@@ -69,8 +69,7 @@ pub fn App() -> impl IntoView {
     }
 }
 
-/// Every address the app has, the reference's. A page still to be built
-/// shows `SoonAlone` with its name until it lands.
+/// Every address the app has, the reference's.
 #[component]
 fn AppRoutes() -> impl IntoView {
     view! {
@@ -78,8 +77,8 @@ fn AppRoutes() -> impl IntoView {
             // The sign-in pages, shared posts and the legal pages stand alone.
             <Route path=path!("/oidc") view=OidcReturn />
             <Route path=path!("/s/:token") view=SharedPage />
-            <Route path=path!("/privacy") view=|| view! { <SoonAlone title=|| t!("privacy-title") /> } />
-            <Route path=path!("/terms") view=|| view! { <SoonAlone title=|| t!("terms-title") /> } />
+            <Route path=path!("/privacy") view=Privacy />
+            <Route path=path!("/terms") view=Terms />
             <ParentRoute path=path!("") view=Shell>
                 <Route path=path!("/") view=Gallery />
                 <Route path=path!("/explore") view=Explore />
@@ -297,6 +296,7 @@ mod tests {
             include_str!("../style/pages/help.css"),
             include_str!("../style/pages/share.css"),
             include_str!("../style/pages/admin.css"),
+            include_str!("../style/pages/legal.css"),
         ] {
             assert!(!css.contains("-webkit-backdrop-filter"));
         }
@@ -317,6 +317,7 @@ mod tests {
             ("settings", include_str!("../style/pages/settings.css")),
             ("share", include_str!("../style/pages/share.css")),
             ("admin", include_str!("../style/pages/admin.css")),
+            ("legal", include_str!("../style/pages/legal.css")),
         ] {
             // A colour worked out from the tokens is fine: `oklch(from var(--x) …)`,
             // or the strength meter's `oklch(var(--meter-l) …)`.
