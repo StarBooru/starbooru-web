@@ -3,6 +3,8 @@
 //! says how long it runs and plays, muted, under a mouse; a GIF says so.
 //! Under `data-press="post"` a right click opens its menu (`pages/post_menu.rs`).
 //! In the gallery's selection mode a click picks it instead, with a check mark.
+//! In the gallery it can be swiped aside for what Settings › Gestures says
+//! (`swipe.rs`).
 
 use std::cell::RefCell;
 use std::rc::Rc;
@@ -15,10 +17,11 @@ use send_wrapper::SendWrapper;
 use starbooru_core::{MediaKind, Post};
 
 use super::icons::{Ico, Icon};
-use crate::api;
-use crate::dom;
 use crate::logic::gallery::{PAGE_SIZE, format_duration, tint};
 use crate::logic::layout::Place;
+use crate::logic::swipe::Side;
+use crate::store::SwipeAction;
+use crate::{api, dom, power};
 
 /// Where a tile goes and how big it is, for `.masonry .thumb` in
 /// `style/pages/gallery.css`: so many tile widths and so many gaps.
@@ -37,12 +40,25 @@ pub(crate) fn place_style(p: Place) -> String {
     )
 }
 
+/// The icon a swipe uncovers.
+fn swipe_icon(action: SwipeAction) -> Icon {
+    match action {
+        SwipeAction::Off => Icon::Close,
+        SwipeAction::Like => Icon::ThumbUp,
+        SwipeAction::Select => Icon::Check,
+        SwipeAction::Share => Icon::Share,
+        SwipeAction::Download => Icon::Download,
+        SwipeAction::Delete => Icon::Delete,
+    }
+}
+
 /// `index` is the post's place in the list, for a staggered entrance within a
 /// page of results; `still` skips the entrance, for a tile that isn't new to
 /// the user. `place` is its spot in the layout. `on_open` hears of a click
 /// that opens the post here, and not one for a new tab. While `selecting`,
 /// a click or Space goes to `on_toggle` with the post and whether Shift was
-/// down, and `selected` says whether it's picked.
+/// down, and `selected` says whether it's picked. `swipe` is what swiping it
+/// left and right does.
 #[component]
 pub fn Thumb(
     post: Arc<Post>,
@@ -54,6 +70,7 @@ pub fn Thumb(
     #[prop(optional, into)] selecting: Signal<bool>,
     #[prop(optional, into)] selected: Signal<bool>,
     #[prop(optional)] on_toggle: Option<Callback<(i64, bool)>>,
+    #[prop(optional, into)] swipe: Option<Signal<(SwipeAction, SwipeAction)>>,
 ) -> impl IntoView {
     let id = post.id;
     let opened = Arc::clone(&post);
@@ -182,6 +199,26 @@ pub fn Thumb(
             }
         })
     };
+    // Under the picture, which uncovers them as it's swiped aside.
+    let hints = move || {
+        let (left, right) = swipe.map(|s| s.get()).unwrap_or_default();
+        [(Side::Left, left), (Side::Right, right)]
+            .into_iter()
+            .filter(|(_, action)| *action != SwipeAction::Off)
+            .map(|(side, action)| {
+                view! {
+                    <span
+                        class="swipe-hint"
+                        data-side=side.as_str()
+                        data-action=action.as_str()
+                        aria-hidden="true"
+                    >
+                        <Ico icon=swipe_icon(action) />
+                    </span>
+                }
+            })
+            .collect_view()
+    };
     view! {
         <a
             class="thumb"
@@ -206,10 +243,13 @@ pub fn Thumb(
                 }
             }
         >
+            {hints}
             <div
                 class="thumb-media"
                 on:pointerenter=move |e: PointerEvent| {
-                    if video && e.pointer_type() == "mouse" && !dom::reduced_motion() {
+                    if video && e.pointer_type() == "mouse" && !dom::reduced_motion()
+                        && !power::active_untracked()
+                    {
                         hovered.set(true);
                     }
                 }

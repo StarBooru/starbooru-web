@@ -45,8 +45,7 @@ use crate::logic::viewer::{
 };
 use crate::logic::votes::{next_vote, rescored};
 use crate::logic::zoom::Zoom;
-use crate::route;
-use crate::store;
+use crate::{power, route, store};
 
 /// Posts kept for the viewer to show at once: the tile just clicked and the
 /// neighbours fetched ahead.
@@ -130,8 +129,12 @@ fn warm(p: &Post) {
     });
 }
 
-/// Fetches the posts around one ahead, with their pictures.
+/// Fetches the posts around one ahead, with their pictures, unless the
+/// battery saver is on.
 fn fetch_ahead(n: Neighbors) {
+    if power::active_untracked() {
+        return;
+    }
     for id in [n.next, n.prev].into_iter().flatten() {
         if let Some(p) = kept(id).filter(|p| !p.tag_details.is_empty() || p.tags.is_empty()) {
             warm(&p);

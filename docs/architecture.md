@@ -31,18 +31,21 @@ src/
   app.rs        theme and language on the root, and the routes
   route.rs      the navigation's tabs, which tab a path is under, search addresses
   api.rs        the shared Client, api::call (a 401 signs out), errors in words
-  oidc.rs       sign-in through the identity provider, away and back to /oidc
+  oidc.rs       sign-in through the identity provider, and linking it to the account, away and back to /oidc
   store.rs      session and preferences in localStorage
-  theme.rs      the browser's bar colour (theme-color) from the seed hue
+  theme.rs      the browser's bar colour (theme-color) from the seed hue, and the hue of a picked accent
+  power.rs      the battery saver: data-saver on the root, from the setting, the battery and data saver
+  pace.rs       the effects: data-effects on the root, from the setting or from frame times while scrolling
   i18n.rs       t!() over the Fluent catalogues
   pages/        one module per page; shell.rs is the frame, soon.rs the placeholder, post/ the viewer and
-                  its media editor, share/ the share sheet, the list of links and the public /s/ page
-  components/   icons, brand, snackbar, tiles, downloads, the tag box and its grip, a tag's menu
+                  its media editor, share/ the share sheet, the list of links and the public /s/ page,
+                  settings/ the Settings cards
+  components/   icons, brand, snackbar, tiles and their swipes, downloads, the tag box and its grip, a tag's menu
   logic/        pure Rust with unit tests: server addresses, the gallery's lists and layout, zoom, the viewer's
                   tags, details and file names, the word at the caret, the tag editor's text and who may edit,
                   the gallery's selection and the mass edit it sends, the booru browser's sites, addresses and
-                  results, the library import's text, the media editor's crop, turns and trim, and share links'
-                  lifetimes, addresses and expiry text
+                  results, the library import's text, the media editor's crop, turns and trim, share links'
+                  lifetimes, addresses and expiry text, Settings' accent, lists and password checks, and swipes
 locales/        en.ftl, it.ftl
 style/          tokens.css, base.css, shell.css, pages/<page>.css
 index.html      Trunk's entry, with the loading screen

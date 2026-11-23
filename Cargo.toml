@@ -71,6 +71,7 @@ web-sys = { version = "0.3", features = [
   "MouseEvent",
   "Navigator",
   "NodeList",
+  "Performance",
   "PointerEvent",
   "ResizeObserver",
   "Response",

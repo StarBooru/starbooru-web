@@ -3,7 +3,8 @@
 //! like it, share it, download it and, in the gallery, select it for a mass
 //! edit or move it to the recycle bin. A long press on a phone opens it too
 //! where the browser reports one as a right click, and so do Shift+F10 and
-//! the menu key on a focused tile.
+//! the menu key on a focused tile. In the gallery a tile swiped aside does
+//! what Settings › Gestures says, from the same actions.
 
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -24,9 +25,12 @@ use crate::components::download;
 use crate::components::icons::Icon;
 use crate::components::menu::{self, ActionMenu, MenuAt, MenuItem};
 use crate::components::snackbar::{notify, notify_undo};
+use crate::components::swipe::watch as watch_swipes;
 use crate::dom;
+use crate::logic::swipe::{Side, action};
 use crate::logic::viewer::download_name;
 use crate::logic::votes::next_vote;
+use crate::store::SwipeAction;
 
 /// The tiles whose right click opens the menu.
 const TILES: &str = r#"[data-press="post"] [data-post]"#;
@@ -52,7 +56,8 @@ struct Open {
 /// opened from the menu as a click on the tile would, and `on_deleted`, where
 /// the page can take a tile away, offers the recycle bin. Where the page has
 /// a selection, `on_select` offers it; where it keeps its posts, `on_voted`
-/// gets each one as it is after a vote.
+/// gets each one as it is after a vote. With `swipe`, a tile swiped left or
+/// right does that action.
 #[component]
 pub fn PostPress(
     find: Callback<i64, Option<Arc<Post>>>,
@@ -60,6 +65,7 @@ pub fn PostPress(
     #[prop(optional)] on_deleted: Option<Callback<i64>>,
     #[prop(optional)] on_select: Option<Callback<i64>>,
     #[prop(optional)] on_voted: Option<Callback<Arc<Post>>>,
+    #[prop(optional, into)] swipe: Option<Signal<(SwipeAction, SwipeAction)>>,
 ) -> impl IntoView {
     let open = RwSignal::new(None::<Open>);
     // The post the share sheet is open for.
@@ -135,6 +141,47 @@ pub fn PostPress(
                 Err(message) => notify(t!("delete-failed", reason = message)),
             }
         });
+    });
+
+    // A swipe does at once what the menu would.
+    let swipes = swipe.map(|swipe| {
+        let run = move |id: i64, side: Side| {
+            let Some(mut post) = find.run(id) else {
+                return;
+            };
+            if let Some(vote) = votes.with_value(|v| v.get(&id).copied()) {
+                Arc::make_mut(&mut post).my_vote = vote;
+            }
+            match action(side, swipe.get_untracked()) {
+                SwipeAction::Off => {}
+                SwipeAction::Like => like.run(post),
+                SwipeAction::Select => {
+                    if let Some(select) = on_select {
+                        select.run(id);
+                    }
+                }
+                SwipeAction::Share => {
+                    if !post.deleted {
+                        sharing.set(Some(id));
+                    }
+                }
+                SwipeAction::Download => download::start(
+                    absolute(&post.file_url),
+                    download_name(&post.sha256, &post.file_url, &post.mime),
+                ),
+                SwipeAction::Delete => {
+                    if on_deleted.is_some() {
+                        remove.run(id);
+                    }
+                }
+            }
+        };
+        watch_swipes(run)
+    });
+    on_cleanup(move || {
+        for watch in swipes.into_iter().flatten() {
+            watch.stop();
+        }
     });
 
     let menu = move || {

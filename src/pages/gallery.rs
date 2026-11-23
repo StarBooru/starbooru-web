@@ -845,6 +845,11 @@ pub fn Gallery() -> impl IntoView {
         let current = posts.with_untracked(|p| p.iter().find(|p| p.id == post.id).cloned());
         super::post::opening(current.unwrap_or(post), shown_q.get_untracked());
     });
+    // What swiping a tile does (Settings › Gestures).
+    let swipe = Memo::new(|_| {
+        let prefs = store::prefs();
+        (prefs.swipe_left, prefs.swipe_right)
+    });
     let tile_view = move |(index, _): (usize, i64)| {
         let post = posts.with_untracked(|p| p.get(index).cloned())?;
         let id = post.id;
@@ -866,6 +871,7 @@ pub fn Gallery() -> impl IntoView {
                 selecting=selecting
                 selected=selected
                 on_toggle=toggle
+                swipe=swipe
             />
         })
     };
@@ -1071,6 +1077,7 @@ pub fn Gallery() -> impl IntoView {
             on_deleted=deleted
             on_select=select
             on_voted=voted
+            swipe=swipe
         />
     }
 }

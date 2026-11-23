@@ -193,6 +193,13 @@ pub const HELP: &str = "/help";
 pub const TRASH: &str = "/trash";
 /// The duplicate finder.
 pub const DUPLICATES: &str = "/duplicates";
+/// Settings.
+pub const SETTINGS: &str = "/settings";
+/// The administration.
+pub const ADMIN: &str = "/admin";
+/// The privacy policy and the terms, outside the shell.
+pub const PRIVACY: &str = "/privacy";
+pub const TERMS: &str = "/terms";
 
 #[cfg(test)]
 mod tests {

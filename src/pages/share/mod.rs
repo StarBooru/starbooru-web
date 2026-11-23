@@ -97,8 +97,11 @@ mod tests {
         for (name, source) in [("viewer", viewer), ("menu", menu), ("bulk bar", bulk)] {
             assert!(source.contains("<ShareSheet"), "{name}");
         }
-        // The list stands where Settings will have it.
-        assert!(include_str!("../soon.rs").contains("<SharesCard"));
+        // The list stands in Settings, after the devices signed in.
+        let settings = include_str!("../settings/mod.rs");
+        let devices = settings.find("<SessionsCard");
+        let links = settings.find("<SharesCard />");
+        assert!(devices.zip(links).is_some_and(|(d, l)| d < l));
         // The public page is outside the shell and asks no session's client.
         let app = include_str!("../../app.rs");
         assert!(app.contains(r#"<Route path=path!("/s/:token") view=SharedPage />"#));

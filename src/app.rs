@@ -15,14 +15,14 @@ use crate::pages::gallery::Gallery;
 use crate::pages::help::Help;
 use crate::pages::login::OidcReturn;
 use crate::pages::post::PostView;
+use crate::pages::settings::Settings;
 use crate::pages::share::SharedPage;
 use crate::pages::shell::Shell;
-use crate::pages::soon::{SettingsSoon, Soon, SoonAlone};
+use crate::pages::soon::{Soon, SoonAlone};
 use crate::pages::tags::{TagPage, Tags};
 use crate::pages::trash::Trash;
 use crate::pages::upload::Upload;
-use crate::store;
-use crate::theme;
+use crate::{pace, power, store, theme};
 
 #[component]
 pub fn App() -> impl IntoView {
@@ -31,6 +31,10 @@ pub fn App() -> impl IntoView {
     let picked = Memo::new(|_| store::prefs().language);
     let flush = Memo::new(|_| store::prefs().flush_tiles);
     let hand = Memo::new(|_| store::prefs().hand);
+    let saver = Memo::new(|_| power::active());
+    let lite = Memo::new(|_| pace::lite());
+    power::watch();
+    pace::watch();
     // A language picked in Settings, else the browser's.
     Effect::new(move |_| {
         i18n::set_lang(i18n::resolve(picked.get(), &i18n::browser_languages()));
@@ -51,6 +55,9 @@ pub fn App() -> impl IntoView {
             data-tiles=move || flush.get().then_some("flush")
             // The side the rail and the editor's tools stand on.
             data-hand=move || hand.get().as_str()
+            // The battery saver (power.rs) and the effects (pace.rs).
+            data-saver=move || if saver.get() { "on" } else { "off" }
+            data-effects=move || if lite.get() { "lite" } else { "full" }
             style=move || format!("--seed-hue: {}", hue.get())
         >
             <Router>
@@ -81,7 +88,7 @@ fn AppRoutes() -> impl IntoView {
                 <Route path=path!("/upload") view=Upload />
                 <Route path=path!("/boorus") view=Boorus />
                 <Route path=path!("/boorus/post") view=BooruPost />
-                <Route path=path!("/settings") view=SettingsSoon />
+                <Route path=path!("/settings") view=Settings />
                 <Route path=path!("/trash") view=Trash />
                 <Route path=path!("/duplicates") view=Duplicates />
                 <Route path=path!("/help") view=Help />

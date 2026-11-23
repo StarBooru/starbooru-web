@@ -13,6 +13,7 @@ pub mod rating;
 pub mod select;
 pub mod snackbar;
 pub mod strength;
+pub mod swipe;
 pub mod switch;
 pub mod tag_box;
 pub mod tag_menu;

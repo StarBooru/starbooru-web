@@ -513,7 +513,7 @@ mod tests {
         assert!(css.contains(".dup-item.on .dup-pick .thumb { outline-color: var(--primary); }"));
         assert!(css.contains("@media (prefers-reduced-motion: reduce)"));
         // Linked from Settings' Library card, beside the recycle bin.
-        let settings = include_str!("soon.rs");
+        let settings = include_str!("settings/mod.rs");
         let trash = settings.find("href=route::TRASH");
         let here = settings.find("href=route::DUPLICATES");
         assert!(trash.zip(here).is_some_and(|(t, d)| t < d));

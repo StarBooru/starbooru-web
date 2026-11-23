@@ -1,6 +1,9 @@
 //! The colour the browser paints its own bars in (`<meta name="theme-color">`):
 //! the app's canvas, `--canvas` in `style/tokens.css`. Worked out here as
-//! sRGB, which every browser reads in that tag.
+//! sRGB, which every browser reads in that tag. Also the way back, from a
+//! colour picked as the accent to the hue the palette is built on.
+
+use starbooru_core::color::Rgb;
 
 use crate::store::Theme;
 
@@ -39,6 +42,47 @@ pub fn oklch_hex(l: f64, c: f64, hue_degrees: f64) -> String {
     let b = -0.004_196_086_3 * l3 - 0.703_418_614_7 * m3 + 1.707_614_701_0 * s3;
     format!("#{:02x}{:02x}{:02x}", channel(r), channel(g), channel(b))
 }
+
+/// Below this chroma a colour is a grey, with no hue to build a palette on.
+const MIN_CHROMA: f64 = 0.02;
+
+/// The OKLCH hue in whole degrees (0–359) of an sRGB colour, or `None` for
+/// a grey. The palette is built from a hue, so this is what a colour picked
+/// as the accent comes down to.
+pub fn hue_of(rgb: Rgb) -> Option<u16> {
+    let [r, g, b] = rgb.map(|c| {
+        let c = f64::from(c) / 255.0;
+        if c <= 0.04045 {
+            c / 12.92
+        } else {
+            ((c + 0.055) / 1.055).powf(2.4)
+        }
+    });
+    // Linear sRGB to OKLab (Björn Ottosson's matrices).
+    let l = (0.412_221_470_8 * r + 0.536_332_536_3 * g + 0.051_445_992_9 * b).cbrt();
+    let m = (0.211_903_498_2 * r + 0.680_699_545_1 * g + 0.107_396_956_6 * b).cbrt();
+    let s = (0.088_302_461_9 * r + 0.281_718_837_6 * g + 0.629_978_700_5 * b).cbrt();
+    let a = 1.977_998_495_1 * l - 2.428_592_205 * m + 0.450_593_709_9 * s;
+    let b = 0.025_904_037_1 * l + 0.782_771_766_2 * m - 0.808_675_766 * s;
+    if a.hypot(b) < MIN_CHROMA {
+        return None;
+    }
+    let degrees = b.atan2(a).to_degrees().rem_euclid(360.0).round();
+    // In 0..=360 after rem_euclid and round; 360 wraps to 0.
+    #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+    let hue = (degrees as u16) % 360;
+    Some(hue)
+}
+
+/// The colour an accent preset of `hue` is painted in: `.accent` in
+/// `style/pages/settings.css`, from `--swatch-l` and `--swatch-c`.
+pub fn swatch_rgb(hue: u16) -> Rgb {
+    let hex = oklch_hex(SWATCH.0, SWATCH.1, f64::from(hue));
+    starbooru_core::color::parse_hex_color(&hex).unwrap_or([0x80, 0x80, 0x80])
+}
+
+/// `--swatch-l` and `--swatch-c` in `style/tokens.css`.
+const SWATCH: (f64, f64) = (0.6, 0.16);
 
 /// A linear channel as an 8-bit sRGB one.
 fn channel(linear: f64) -> u8 {
@@ -81,6 +125,48 @@ mod tests {
         assert_eq!(light, "#f9fafe");
         assert_eq!(dark, "#0e0e13");
         assert_ne!(bar_colors(Theme::System, 120).0, light);
+    }
+
+    #[test]
+    fn finds_the_hue_of_a_colour() {
+        let near = |rgb, want: u16| {
+            let got = hue_of(rgb).unwrap();
+            assert!(got.abs_diff(want) <= 1, "{rgb:?}: {got} vs {want}");
+        };
+        near([0xff, 0, 0], 29);
+        near([0, 0xff, 0], 142);
+        near([0, 0, 0xff], 264);
+        near([0x67, 0x50, 0xa4], 294);
+        // Every hue of a saturated wheel lands in 0..360.
+        for i in 0..=255u8 {
+            assert!(hue_of([0xff, 0, i]).unwrap() < 360);
+        }
+    }
+
+    #[test]
+    fn greys_have_no_hue() {
+        for grey in [
+            [0, 0, 0],
+            [0x80, 0x80, 0x80],
+            [0xff, 0xff, 0xff],
+            [0x7f, 0x80, 0x81],
+        ] {
+            assert_eq!(hue_of(grey), None, "{grey:?}");
+        }
+    }
+
+    #[test]
+    fn a_preset_is_drawn_in_its_own_hue() {
+        let css = include_str!("../style/tokens.css");
+        let (l, c) = SWATCH;
+        assert!(css.contains(&format!("--swatch-l: {l};")));
+        assert!(css.contains(&format!("--swatch-c: {c};")));
+        // Some fall outside sRGB, and clipping them moves the hue a little.
+        for hue in [285, 330, 20, 65, 140, 190, 245, 0] {
+            let got = hue_of(swatch_rgb(hue)).unwrap();
+            let apart = got.abs_diff(hue).min(360 - got.abs_diff(hue));
+            assert!(apart <= 10, "{hue}: {got}");
+        }
     }
 
     #[test]

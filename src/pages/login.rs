@@ -16,7 +16,7 @@ use crate::components::legal::LegalLinks;
 use crate::components::strength::StrengthField;
 use crate::logic::address::normalize_server;
 use crate::oidc::{self, Back};
-use crate::store;
+use crate::{route, store};
 
 #[component]
 pub fn Login() -> impl IntoView {
@@ -304,30 +304,51 @@ fn sign_in_error(e: &ClientError, server: &str) -> String {
 
 /// `/oidc`: the browser back from the identity provider. It finishes the
 /// sign-in and goes to the gallery, or to the sign-in screen saying why not.
+/// A link to the account signed in goes back to Settings, or says here why
+/// it didn't work, with the way back.
 #[component]
 pub fn OidcReturn() -> impl IntoView {
     let query = use_location().search.get_untracked();
     let navigate = use_navigate();
-    let home = move || {
+    let go = move |to: &str| {
         navigate(
-            "/",
+            to,
             NavigateOptions {
                 replace: true,
                 ..NavigateOptions::default()
             },
         );
     };
+    let error = RwSignal::new(None::<String>);
     // Once this page is drawn, as the router takes no new address mid-draw.
     // Untracked, so it runs once: the handle can be taken only once.
     Effect::new(move |_| {
         untrack(|| match oidc::back(&query, oidc::take()) {
-            Back::Nothing => home(),
-            Back::Failed(why) => {
+            Back::Nothing => go("/"),
+            Back::Failed { why, link: true } => error.set(Some(why.text())),
+            Back::Failed { why, link: false } => {
                 store::set_sign_in_note(why.text());
-                home();
+                go("/");
             }
-            Back::Finish { server, finish } => {
-                let home = home.clone();
+            Back::Finish {
+                finish, link: true, ..
+            } => {
+                let go = go.clone();
+                spawn_local(async move {
+                    match api::attempt(move |c| async move { c.oidc_link(&finish).await }).await {
+                        Ok(_) => go(route::SETTINGS),
+                        Err(e) => {
+                            error.try_set(Some(oidc::link_error(e.status, e.message)));
+                        }
+                    }
+                });
+            }
+            Back::Finish {
+                server,
+                finish,
+                link: false,
+            } => {
+                let go = go.clone();
                 spawn_local(async move {
                     let result = match Client::new(&server) {
                         Ok(client) => client.oidc_finish(&finish).await,
@@ -337,19 +358,32 @@ pub fn OidcReturn() -> impl IntoView {
                         Ok(auth) => store::sign_in(server, auth),
                         Err(e) => store::set_sign_in_note(oidc::finish_error(&e, &server)),
                     }
-                    home();
+                    go("/");
                 });
             }
         });
     });
+    let body = move || match error.get() {
+        None => view! {
+            <p class="muted status-line" role="status">
+                {move || t!("oidc-finishing")}
+            </p>
+        }
+        .into_any(),
+        Some(message) => view! {
+            <div class="banner error" role="alert">
+                {message}
+            </div>
+            <a class="btn wide" href=route::SETTINGS>
+                {move || t!("oidc-back-settings")}
+            </a>
+        }
+        .into_any(),
+    };
     view! {
         <div class="login-page">
             <div class="aurora" aria-hidden="true"></div>
-            <div class="login-card glass">
-                <p class="muted status-line" role="status">
-                    {move || t!("oidc-finishing")}
-                </p>
-            </div>
+            <div class="login-card glass">{body}</div>
         </div>
     }
 }

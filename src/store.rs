@@ -44,6 +44,9 @@ pub enum Theme {
 }
 
 impl Theme {
+    /// In the order Settings offers them.
+    pub const ALL: [Theme; 3] = [Theme::System, Theme::Light, Theme::Dark];
+
     /// The value of `data-theme` on `.app`, which `style/tokens.css` reads.
     pub fn as_str(self) -> &'static str {
         match self {
@@ -69,6 +72,8 @@ pub enum Hand {
 }
 
 impl Hand {
+    pub const ALL: [Hand; 3] = [Hand::Either, Hand::Left, Hand::Right];
+
     /// The value of `data-hand` on `.app`, which the styles read.
     pub fn as_str(self) -> &'static str {
         match self {
@@ -76,6 +81,84 @@ impl Hand {
             Hand::Left => "left",
             Hand::Right => "right",
         }
+    }
+}
+
+/// The battery saver (`power.rs`).
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum Saver {
+    Always,
+    Never,
+    /// On while the battery is low or the device saves data. Also what an
+    /// unknown value (from a newer version) reads as.
+    #[default]
+    #[serde(other)]
+    Auto,
+}
+
+impl Saver {
+    pub const ALL: [Saver; 3] = [Saver::Auto, Saver::Always, Saver::Never];
+}
+
+/// How much the app spends on looks (`pace.rs`).
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum Effects {
+    Full,
+    /// Plain surfaces for the glass, no entrance for new thumbnails and no
+    /// glow behind a picture.
+    Lite,
+    /// Full until scrolling stutters on this device. Also what an unknown
+    /// value (from a newer version) reads as.
+    #[default]
+    #[serde(other)]
+    Auto,
+}
+
+impl Effects {
+    pub const ALL: [Effects; 3] = [Effects::Auto, Effects::Full, Effects::Lite];
+}
+
+/// What swiping a gallery thumbnail sideways does. Off until chosen in
+/// Settings, as a sideways swipe is easy to make by mistake.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum SwipeAction {
+    Like,
+    Select,
+    Share,
+    Download,
+    Delete,
+    /// Also what an unknown value (from a newer version) reads as.
+    #[default]
+    #[serde(other)]
+    Off,
+}
+
+impl SwipeAction {
+    pub const ALL: [SwipeAction; 6] = [
+        SwipeAction::Off,
+        SwipeAction::Like,
+        SwipeAction::Select,
+        SwipeAction::Share,
+        SwipeAction::Download,
+        SwipeAction::Delete,
+    ];
+
+    pub fn as_str(self) -> &'static str {
+        match self {
+            SwipeAction::Off => "off",
+            SwipeAction::Like => "like",
+            SwipeAction::Select => "select",
+            SwipeAction::Share => "share",
+            SwipeAction::Download => "download",
+            SwipeAction::Delete => "delete",
+        }
+    }
+
+    pub fn parse(s: &str) -> Option<SwipeAction> {
+        Self::ALL.into_iter().find(|a| a.as_str() == s)
     }
 }
 
@@ -178,6 +261,20 @@ pub struct Prefs {
     /// bin once the edited copy is saved.
     #[serde(deserialize_with = "lenient")]
     pub keep_original: bool,
+    #[serde(deserialize_with = "lenient")]
+    pub battery_saver: Saver,
+    #[serde(deserialize_with = "lenient")]
+    pub effects: Effects,
+    /// Automatic effects found this device too slow for the full ones. Kept,
+    /// so the next visit doesn't stutter until it finds out again.
+    #[serde(deserialize_with = "lenient")]
+    pub effects_reduced: bool,
+    /// What swiping a gallery thumbnail to the left does.
+    #[serde(deserialize_with = "lenient")]
+    pub swipe_left: SwipeAction,
+    /// What swiping a gallery thumbnail to the right does.
+    #[serde(deserialize_with = "lenient")]
+    pub swipe_right: SwipeAction,
     /// Settings this version doesn't have yet (the reference's, or a newer
     /// version's), written back untouched.
     #[serde(flatten)]
@@ -204,6 +301,11 @@ impl Default for Prefs {
             booru_dedupe: true,
             hand: Hand::Either,
             keep_original: false,
+            battery_saver: Saver::Auto,
+            effects: Effects::Auto,
+            effects_reduced: false,
+            swipe_left: SwipeAction::Off,
+            swipe_right: SwipeAction::Off,
             other: Map::new(),
         }
     }
@@ -596,6 +698,11 @@ mod tests {
                 booru_dedupe: false,
                 hand: Hand::Left,
                 keep_original: true,
+                battery_saver: Saver::Always,
+                effects: Effects::Lite,
+                effects_reduced: true,
+                swipe_left: SwipeAction::Delete,
+                swipe_right: SwipeAction::Like,
                 other: Map::new(),
             },
             memory: GalleryMemory {
@@ -627,6 +734,12 @@ mod tests {
         assert_eq!(value["prefs"]["booru_dedupe"], false);
         assert_eq!(value["prefs"]["hand"], "left");
         assert_eq!(value["prefs"]["keep_original"], true);
+        // The reference's names for the looks and the gestures.
+        assert_eq!(value["prefs"]["battery_saver"], "always");
+        assert_eq!(value["prefs"]["effects"], "lite");
+        assert_eq!(value["prefs"]["effects_reduced"], true);
+        assert_eq!(value["prefs"]["swipe_left"], "delete");
+        assert_eq!(value["prefs"]["swipe_right"], "like");
         assert_eq!(
             value["prefs"]["boorus"][0],
             serde_json::json!({"api": "danbooru", "base": "http://nas:8000"})
@@ -851,6 +964,54 @@ mod tests {
     }
 
     #[test]
+    fn looks_and_gestures_default_and_fall_back() {
+        let prefs = parse(r#"{"prefs":{"theme":"dark"}}"#).prefs;
+        assert_eq!(prefs.battery_saver, Saver::Auto);
+        assert_eq!(
+            (prefs.effects, prefs.effects_reduced),
+            (Effects::Auto, false)
+        );
+        // Swiping a thumbnail does nothing until chosen.
+        assert_eq!(
+            (prefs.swipe_left, prefs.swipe_right),
+            (SwipeAction::Off, SwipeAction::Off)
+        );
+        for effects in Effects::ALL {
+            let json = format!(
+                r#"{{"prefs":{{"effects":{},"effects_reduced":true}}}}"#,
+                serde_json::to_string(&effects).unwrap()
+            );
+            let prefs = parse(&json).prefs;
+            assert_eq!((prefs.effects, prefs.effects_reduced), (effects, true));
+        }
+        for saver in Saver::ALL {
+            let json = format!(
+                r#"{{"prefs":{{"battery_saver":{}}}}}"#,
+                serde_json::to_string(&saver).unwrap()
+            );
+            assert_eq!(parse(&json).prefs.battery_saver, saver);
+        }
+        for action in SwipeAction::ALL {
+            assert_eq!(SwipeAction::parse(action.as_str()), Some(action));
+            let json = format!(r#"{{"prefs":{{"swipe_left":"{}"}}}}"#, action.as_str());
+            assert_eq!(parse(&json).prefs.swipe_left, action);
+        }
+        assert_eq!(SwipeAction::parse("nope"), None);
+        // From a newer version, or odd: the default, and the rest still reads.
+        let prefs = parse(
+            r#"{"prefs":{"effects":"cinematic","battery_saver":3,"swipe_left":"archive",
+                "swipe_right":["x"],"effects_reduced":"yes","theme":"light"}}"#,
+        )
+        .prefs;
+        assert_eq!(prefs.effects, Effects::Auto);
+        assert_eq!(prefs.battery_saver, Saver::Auto);
+        assert_eq!(prefs.swipe_left, SwipeAction::Off);
+        assert_eq!(prefs.swipe_right, SwipeAction::Off);
+        assert!(!prefs.effects_reduced);
+        assert_eq!(prefs.theme, Theme::Light);
+    }
+
+    #[test]
     fn state_without_memory_still_loads() {
         assert_eq!(
             parse(r#"{"prefs":{"theme":"dark"}}"#).memory,
@@ -867,17 +1028,25 @@ mod tests {
         // As the reference wrote it, with settings and the gallery's places
         // the web app doesn't have yet.
         let json = r#"{"session":null,
-            "prefs":{"theme":"dark","accent_hue":200,"hand":"left","effects":"lite",
+            "prefs":{"theme":"dark","accent_hue":200,"hand":"left","cache_mb":500,
+                     "system_accent":false,"effects":"lite",
                      "boorus":[{"api":"e621","base":"https://e926.net"}]},
             "memory":{"owner":"x|1","spots":[{"q":"cat"}]}}"#;
         let stored = parse(json);
         assert_eq!(stored.prefs.theme, Theme::Dark);
         assert_eq!(stored.prefs.hand, Hand::Left);
-        assert_eq!(stored.prefs.other["effects"], "lite");
+        assert_eq!(stored.prefs.effects, Effects::Lite);
+        assert_eq!(stored.prefs.other["cache_mb"], 500);
         let again: Value = serde_json::from_str(&to_json(&stored).unwrap()).unwrap();
         let before: Value = serde_json::from_str(json).unwrap();
         assert_eq!(again["prefs"]["hand"], before["prefs"]["hand"]);
         assert_eq!(again["prefs"]["effects"], before["prefs"]["effects"]);
+        // The desktop's cache and Android's wallpaper colour, kept for them.
+        assert_eq!(again["prefs"]["cache_mb"], before["prefs"]["cache_mb"]);
+        assert_eq!(
+            again["prefs"]["system_accent"],
+            before["prefs"]["system_accent"]
+        );
         assert_eq!(again["prefs"]["boorus"], before["prefs"]["boorus"]);
         // The gallery's places, in the reference's shape, read as they were.
         assert_eq!(stored.memory.last_search("x|1"), "cat");

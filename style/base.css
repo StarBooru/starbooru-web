@@ -458,3 +458,11 @@ button.chip:disabled:hover { background: var(--surface-2); color: var(--on-surfa
   .chip:hover { transform: none; }
   .snackbar.timed::after { display: none; }
 }
+/* Battery saver (power.rs): the same, except spinners keep turning, as they
+   say something is happening and stop when it's done. */
+.app[data-saver="on"] *:not(.spinner), .app[data-saver="on"] *::before, .app[data-saver="on"] *::after {
+  animation-duration: 1ms !important; animation-iteration-count: 1 !important;
+  transition-duration: 1ms !important;
+}
+.app[data-saver="on"] .chip:hover { transform: none; }
+.app[data-saver="on"] .snackbar.timed::after { display: none; }

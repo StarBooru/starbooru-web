@@ -22,13 +22,13 @@ use crate::api;
 use crate::components::banner::{ErrorBanner, Spinner};
 use crate::components::brand::{Mark, Wordmark};
 use crate::components::icons::{Ico, Icon};
-use crate::dom;
 use crate::logic::gallery::format_duration;
 use crate::logic::share::{Item, Layout, heading, items, layout, step};
 use crate::logic::viewer::when;
 use crate::logic::zoom::Zoom;
 use crate::pages::post::glow::PostGlow;
 use crate::pages::post::stage::{Shown, Stage};
+use crate::{dom, power};
 
 /// What the link holds, as the page shows it.
 #[derive(Clone, Debug, PartialEq)]
@@ -414,7 +414,7 @@ fn Lightbox(
                     src=item.file
                     poster=item.sample.or(item.thumb)
                     controls=true
-                    autoplay=!dom::reduced_motion()
+                    autoplay=!dom::reduced_motion() && !power::active_untracked()
                     playsinline=true
                 ></video>
             }

@@ -59,6 +59,11 @@
      starbooru_core::color::wheel_color reads it */
   --color-wheel: radial-gradient(closest-side, #fff, #fff0),
     conic-gradient(#f00, #ff0, #0f0, #0ff, #00f, #f0f, #f00);
+  /* an accent preset in Settings shows its hue at this lightness and chroma,
+     with a white tick on it, in both themes (theme::swatch_rgb agrees) */
+  --swatch-l: 0.6;
+  --swatch-c: 0.16;
+  --on-swatch: oklch(0.99 0 0);
   --shadow-1: 0 1px 2px oklch(0.2 0.04 var(--h) / 0.08), 0 2px 8px oklch(0.2 0.04 var(--h) / 0.06);
   /* --shadow-1 as a filter, for a shape a box shadow doesn't follow. */
   --drop-1: drop-shadow(0 1px 2px oklch(0.2 0.04 var(--h) / 0.08)) drop-shadow(0 2px 8px oklch(0.2 0.04 var(--h) / 0.06));

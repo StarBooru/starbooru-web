@@ -1,6 +1,31 @@
-/* Settings (src/pages/soon.rs until the page is built), its lists of
-   sessions, keys and links, and its import of a whole library from another
-   booru (src/pages/library.rs). */
+/* Settings (src/pages/settings/): its choices, the accent's colours, the
+   account and its usage, the lists of devices, sign-ins, keys and links, and
+   the import of a whole library from another booru (src/pages/library.rs). */
+
+/* ---------- appearance ---------- */
+
+/* The accent's presets, each in its own hue with a tick on it. The ring is a
+   shadow, so hovering moves nothing. */
+.accents { display: flex; flex-wrap: wrap; gap: 10px; }
+.accent {
+  display: grid; place-items: center; width: 40px; height: 40px; padding: 0; border: 0; border-radius: 50%; cursor: pointer;
+  background: oklch(var(--swatch-l) var(--swatch-c) var(--swatch-hue)); color: var(--on-swatch);
+  transition: box-shadow var(--fast) var(--ease);
+}
+.accent:hover { box-shadow: 0 0 0 2px var(--surface), 0 0 0 4px var(--outline); }
+.accent.on { box-shadow: 0 0 0 2px var(--surface), 0 0 0 4px var(--on-surface); }
+.accent:focus-visible { outline: 3px solid var(--primary); outline-offset: 4px; }
+/* The picker has no colour of its own until its colour is the one in use. */
+.accent.custom:not(.on) { background: var(--surface-3); color: var(--on-surface); }
+/* It opens under its button; AccentMenu keeps it inside the window. */
+.accents .color-menu { left: 0; right: auto; }
+
+/* ---------- account ---------- */
+
+.usage { display: grid; gap: 6px; }
+.meter.full span { background: var(--danger); }
+.about-credits { margin-bottom: 12px; }
+.card form .banner { margin-bottom: 12px; }
 
 .sessions { list-style: none; margin: 0 0 12px; padding: 0; }
 .session { display: flex; align-items: center; gap: 12px; padding: 12px 0; }
@@ -9,6 +34,9 @@
 .session-main .muted { flex-basis: 100%; font-size: 14px; }
 .session-main .pill { background: var(--primary-container); color: var(--on-primary-container); }
 .session-main .pill.bad { background: var(--danger-container); color: var(--on-danger-container); }
+.key-prefix { font: 13px ui-monospace, "Cascadia Code", "Roboto Mono", monospace; color: var(--on-surface-2); }
+.key-options { display: flex; flex-wrap: wrap; align-items: start; gap: 0 24px; }
+.keys-none { margin-bottom: 12px; }
 .key-form { margin-top: 4px; padding-top: 16px; border-top: 1px solid oklch(from var(--outline) l c h / 0.4); }
 /* A new key or link, in a field to select, with its copy button. */
 .key-created { display: grid; justify-content: stretch; gap: 10px; margin-bottom: 12px; }

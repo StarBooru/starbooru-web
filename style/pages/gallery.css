@@ -73,6 +73,23 @@ html.sb-scrolling .thumb img { filter: none; transition: opacity var(--med) var(
   background: var(--scrim); color: var(--on-scrim);
 }
 .page.gallery { animation: none; }
+/* Swiping a tile aside (components/swipe.rs) uncovers what the swipe does,
+   on the side it opens. */
+.thumb:has(> .swipe-hint) { touch-action: pan-y; }
+.swipe-hint {
+  position: absolute; top: 0; bottom: 0; width: 50%; display: grid; align-items: center; padding: 0 16px;
+  background: var(--primary-container); color: var(--on-primary-container); opacity: 0;
+}
+.swipe-hint[data-side="left"] { right: 0; justify-items: end; }
+.swipe-hint[data-side="right"] { left: 0; justify-items: start; }
+.swipe-hint[data-action="delete"] { background: var(--danger-container); color: var(--on-danger-container); }
+.thumb[data-swiping="left"] .swipe-hint[data-side="left"],
+.thumb[data-swiping="right"] .swipe-hint[data-side="right"],
+.thumb[data-swiping="back"] .swipe-hint { opacity: 1; }
+.swipe-hint .icon { transition: scale var(--fast) var(--ease-spring); }
+.thumb[data-armed] .swipe-hint .icon { scale: 1.3; }
+.thumb[data-swiping] .badge { opacity: 0; }
+.thumb[data-swiping="back"] .thumb-media { transition: translate var(--med) var(--ease); }
 
 /* ---------- selection mode (pages/bulk.rs) ---------- */
 
