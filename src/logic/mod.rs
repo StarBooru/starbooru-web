@@ -1,6 +1,7 @@
 //! Plain Rust with no browser in it, tested on the host.
 
 pub mod address;
+pub mod bulk;
 pub mod explore;
 pub mod gallery;
 pub mod jobs;

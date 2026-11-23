@@ -6,6 +6,7 @@ use leptos::prelude::*;
 use crate::api;
 use crate::components::brand::Mark;
 use crate::components::icons::{Ico, Icon};
+use crate::route;
 use crate::store;
 
 /// `title` is the page's name, translated.
@@ -48,7 +49,8 @@ fn SoonCard() -> impl IntoView {
 }
 
 /// `/settings` until it's built: the account, with a way to sign out, as the
-/// reference's Settings had at its foot.
+/// reference's Settings had at its foot, and the way to the recycle bin from
+/// its Library card.
 #[component]
 pub fn SettingsSoon() -> impl IntoView {
     let info = LocalResource::new(api::server_info);
@@ -92,6 +94,14 @@ pub fn SettingsSoon() -> impl IntoView {
     view! {
         <div class="page narrow">
             <h1 class="page-title break">{move || t!("nav-settings")}</h1>
+            <section class="card">
+                <h2 class="card-title">{move || t!("settings-library")}</h2>
+                <a class="list-link" href=route::TRASH>
+                    <Ico icon=Icon::Delete />
+                    <span>{move || t!("trash-title")}</span>
+                    <span class="muted">{move || t!("settings-trash-note")}</span>
+                </a>
+            </section>
             {account}
             <SoonCard />
         </div>

@@ -74,6 +74,42 @@ html.sb-scrolling .thumb img { filter: none; transition: opacity var(--med) var(
 }
 .page.gallery { animation: none; }
 
+/* ---------- selection mode (pages/bulk.rs) ---------- */
+
+/* The last tiles aren't left under the bar. */
+.masonry-box.selecting { padding-bottom: 112px; }
+/* A picked tile draws its picture in from the edge, on the accent. */
+.thumb.selectable .thumb-media { overflow: hidden; transition: inset var(--med) var(--ease-spring), border-radius var(--med) var(--ease); }
+.thumb.selectable.on { background: var(--primary-container); }
+.app .masonry .thumb.selectable.on .thumb-media { inset: 10px; border-radius: var(--radius-s); }
+.check-mark {
+  position: absolute; top: 8px; left: 8px; display: grid; place-items: center;
+  width: 28px; height: 28px; border-radius: 999px;
+  border: 2px solid var(--on-scrim); background: var(--scrim); color: transparent;
+  box-shadow: var(--shadow-1);
+  transition: background-color var(--fast) var(--ease), color var(--fast) var(--ease);
+}
+.thumb.selectable.on .check-mark {
+  background: var(--primary); border-color: var(--primary); color: var(--on-primary);
+  animation: pop var(--slow) var(--ease-spring);
+}
+.bulk-count { display: flex; align-items: center; gap: 4px; margin-right: auto; min-width: 0; font-variant-numeric: tabular-nums; }
+.bulk-count strong { white-space: nowrap; }
+.bulk-bar > .btn:disabled { opacity: 0.5; }
+/* The sheet's rating list opens upwards, over the boxes, so the sheet
+   doesn't scroll to show it. */
+.bulk-sheet .select-list { top: auto; bottom: calc(100% + 6px); transform-origin: bottom right; }
+.bulk-sheet .sheet-head { margin-bottom: 12px; }
+.bulk-sheet .field:last-of-type { margin-bottom: 12px; }
+.bulk-sheet .text-box textarea { min-height: 64px; }
+@media (max-width: 760px) {
+  .bulk-count { flex-basis: 100%; }
+  .bulk-count .btn { flex: none; margin-left: auto; }
+  .bulk-bar .bulk-edit { flex: 1 1 0; }
+  .bulk-bar .bulk-delete { flex: none; width: 48px; padding: 0; }
+  .bulk-bar .bulk-delete .bulk-label { display: none; }
+}
+
 /* ---------- the end of the list ---------- */
 
 .sentinel { display: grid; place-items: center; min-height: 104px; padding: 32px 0; }
@@ -223,4 +259,6 @@ html.sb-scrolling .thumb img { filter: none; transition: opacity var(--med) var(
 @media (prefers-reduced-motion: reduce) {
   .thumb img { transition: none; }
   .thumb .preview { display: none; }
+  .thumb.selectable .thumb-media { transition: none; }
+  .thumb.selectable.on .check-mark { animation: none; }
 }

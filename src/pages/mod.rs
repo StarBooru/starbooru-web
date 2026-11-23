@@ -1,5 +1,6 @@
 //! The app's pages. `app.rs` says which address shows which.
 
+mod bulk;
 pub mod explore;
 pub mod gallery;
 pub mod help;
@@ -11,6 +12,7 @@ mod search_demo;
 pub mod shell;
 pub mod soon;
 pub mod tags;
+pub mod trash;
 pub mod upload;
 
 use leptos::prelude::*;

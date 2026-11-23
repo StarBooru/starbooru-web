@@ -112,6 +112,8 @@ settings-account = Account
 settings-signed-in-as = Accesso come
 settings-server-version = Versione del server
 settings-sign-out = Esci
+settings-library = Raccolta
+settings-trash-note = Ripristina o elimina definitivamente i post
 
 ## Gallery
 
@@ -182,6 +184,57 @@ saved-searches = Ricerche salvate
 saved-remove = Rimuovi “{ $name }”
 saved-removed = “{ $name }” rimossa
 
+gallery-select = Seleziona i post
+gallery-stop-selecting = Termina la selezione
+bulk-label = Modifica i post selezionati
+bulk-selected =
+    { $count ->
+        [one] 1 selezionato
+       *[other] { $count } selezionati
+    }
+bulk-select-all = Seleziona tutto
+bulk-select-none = Deseleziona tutto
+bulk-edit-title = Modifica tag e classificazione
+bulk-sheet-title =
+    { $count ->
+        [one] Modifica 1 post
+       *[other] Modifica { $count } post
+    }
+bulk-add-tags = Aggiungi questi tag
+bulk-remove-tags = Togli questi tag
+bulk-keep-rating = Mantieni la classificazione
+bulk-apply = Applica
+bulk-tag-both = “{ $tag }” è in entrambe le liste. Lascialo in una sola.
+bulk-nothing = Aggiungi o togli un tag, oppure scegli una classificazione.
+bulk-delete-failed = Impossibile spostarli nel cestino: { $reason }
+bulk-restore-failed =
+    { $count ->
+        [one] Impossibile recuperare 1 post: { $reason }
+       *[other] Impossibile recuperare { $count } post: { $reason }
+    }
+bulk-updated =
+    { $count ->
+        [one] Aggiornato 1 post
+       *[other] Aggiornati { $count } post
+    }
+bulk-moved =
+    { $count ->
+        [one] Spostato 1 post nel cestino
+       *[other] Spostati { $count } post nel cestino
+    }
+bulk-skipped =
+    { $count ->
+        [one] saltato 1 post
+       *[other] saltati { $count } post
+    }
+bulk-skipped-undeletable =
+    { $count ->
+        [one] saltato 1 post che non puoi eliminare
+       *[other] saltati { $count } post che non puoi eliminare
+    }
+bulk-done = { $done }.
+bulk-done-skipped = { $done }; { $skipped }.
+
 ## Esplora
 
 explore-window = Tendenze di
@@ -214,6 +267,37 @@ explore-random = Scelti a caso
 explore-shuffle = Mescola
 explore-filter-placeholder = Restringi, ad es. -rating:e
 explore-filter-label = Restringi con una ricerca
+
+## Cestino
+
+trash-lead = I post eliminati restano qui finché non li ripristini o li elimini definitivamente. L'eliminazione definitiva rimuove anche il file dal server.
+trash-purge-after =
+    { $days ->
+        [one] Il server elimina definitivamente i post qui un giorno dopo che sono stati spostati nel cestino.
+       *[other] Il server elimina definitivamente i post qui { $days } giorni dopo che sono stati spostati nel cestino.
+    }
+trash-purge-never = I post restano qui finché qualcuno non li elimina definitivamente.
+trash-none = Il cestino è vuoto
+trash-restore-post = Ripristina il post { $id }
+trash-restore-all = Ripristina tutto
+trash-restore-all-confirm = Ripristinare tutto?
+trash-restored =
+    { $count ->
+        [one] 1 post ripristinato.
+       *[other] { $count } post ripristinati.
+    }
+trash-restore-failed = Impossibile ripristinare il post { $id }: { $reason }
+trash-purge = Elimina definitivamente
+trash-purge-post = Elimina definitivamente il post { $id }
+trash-purge-failed = Impossibile eliminare definitivamente il post { $id }: { $reason }
+trash-purged =
+    { $count ->
+        [one] 1 post eliminato definitivamente.
+       *[other] { $count } post eliminati definitivamente.
+    }
+trash-empty = Svuota il cestino
+trash-empty-confirm = Eliminare tutto definitivamente?
+sure = Sicuro?
 
 ## Viewer
 
@@ -315,6 +399,7 @@ press-unlike = Togli il mi piace
 press-liked = Ti piace
 press-unliked = Mi piace tolto
 delete-failed = Impossibile spostarlo nel cestino: { $reason }
+swipe-select = Seleziona
 
 ## Tag
 

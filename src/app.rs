@@ -16,6 +16,7 @@ use crate::pages::post::PostView;
 use crate::pages::shell::Shell;
 use crate::pages::soon::{SettingsSoon, Soon, SoonAlone};
 use crate::pages::tags::{TagPage, Tags};
+use crate::pages::trash::Trash;
 use crate::pages::upload::Upload;
 use crate::store;
 use crate::theme;
@@ -75,7 +76,7 @@ fn AppRoutes() -> impl IntoView {
                 <Route path=path!("/boorus") view=|| view! { <Soon title=|| t!("nav-boorus") /> } />
                 <Route path=path!("/boorus/post") view=|| view! { <Soon title=|| t!("nav-boorus") /> } />
                 <Route path=path!("/settings") view=SettingsSoon />
-                <Route path=path!("/trash") view=|| view! { <Soon title=|| t!("trash-title") /> } />
+                <Route path=path!("/trash") view=Trash />
                 <Route path=path!("/duplicates") view=|| view! { <Soon title=|| t!("dup-title") /> } />
                 <Route path=path!("/help") view=Help />
                 <Route path=path!("/admin") view=|| view! { <Soon title=|| t!("admin-title") /> } />

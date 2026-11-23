@@ -1,8 +1,9 @@
 //! The menu a right-clicked tile opens, on any page that lists posts as
 //! `Thumb`s under `data-press="post"`: open the post here or in a new tab,
-//! like it, download it and, in the gallery, move it to the recycle bin. A
-//! long press on a phone opens it too where the browser reports one as a
-//! right click, and so do Shift+F10 and the menu key on a focused tile.
+//! like it, download it and, in the gallery, select it for a mass edit or
+//! move it to the recycle bin. A long press on a phone opens it too where the
+//! browser reports one as a right click, and so do Shift+F10 and the menu key
+//! on a focused tile.
 
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -16,7 +17,7 @@ use starbooru_core::Post;
 use wasm_bindgen::JsCast;
 use web_sys::MouseEvent;
 
-use super::gallery;
+use super::{gallery, trash};
 use crate::api;
 use crate::components::download;
 use crate::components::icons::Icon;
@@ -48,12 +49,16 @@ struct Open {
 /// Listens for right clicks on tiles while it's on the page, and shows their
 /// menu. `find` gives the post a tile stands for, `on_open` hears of one
 /// opened from the menu as a click on the tile would, and `on_deleted`, where
-/// the page can take a tile away, offers the recycle bin.
+/// the page can take a tile away, offers the recycle bin. Where the page has
+/// a selection, `on_select` offers it; where it keeps its posts, `on_voted`
+/// gets each one as it is after a vote.
 #[component]
 pub fn PostPress(
     find: Callback<i64, Option<Arc<Post>>>,
     on_open: Callback<Arc<Post>>,
     #[prop(optional)] on_deleted: Option<Callback<i64>>,
+    #[prop(optional)] on_select: Option<Callback<i64>>,
+    #[prop(optional)] on_voted: Option<Callback<Arc<Post>>>,
 ) -> impl IntoView {
     let open = RwSignal::new(None::<Open>);
     // Votes cast from here. The lists the tiles come from aren't asked for
@@ -95,7 +100,12 @@ pub fn PostPress(
             match api::call(move |c| async move { c.vote(id, vote).await }).await {
                 Ok(fresh) => {
                     let _ = votes.try_update_value(|v| v.insert(id, fresh.my_vote));
-                    gallery::update_post(Arc::new(fresh));
+                    let fresh = Arc::new(fresh);
+                    gallery::update_post(Arc::clone(&fresh));
+                    // The page may have gone meanwhile.
+                    if let Some(voted) = on_voted {
+                        voted.try_run(fresh);
+                    }
                     notify(if vote > 0 {
                         t!("press-liked")
                     } else {
@@ -113,10 +123,10 @@ pub fn PostPress(
                 Ok(()) => {
                     gallery::forget_post(id);
                     if let Some(deleted) = on_deleted {
-                        deleted.run(id);
+                        deleted.try_run(id);
                     }
                     notify_undo(t!("press-deleted"), t!("press-undo"), move || {
-                        gallery::undo_delete(id);
+                        trash::undo_delete(vec![id]);
                     });
                 }
                 Err(message) => notify(t!("delete-failed", reason = message)),
@@ -132,6 +142,18 @@ pub fn PostPress(
         let file = absolute(&post.file_url);
         let name = download_name(&post.sha256, &post.file_url, &post.mime);
         let id = post.id;
+        let select = on_select.map(|select| {
+            view! {
+                <MenuItem
+                    icon=Icon::Check
+                    label=move || t!("swipe-select")
+                    on_click=Callback::new(move |()| {
+                        open.set(None);
+                        select.run(id);
+                    })
+                />
+            }
+        });
         let delete = on_deleted.map(|_| {
             view! {
                 <MenuItem
@@ -162,6 +184,7 @@ pub fn PostPress(
                     label=move || if liked { t!("press-unlike") } else { t!("swipe-like") }
                     on_click=Callback::new(move |()| like.run(Arc::clone(&voted)))
                 />
+                {select}
                 <MenuItem
                     icon=Icon::Download
                     label=move || t!("post-download")
@@ -196,12 +219,15 @@ mod tests {
         assert!(source.contains(r#"[data-press="post"] [data-post]"#));
         let thumb = include_str!("../components/thumb.rs");
         assert!(thumb.contains("data-post=id"));
-        // Deleting needs a list to take the tile out of.
+        // Deleting needs a list to take the tile out of, and selecting a
+        // selection to add it to: the gallery's.
         let gallery = include_str!("gallery.rs");
-        assert!(gallery.contains("on_deleted="));
+        for prop in ["on_deleted=", "on_select=", "on_voted="] {
+            assert!(gallery.contains(prop), "{prop}");
+        }
         for page in [include_str!("explore.rs"), include_str!("post/related.rs")] {
             assert!(page.contains("<PostPress"));
-            assert!(!page.contains("on_deleted="));
+            assert!(!page.contains("on_deleted=") && !page.contains("on_select="));
         }
     }
 }

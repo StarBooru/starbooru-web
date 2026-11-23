@@ -2,12 +2,13 @@
 //! picture's main colour and fades the thumbnail in once it has come. A video
 //! says how long it runs and plays, muted, under a mouse; a GIF says so.
 //! Under `data-press="post"` a right click opens its menu (`pages/post_menu.rs`).
+//! In the gallery's selection mode a click picks it instead, with a check mark.
 
 use std::cell::RefCell;
 use std::rc::Rc;
 use std::sync::Arc;
 
-use leptos::ev::{MouseEvent, PointerEvent};
+use leptos::ev::{KeyboardEvent, MouseEvent, PointerEvent};
 use leptos::html;
 use leptos::prelude::*;
 use send_wrapper::SendWrapper;
@@ -39,7 +40,9 @@ fn place_style(p: Place) -> String {
 /// `index` is the post's place in the list, for a staggered entrance within a
 /// page of results; `still` skips the entrance, for a tile that isn't new to
 /// the user. `place` is its spot in the layout. `on_open` hears of a click
-/// that opens the post here, and not one for a new tab.
+/// that opens the post here, and not one for a new tab. While `selecting`,
+/// a click or Space goes to `on_toggle` with the post and whether Shift was
+/// down, and `selected` says whether it's picked.
 #[component]
 pub fn Thumb(
     post: Arc<Post>,
@@ -48,13 +51,32 @@ pub fn Thumb(
     #[prop(into)] place: Signal<Option<Place>>,
     still: bool,
     #[prop(optional)] on_open: Option<Callback<Arc<Post>>>,
+    #[prop(optional, into)] selecting: Signal<bool>,
+    #[prop(optional, into)] selected: Signal<bool>,
+    #[prop(optional)] on_toggle: Option<Callback<(i64, bool)>>,
 ) -> impl IntoView {
+    let id = post.id;
     let opened = Arc::clone(&post);
     let click = move |e: MouseEvent| {
+        if selecting.get_untracked() {
+            e.prevent_default();
+            if let Some(toggle) = on_toggle {
+                toggle.run((id, e.shift_key()));
+            }
+            return;
+        }
         let plain =
             e.button() == 0 && !(e.ctrl_key() || e.meta_key() || e.shift_key() || e.alt_key());
         if let Some(open) = on_open.filter(|_| plain) {
             open.run(Arc::clone(&opened));
+        }
+    };
+    let key = move |e: KeyboardEvent| {
+        if selecting.get_untracked() && e.key() == " " {
+            e.prevent_default();
+            if let Some(toggle) = on_toggle {
+                toggle.run((id, e.shift_key()));
+            }
         }
     };
     let client = api::client();
@@ -101,7 +123,6 @@ pub fn Thumb(
         style
     };
     let alt = post.tags.join(" ");
-    let id = post.id;
     let label = if alt.is_empty() {
         t!("post-alt", id = id)
     } else {
@@ -152,16 +173,38 @@ pub fn Thumb(
         }
         MediaKind::Image => None,
     };
+    let check = move || {
+        selecting.get().then(|| {
+            view! {
+                <span class="check-mark" aria-hidden="true">
+                    <Ico icon=Icon::Check size=20 />
+                </span>
+            }
+        })
+    };
     view! {
         <a
             class="thumb"
             class:still=still
             class:loaded=loaded
+            class:selectable=move || selecting.get()
+            class:on=move || selecting.get() && selected.get()
             style=style
             href=move || href.get()
             aria-label=label
+            role=move || selecting.get().then_some("button")
+            aria-pressed=move || {
+                selecting.get().then(|| if selected.get() { "true" } else { "false" })
+            }
             data-post=id
             on:click=click
+            on:keydown=key
+            // Shift+click picks a range, not the text in between.
+            on:mousedown=move |e: MouseEvent| {
+                if e.shift_key() && selecting.get_untracked() {
+                    e.prevent_default();
+                }
+            }
         >
             <div
                 class="thumb-media"
@@ -180,6 +223,7 @@ pub fn Thumb(
                 {preview}
             </div>
             {badge}
+            {check}
         </a>
     }
 }

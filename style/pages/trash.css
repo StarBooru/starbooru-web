@@ -1,0 +1,27 @@
+/* The recycle bin (pages/trash.rs): what it is, when the server purges it,
+   and the posts in it, each with its buttons under it. */
+
+.trash .page-head { margin-bottom: 8px; }
+.trash .page-head .page-title { margin: 0; }
+.trash .page-tools { flex-wrap: wrap; justify-content: flex-end; }
+.trash .lead { margin-bottom: 12px; }
+.trash .trash-note { margin-bottom: 20px; font-size: 14px; }
+.trash .banner { margin-bottom: 16px; }
+.trash .card.empty { margin-top: 8px; }
+.trash-grid {
+  display: grid; gap: 12px;
+  grid-template-columns: repeat(auto-fill, minmax(min(168px, 44vw), 1fr));
+}
+.trash-item { display: grid; gap: 4px; }
+/* Faded, as something on its way out. */
+.trash-item .thumb { filter: saturate(0.6); }
+.trash-actions { display: flex; justify-content: center; align-items: center; gap: 4px; min-height: 44px; }
+.trash-actions .btn.small { animation: pop-in var(--fast) var(--ease); }
+
+@media (max-width: 760px) {
+  .trash .page-tools { width: 100%; justify-content: flex-start; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .trash-actions .btn.small { animation: none; }
+}

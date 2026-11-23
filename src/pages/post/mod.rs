@@ -25,7 +25,7 @@ use self::glow::PostGlow;
 use self::related::Related;
 use self::side::{DetailsCard, TagsCard};
 use self::stage::Stage;
-use super::gallery;
+use super::{gallery, trash};
 use crate::api::{self, Failure};
 use crate::components::banner::{ErrorBanner, Spinner};
 use crate::components::download::DownloadLink;
@@ -70,6 +70,21 @@ fn kept(id: i64) -> Option<Arc<Post>> {
 
 fn forget(id: i64) {
     POSTS.with_borrow_mut(|kept| kept.retain(|p| p.id != id));
+}
+
+/// `post` is back from the recycle bin: a copy kept to show at once says so.
+pub fn restored(post: &Arc<Post>) {
+    POSTS.with_borrow_mut(|kept| {
+        for p in kept.iter_mut().filter(|p| p.id == post.id) {
+            *p = Arc::clone(post);
+        }
+    });
+}
+
+/// Drops the copies kept of posts changed elsewhere, by a mass edit or a
+/// purge, so the viewer doesn't show them as they were.
+pub fn forget_kept(ids: &[i64]) {
+    POSTS.with_borrow_mut(|kept| kept.retain(|p| !ids.contains(&p.id)));
 }
 
 /// The gallery is opening `post`, from its results for `q`: the viewer shows
@@ -367,7 +382,7 @@ pub fn PostView() -> impl IntoView {
                     forget(id);
                     gallery::forget_post(id);
                     notify_undo(t!("press-deleted"), t!("press-undo"), move || {
-                        gallery::undo_delete(id);
+                        trash::undo_delete(vec![id]);
                     });
                     // Only if the page is still on it.
                     if post.try_with_untracked(|p| p.as_ref().map(|p| p.id)) == Some(Some(id)) {
@@ -395,21 +410,18 @@ pub fn PostView() -> impl IntoView {
         action_error.set(None);
         let id = p.id;
         spawn_local(async move {
-            let result = api::call(move |c| async move { c.restore_post(id).await }).await;
+            // The way the bin's page restores, so the two agree.
+            let trash::Restored { back, failed } = trash::restore_posts(vec![id]).await;
             busy.try_set(false);
-            match result {
-                Ok(_) => {
-                    gallery::forget_lists();
-                    post.try_update(|p| {
-                        if let Some(p) = p.as_mut().filter(|p| p.id == id) {
-                            Arc::make_mut(p).deleted = false;
-                            keep(Arc::clone(p));
-                        }
-                    });
-                }
-                Err(message) => {
-                    action_error.try_set(Some(message));
-                }
+            if let Some(fresh) = back.into_iter().next() {
+                keep(Arc::clone(&fresh));
+                post.try_update(|p| {
+                    if let Some(p) = p.as_mut().filter(|p| p.id == id) {
+                        *p = fresh;
+                    }
+                });
+            } else if let Some(refused) = failed.into_iter().next() {
+                action_error.try_set(Some(refused.message));
             }
         });
     };

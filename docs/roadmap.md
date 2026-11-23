@@ -1,6 +1,6 @@
 # Roadmap
 
-_Status as of 2026-11-23: section 1 is done; section 2 needs only the recycle bin and mass edit. Scope comes from starbooru-server's `docs/checklist.md`; the target is everything the reference web app did._
+_Status as of 2026-11-23: sections 1 and 2 are done; section 3 is next. Scope comes from starbooru-server's `docs/checklist.md`; the target is everything the reference web app did._
 
 ## 1. Foundation
 
@@ -16,7 +16,7 @@ _Status as of 2026-11-23: section 1 is done; section 2 needs only the recycle bi
 - [x] Tag editor, the Tags page and each tag's page
 - [x] Upload: drag and drop, folders, paste, links, chunks with progress
 - [x] Explore, saved searches, votes, related posts
-- [ ] Recycle bin, mass edit
+- [x] Recycle bin, mass edit
 
 ## 3. The rest of the reference
 

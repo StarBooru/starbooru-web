@@ -112,6 +112,8 @@ settings-account = Account
 settings-signed-in-as = Signed in as
 settings-server-version = Server version
 settings-sign-out = Sign out
+settings-library = Library
+settings-trash-note = Restore or permanently delete posts
 
 ## Gallery
 
@@ -182,6 +184,57 @@ saved-searches = Saved searches
 saved-remove = Remove “{ $name }”
 saved-removed = Removed “{ $name }”
 
+gallery-select = Select posts
+gallery-stop-selecting = Stop selecting
+bulk-label = Edit selected posts
+bulk-selected =
+    { $count ->
+        [one] 1 selected
+       *[other] { $count } selected
+    }
+bulk-select-all = Select all
+bulk-select-none = Select none
+bulk-edit-title = Edit tags and rating
+bulk-sheet-title =
+    { $count ->
+        [one] Edit 1 post
+       *[other] Edit { $count } posts
+    }
+bulk-add-tags = Add these tags
+bulk-remove-tags = Remove these tags
+bulk-keep-rating = Keep rating
+bulk-apply = Apply
+bulk-tag-both = “{ $tag }” is in both lists. Keep it in one.
+bulk-nothing = Add or remove a tag, or pick a rating.
+bulk-delete-failed = Couldn't move them to the recycle bin: { $reason }
+bulk-restore-failed =
+    { $count ->
+        [one] Couldn't bring 1 post back: { $reason }
+       *[other] Couldn't bring { $count } posts back: { $reason }
+    }
+bulk-updated =
+    { $count ->
+        [one] Updated 1 post
+       *[other] Updated { $count } posts
+    }
+bulk-moved =
+    { $count ->
+        [one] Moved 1 post to the recycle bin
+       *[other] Moved { $count } posts to the recycle bin
+    }
+bulk-skipped =
+    { $count ->
+        [one] skipped 1 post
+       *[other] skipped { $count } posts
+    }
+bulk-skipped-undeletable =
+    { $count ->
+        [one] skipped 1 post you can't delete
+       *[other] skipped { $count } posts you can't delete
+    }
+bulk-done = { $done }.
+bulk-done-skipped = { $done }; { $skipped }.
+
 ## Explore
 
 explore-window = Trending over
@@ -214,6 +267,37 @@ explore-random = Random picks
 explore-shuffle = Shuffle
 explore-filter-placeholder = Narrow down, e.g. -rating:e
 explore-filter-label = Narrow down with a search
+
+## Recycle bin
+
+trash-lead = Deleted posts wait here until you restore them or delete them for good. Deleting for good also removes the file from the server.
+trash-purge-after =
+    { $days ->
+        [one] The server deletes posts here for good a day after they were moved here.
+       *[other] The server deletes posts here for good { $days } days after they were moved here.
+    }
+trash-purge-never = Posts stay here until someone deletes them for good.
+trash-none = The recycle bin is empty
+trash-restore-post = Restore post { $id }
+trash-restore-all = Restore all
+trash-restore-all-confirm = Restore everything?
+trash-restored =
+    { $count ->
+        [one] Restored 1 post.
+       *[other] Restored { $count } posts.
+    }
+trash-restore-failed = Couldn't restore post { $id }: { $reason }
+trash-purge = Delete for good
+trash-purge-post = Delete post { $id } for good
+trash-purge-failed = Couldn't delete post { $id } for good: { $reason }
+trash-purged =
+    { $count ->
+        [one] Deleted 1 post for good.
+       *[other] Deleted { $count } posts for good.
+    }
+trash-empty = Empty recycle bin
+trash-empty-confirm = Delete everything for good?
+sure = Sure?
 
 ## Viewer
 
@@ -315,6 +399,7 @@ press-unlike = Remove like
 press-liked = Liked
 press-unliked = Like removed
 delete-failed = Couldn't move it to the recycle bin: { $reason }
+swipe-select = Select
 
 ## Tags
 

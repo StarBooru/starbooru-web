@@ -21,6 +21,7 @@ use send_wrapper::SendWrapper;
 use starbooru_core::color::{NAMED_COLORS, to_hex};
 use starbooru_core::{Post, TagCorrection, parse_query};
 
+use super::bulk::BulkBar;
 use super::post_menu::PostPress;
 use super::saved::{self, SaveToggle, SavedList};
 use super::upload::DropToUpload;
@@ -29,9 +30,9 @@ use crate::components::banner::{CorrectionBanner, ErrorBanner, Spinner};
 use crate::components::color_picker::ColorPicker;
 use crate::components::icons::{Ico, Icon};
 use crate::components::select::{Choice, Select};
-use crate::components::snackbar::notify;
 use crate::components::thumb::Thumb;
 use crate::dom;
+use crate::logic::bulk::Selection;
 use crate::logic::gallery::{
     List, Lists, MAX_RESTORE, PAGE_SIZE, SORTS, Seeds, colored, current_color, current_sort,
     is_random, merge_head, mix_seed, mostly_hidden, page_after_restore, rest, restore_request,
@@ -132,17 +133,6 @@ pub fn forget_post(id: i64) {
 /// Puts a post as it is after a vote in the kept results.
 pub fn update_post(post: Arc<Post>) {
     LISTS.with_borrow_mut(|l| l.replace(&post));
-}
-
-/// Brings post `id` back from the recycle bin, from the notice after it was
-/// moved there, which outlives the page.
-pub fn undo_delete(id: i64) {
-    spawn_local(async move {
-        match api::call(move |c| async move { c.restore_post(id).await }).await {
-            Ok(_) => forget_lists(),
-            Err(message) => notify(message),
-        }
-    });
 }
 
 /// The grid's measurements as they are now.
@@ -388,6 +378,17 @@ pub fn Gallery() -> impl IntoView {
     // Bumped each time the spot has been put back.
     let landed = RwSignal::new(0_u32);
     let seek = StoredValue::new(None::<Seek>);
+    // Selection mode, for mass edits.
+    let selecting = RwSignal::new(false);
+    let selection = RwSignal::new(Selection::default());
+    let stop_selecting = Callback::new(move |()| {
+        selecting.set(false);
+        selection.update(Selection::clear);
+    });
+    let toggle = Callback::new(move |(id, shift): (i64, bool)| {
+        let loaded: Vec<i64> = posts.with_untracked(|p| p.iter().map(|p| p.id).collect());
+        selection.update(|s| s.toggle(&loaded, id, shift));
+    });
 
     // The part of the grid near the screen, a quarter of a screen at a time.
     let check_near = move |force: bool| {
@@ -620,8 +621,18 @@ pub fn Gallery() -> impl IntoView {
             }
         }
     };
-    Effect::watch(move || q.get(), move |q, _, _| restart(q.clone()), true);
-    // Posts came back from the recycle bin.
+    Effect::watch(
+        move || q.get(),
+        move |q, before, _| {
+            // What was picked in one search goes with it.
+            if before.is_some() {
+                stop_selecting.run(());
+            }
+            restart(q.clone());
+        },
+        true,
+    );
+    // Posts came back from the recycle bin, or a mass edit changed them.
     let changed = CHANGED.with(Clone::clone);
     Effect::watch(
         move || changed.get(),
@@ -812,8 +823,13 @@ pub fn Gallery() -> impl IntoView {
             })
         })
     };
-    // The viewer shows the tile's post while it loads the rest of it.
-    let open = Callback::new(move |post| super::post::opening(post, shown_q.get_untracked()));
+    // The viewer shows the tile's post while it loads the rest of it: the
+    // list's copy, as the tile keeps the one it was made with, which a vote
+    // from its menu leaves behind.
+    let open = Callback::new(move |post: Arc<Post>| {
+        let current = posts.with_untracked(|p| p.iter().find(|p| p.id == post.id).cloned());
+        super::post::opening(current.unwrap_or(post), shown_q.get_untracked());
+    });
     let tile_view = move |(index, _): (usize, i64)| {
         let post = posts.with_untracked(|p| p.get(index).cloned())?;
         let id = post.id;
@@ -823,9 +839,20 @@ pub fn Gallery() -> impl IntoView {
             route::post(id, &q, seed(&q))
         });
         let still = index < settled.get_untracked() || !in_sight(index);
-        Some(
-            view! { <Thumb post=post index=index href=href place=place still=still on_open=open /> },
-        )
+        let selected = Signal::derive(move || selection.with(|s| s.contains(id)));
+        Some(view! {
+            <Thumb
+                post=post
+                index=index
+                href=href
+                place=place
+                still=still
+                on_open=open
+                selecting=selecting
+                selected=selected
+                on_toggle=toggle
+            />
+        })
     };
     // The entrance plays for what arrives with a page, not for tiles there
     // before it.
@@ -843,6 +870,19 @@ pub fn Gallery() -> impl IntoView {
     let deleted = Callback::new(move |id: i64| {
         posts.update(|p| p.retain(|p| p.id != id));
         settled.update(|n| *n = n.saturating_sub(1));
+        selection.update(|s| s.remove(id));
+    });
+    let select = Callback::new(move |id: i64| {
+        selecting.set(true);
+        toggle.run((id, false));
+    });
+    // A vote from a tile's menu: the list has the post as it is now.
+    let voted = Callback::new(move |fresh: Arc<Post>| {
+        posts.update(|list| {
+            for p in list.iter_mut().filter(|p| p.id == fresh.id) {
+                *p = Arc::clone(&fresh);
+            }
+        });
     });
 
     let retry = Callback::new(move |()| {
@@ -900,6 +940,29 @@ pub fn Gallery() -> impl IntoView {
                     <SortMenu q=q />
                     <ColorMenu q=q />
                     <ViewMenu grid=grid />
+                    <button
+                        type="button"
+                        class="icon-btn select-toggle"
+                        class:on=move || selecting.get()
+                        title=move || {
+                            if selecting.get() { t!("gallery-stop-selecting") } else { t!("gallery-select") }
+                        }
+                        aria-label=move || {
+                            if selecting.get() { t!("gallery-stop-selecting") } else { t!("gallery-select") }
+                        }
+                        aria-pressed=move || if selecting.get() { "true" } else { "false" }
+                        on:click=move |_| {
+                            if selecting.get_untracked() {
+                                stop_selecting.run(());
+                            } else {
+                                selecting.set(true);
+                            }
+                        }
+                    >
+                        {move || {
+                            view! { <Ico icon=if selecting.get() { Icon::Close } else { Icon::Check } /> }
+                        }}
+                    </button>
                 </div>
             </div>
             <Show when=move || corrected.with(|c| !c.is_empty())>
@@ -958,7 +1021,7 @@ pub fn Gallery() -> impl IntoView {
                     }}
                 </div>
             </Show>
-            <div class="masonry-box">
+            <div class="masonry-box" class:selecting=move || selecting.get()>
                 <div class="masonry" data-press="post" node_ref=masonry style=masonry_style>
                     <For each=move || shown.get() key=|(index, id)| (*id, *index) children=tile_view />
                 </div>
@@ -981,17 +1044,27 @@ pub fn Gallery() -> impl IntoView {
                     }
                 }}
             </div>
+            <Show when=move || selecting.get()>
+                <BulkBar selection=selection posts=posts on_close=stop_selecting />
+            </Show>
         </div>
-        <ToTop />
+        <ToTop selecting=selecting />
         <DropToUpload />
-        <PostPress find=find on_open=open on_deleted=deleted />
+        <PostPress
+            find=find
+            on_open=open
+            on_deleted=deleted
+            on_select=select
+            on_voted=voted
+        />
     }
 }
 
 /// The arrow back to the top, once the page is a screen down. A component of
-/// its own, so the gallery isn't drawn again each time it comes or goes.
+/// its own, so the gallery isn't drawn again each time it comes or goes. It
+/// keeps out of the way of a selection's bar.
 #[component]
-fn ToTop() -> impl IntoView {
+fn ToTop(selecting: RwSignal<bool>) -> impl IntoView {
     let far = RwSignal::new(false);
     let check = move || {
         let (y, tall) = dom::scroll();
@@ -1019,7 +1092,7 @@ fn ToTop() -> impl IntoView {
         <button
             type="button"
             class="to-top"
-            class:shown=move || far.get()
+            class:shown=move || far.get() && !selecting.get()
             title=move || t!("gallery-to-top")
             aria-label=move || t!("gallery-to-top")
             on:click=move |_| dom::scroll_to(0.0, true)

@@ -137,6 +137,8 @@ pub const TAGS: &str = "/tags";
 pub const UPLOAD: &str = "/upload";
 /// The search cheat sheet.
 pub const HELP: &str = "/help";
+/// The recycle bin.
+pub const TRASH: &str = "/trash";
 
 #[cfg(test)]
 mod tests {

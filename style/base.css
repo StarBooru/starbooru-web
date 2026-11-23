@@ -24,6 +24,8 @@ h1, h2 { line-height: 1.2; margin: 0; }
 .page-title { font-size: 28px; font-weight: 600; margin: 8px 0 20px; overflow-wrap: anywhere; }
 .card-title { font-size: 16px; font-weight: 600; margin-bottom: 12px; }
 .muted { color: var(--on-surface-2); margin: 0; }
+/* What a page is for, under its title. */
+.lead { margin: 0 0 20px; max-width: 70ch; }
 .break { overflow-wrap: anywhere; }
 .icon { flex: none; display: block; }
 .visually-hidden {
@@ -312,6 +314,18 @@ button.chip:disabled:hover { background: var(--surface-2); color: var(--on-surfa
 .banner.warn { background: var(--warn-container); color: var(--on-warn-container); }
 .banner.info { background: var(--primary-container); color: var(--on-primary-container); }
 
+/* A link to another page, as a row in a card: an icon, a name and a note. */
+.list-link {
+  display: grid; grid-template-columns: auto 1fr; column-gap: 16px; align-items: center;
+  padding: 12px; margin: 0 -12px; border-radius: var(--radius-m);
+  color: var(--on-surface); text-decoration: none;
+  transition: background-color var(--fast) var(--ease);
+}
+.list-link .icon { grid-row: span 2; color: var(--primary); }
+.list-link span:not(.muted) { font-weight: 600; }
+.list-link .muted { font-size: 14px; }
+.list-link:hover { background: var(--surface-2); }
+
 .row-end { display: flex; justify-content: flex-end; flex-wrap: wrap; gap: 8px; }
 .card .meta + .row-end { margin-top: 16px; }
 
@@ -345,6 +359,8 @@ button.chip:disabled:hover { background: var(--surface-2); color: var(--on-surfa
   background: var(--on-surface); color: var(--surface); box-shadow: var(--shadow-2);
   font-size: 14px; pointer-events: auto; animation: fade-up var(--med) var(--ease-spring);
 }
+/* Over the floating bar at the foot of a page, not on it. */
+.app:has(.bulk-bar) .snackbar-slot { bottom: 96px; }
 .snackbar .icon-btn { color: inherit; }
 /* Inverted colours: the container tone reads on them, where --primary of `.btn.text` doesn't. */
 .snackbar .snackbar-action { min-height: 36px; padding: 0 12px; color: var(--primary-container); }
@@ -405,6 +421,7 @@ button.chip:disabled:hover { background: var(--surface-2); color: var(--on-surfa
   .bulk-rating .select-sizer { display: none; }
   .bulk-bar .btn { order: 3; flex: 1 1 auto; padding: 0 12px; }
   .bulk-bar .btn[type="submit"] { flex: 2 1 0; }
+  .app:has(.bulk-bar) .snackbar-slot { bottom: calc(208px + env(safe-area-inset-bottom)); }
   .segmented { align-self: stretch; }
   .seg { min-width: 0; padding: 0 6px; font-size: 13px; white-space: normal; line-height: 1.2; }
 }

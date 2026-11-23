@@ -38,7 +38,8 @@ src/
   pages/        one module per page; shell.rs is the frame, soon.rs the placeholder, post/ the viewer
   components/   icons, brand, snackbar, tiles, downloads, the tag box and its grip, a tag's menu
   logic/        pure Rust with unit tests: server addresses, the gallery's lists and layout, zoom, the viewer's
-                tags, details and file names, the word at the caret, the tag editor's text and who may edit
+                 tags, details and file names, the word at the caret, the tag editor's text and who may edit,
+                 the gallery's selection and the mass edit it sends
 locales/        en.ftl, it.ftl
 style/          tokens.css, base.css, shell.css, pages/<page>.css
 index.html      Trunk's entry, with the loading screen
