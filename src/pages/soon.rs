@@ -4,7 +4,10 @@
 use leptos::prelude::*;
 use leptos_router::hooks::{use_params_map, use_query_map};
 
+use crate::api;
 use crate::components::brand::Mark;
+use crate::components::icons::{Ico, Icon};
+use crate::store;
 
 /// `title` is the page's name, translated.
 #[component]
@@ -41,6 +44,57 @@ fn SoonCard() -> impl IntoView {
                 <Mark height=56 />
             </span>
             <p class="muted">{move || t!("soon-body")}</p>
+        </div>
+    }
+}
+
+/// `/settings` until it's built: the account, with a way to sign out, as the
+/// reference's Settings had at its foot.
+#[component]
+pub fn SettingsSoon() -> impl IntoView {
+    let info = LocalResource::new(api::server_info);
+    let account = move || {
+        store::session().map(|s| {
+            view! {
+                <section class="card">
+                    <h2 class="card-title">{move || t!("settings-account")}</h2>
+                    <dl class="meta">
+                        <dt>{move || t!("settings-signed-in-as")}</dt>
+                        <dd class="break">{s.user.username}</dd>
+                        <dt>{move || t!("login-server")}</dt>
+                        <dd class="break">{s.server}</dd>
+                        {move || {
+                            info.get()
+                                .flatten()
+                                .map(|i| {
+                                    view! {
+                                        <dt>{move || t!("settings-server-version")}</dt>
+                                        <dd class="break">
+                                            {move || {
+                                                t!(
+                                                    "login-server-version", name = i.name.clone(), version = i.version.clone()
+                                                )
+                                            }}
+                                        </dd>
+                                    }
+                                })
+                        }}
+                    </dl>
+                    <div class="row-end">
+                        <button class="btn tonal" type="button" on:click=move |_| store::sign_out()>
+                            <Ico icon=Icon::Logout />
+                            {move || t!("settings-sign-out")}
+                        </button>
+                    </div>
+                </section>
+            }
+        })
+    };
+    view! {
+        <div class="page narrow">
+            <h1 class="page-title break">{move || t!("nav-settings")}</h1>
+            {account}
+            <SoonCard />
         </div>
     }
 }

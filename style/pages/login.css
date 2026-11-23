@@ -1,0 +1,39 @@
+/* The sign-in screen and the provider's way back (pages/login.rs): a glass
+   card over an aurora of the accent's colours, drifting slowly. */
+
+.login-page { position: relative; display: grid; place-items: center; min-height: 100vh; min-height: 100dvh; padding: 16px; overflow: hidden; }
+.aurora {
+  position: absolute; inset: -20%;
+  background:
+    radial-gradient(40% 40% at 25% 30%, oklch(from var(--primary) l c h / 0.55), transparent 70%),
+    radial-gradient(35% 35% at 75% 70%, oklch(from var(--tertiary) l c h / 0.5), transparent 70%),
+    radial-gradient(30% 30% at 70% 20%, var(--aurora), transparent 70%);
+  filter: blur(40px);
+  animation: drift 18s ease-in-out infinite alternate;
+}
+.login-card {
+  position: relative; width: min(420px, 100%); padding: 32px 28px;
+  border-radius: var(--radius-l); box-shadow: var(--shadow-2);
+  border: 1px solid oklch(from var(--outline) l c h / 0.5);
+  animation: fade-up var(--slow) var(--ease);
+}
+.login-brand { display: grid; justify-items: center; gap: 4px; margin-bottom: 24px; text-align: center; }
+.login-brand h1 { display: grid; justify-items: center; margin: 4px 0; font-size: 28px; }
+.logo {
+  display: grid; place-items: center; width: 64px; height: 64px; margin-bottom: 8px;
+  border-radius: 20px; background: var(--primary); color: var(--on-primary);
+  animation: pop var(--slow) var(--ease-spring) 120ms both;
+}
+.login-card .btn + .btn { margin-top: 8px; }
+.login-card .or {
+  display: flex; align-items: center; gap: 12px; margin: 16px 0;
+  color: var(--on-surface-2); font-size: 13px;
+}
+.login-card .or::before, .login-card .or::after { content: ""; flex: 1; border-top: 1px solid var(--outline); }
+.login-card .status-line { margin: 0 0 8px; text-align: center; }
+
+@keyframes drift { to { transform: translate(4%, -3%) rotate(8deg); } }
+
+@media (prefers-reduced-motion: reduce) {
+  .aurora { animation: none; }
+}

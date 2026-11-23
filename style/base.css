@@ -97,6 +97,21 @@ h1, h2 { line-height: 1.2; margin: 0; }
 }
 input[type="range"] { width: 100%; accent-color: var(--primary); margin-top: 12px; }
 
+/* Password strength (components/strength.rs): the box takes a colour from red
+   through orange to green. Registering the hue with @property lets the browser
+   animate it, so the colour follows the typing smoothly. */
+@property --pw-hue { syntax: "<number>"; inherits: true; initial-value: 25; }
+.pw-field {
+  --pw: oklch(var(--meter-l) var(--meter-c) var(--pw-hue));
+  display: grid;
+  transition: --pw-hue var(--slow) var(--ease);
+}
+.field .pw-field.rated input {
+  border-color: var(--pw);
+  background: color-mix(in oklch, var(--surface), var(--pw) 9%);
+}
+.field .pw-field.rated input:focus { box-shadow: 0 0 0 3px oklch(from var(--pw) l c h / 0.28); }
+
 .segmented { display: inline-flex; align-self: flex-start; max-width: 100%; border: 1px solid var(--outline); border-radius: 999px; overflow: hidden; }
 .seg {
   flex: 1 1 auto; min-height: 40px; padding: 0 14px; white-space: nowrap; border: 0; background: transparent; color: var(--on-surface);
@@ -141,6 +156,17 @@ input[type="range"] { width: 100%; accent-color: var(--primary); margin-top: 12p
 .banner.info { background: var(--primary-container); color: var(--on-primary-container); }
 
 .row-end { display: flex; justify-content: flex-end; flex-wrap: wrap; gap: 8px; }
+.card .meta + .row-end { margin-top: 16px; }
+
+/* Facts as name and value, side by side. */
+.meta { display: grid; grid-template-columns: auto 1fr; gap: 6px 16px; margin: 0; font-size: 14px; }
+.meta dt { color: var(--on-surface-2); }
+.meta dd { margin: 0; }
+
+/* The privacy and terms links (components/legal.rs). */
+.legal-links { display: flex; flex-wrap: wrap; justify-content: center; gap: 4px 16px; margin-top: 16px; font-size: 13px; }
+.legal-links a { color: var(--on-surface-2); text-decoration: none; }
+.legal-links a:hover { color: var(--primary); text-decoration: underline; }
 
 .spinner {
   display: inline-block; width: 32px; height: 32px; border-radius: 50%;

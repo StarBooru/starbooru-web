@@ -8,18 +8,39 @@ use std::cmp::Ordering;
 use leptos::ev::SubmitEvent;
 use leptos::html;
 use leptos::prelude::*;
+use leptos::task::spawn_local;
 use leptos_router::NavigateOptions;
 use leptos_router::components::Outlet;
 use leptos_router::hooks::{use_location, use_navigate, use_query_map};
 
+use super::login::Login;
+use crate::api;
 use crate::components::brand::{Mark, Wordmark};
 use crate::components::icons::{Ico, Icon};
 use crate::route::{self, Tab};
+use crate::store;
 
-/// The pages under the navigation. Item 1.3 puts the sign-in screen in
-/// front of it: until someone is signed in, that shows instead.
+/// The pages under the navigation, or the sign-in screen while no one is
+/// signed in.
 #[component]
 pub fn Shell() -> impl IntoView {
+    view! {
+        <Show when=store::signed_in fallback=Login>
+            <Frame />
+        </Show>
+    }
+}
+
+#[component]
+fn Frame() -> impl IntoView {
+    // Whether the session kept from last time still works. A token signed out
+    // elsewhere or past its 90 days signs out here, with a note on the
+    // sign-in screen, instead of failing on every page.
+    spawn_local(async {
+        if let Ok(user) = api::call(|c| async move { c.me().await }).await {
+            store::update_user(user);
+        }
+    });
     let location = use_location();
     let path = location.pathname;
     let here = Memo::new(move |_| path.with(|p| route::tab_of(p)));

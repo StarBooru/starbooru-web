@@ -37,6 +37,8 @@ web-sys = { version = "0.3", features = [
 
 [dev-dependencies]
 fluent-syntax = "0.12"
+# The client's own HTTP crate, to make the network errors it reports.
+reqwest = { version = "0.13", default-features = false }
 
 [lints.rust]
 unsafe_code = "forbid"

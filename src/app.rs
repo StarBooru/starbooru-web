@@ -8,8 +8,9 @@ use leptos_router::path;
 use crate::components::snackbar::Snackbar;
 use crate::i18n;
 use crate::pages::NotFound;
+use crate::pages::login::OidcReturn;
 use crate::pages::shell::Shell;
-use crate::pages::soon::{PostSoon, Soon, SoonAlone, TagSoon};
+use crate::pages::soon::{PostSoon, SettingsSoon, Soon, SoonAlone, TagSoon};
 use crate::store;
 use crate::theme;
 
@@ -51,7 +52,7 @@ fn AppRoutes() -> impl IntoView {
     view! {
         <Routes fallback=NotFound>
             // The sign-in pages, shared posts and the legal pages stand alone.
-            <Route path=path!("/oidc") view=|| view! { <SoonAlone title=|| t!("login-sign-in") /> } />
+            <Route path=path!("/oidc") view=OidcReturn />
             <Route path=path!("/s/:token") view=|| view! { <SoonAlone title=|| t!("shared-title") /> } />
             <Route path=path!("/privacy") view=|| view! { <SoonAlone title=|| t!("privacy-title") /> } />
             <Route path=path!("/terms") view=|| view! { <SoonAlone title=|| t!("terms-title") /> } />
@@ -64,7 +65,7 @@ fn AppRoutes() -> impl IntoView {
                 <Route path=path!("/upload") view=|| view! { <Soon title=|| t!("nav-upload") /> } />
                 <Route path=path!("/boorus") view=|| view! { <Soon title=|| t!("nav-boorus") /> } />
                 <Route path=path!("/boorus/post") view=|| view! { <Soon title=|| t!("nav-boorus") /> } />
-                <Route path=path!("/settings") view=|| view! { <Soon title=|| t!("nav-settings") /> } />
+                <Route path=path!("/settings") view=SettingsSoon />
                 <Route path=path!("/trash") view=|| view! { <Soon title=|| t!("trash-title") /> } />
                 <Route path=path!("/duplicates") view=|| view! { <Soon title=|| t!("dup-title") /> } />
                 <Route path=path!("/help") view=|| view! { <Soon title=|| t!("help-title") /> } />
@@ -145,7 +146,8 @@ mod tests {
         let tokens = at(r#"<link data-trunk rel="css" href="style/tokens.css">"#);
         let base = at(r#"<link data-trunk rel="css" href="style/base.css">"#);
         let shell = at(r#"<link data-trunk rel="css" href="style/shell.css">"#);
-        assert!(tokens < base && base < shell);
+        let login = at(r#"<link data-trunk rel="css" href="style/pages/login.css">"#);
+        assert!(tokens < base && base < shell && shell < login);
         // Empty, with not even a space in it, or `:empty` never matches.
         assert!(page.contains(r#"<div id="main"></div>"#));
         let base = include_str!("../style/base.css");
@@ -174,9 +176,31 @@ mod tests {
             include_str!("../style/tokens.css"),
             include_str!("../style/base.css"),
             include_str!("../style/shell.css"),
+            include_str!("../style/pages/login.css"),
         ] {
             assert!(!css.contains("-webkit-backdrop-filter"));
         }
         assert!(include_str!("../style/tokens.css").contains("  backdrop-filter: blur("));
+    }
+
+    #[test]
+    fn components_take_their_colours_from_the_tokens() {
+        for (name, css) in [
+            ("base", include_str!("../style/base.css")),
+            ("shell", include_str!("../style/shell.css")),
+            ("login", include_str!("../style/pages/login.css")),
+        ] {
+            // A colour worked out from the tokens is fine: `oklch(from var(--x) …)`,
+            // or the strength meter's `oklch(var(--meter-l) …)`.
+            let literal = css.match_indices("oklch(").any(|(i, _)| {
+                !css.get(i + 6..).is_some_and(|rest| {
+                    rest.starts_with("from var(--") || rest.starts_with("var(--")
+                })
+            });
+            assert!(!literal, "{name}: a literal oklch() colour");
+            for sign in ["rgb(", "rgba(", "hsl(", "#fff", "#000"] {
+                assert!(!css.contains(sign), "{name}: {sign}");
+            }
+        }
     }
 }

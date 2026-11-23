@@ -25,6 +25,8 @@ pub enum Icon {
     Restore,
     Search,
     Share,
+    /// Signing in through an identity provider.
+    Shield,
     Star,
     StarOutline,
     ThumbDown,
@@ -92,6 +94,9 @@ impl Icon {
             Icon::Share => Shape::Fill(
                 "M5.74 11.28L16.24 5.78L17.26 7.72L6.76 13.22zM6.87 11.34L14.99 16.84L13.76 18.66L5.63 13.16zM12 6.75a4.75 4.75 0 1 1 9.5 0a4.75 4.75 0 1 1 -9.5 0zM2.5 12.25a3.75 3.75 0 1 1 7.5 0a3.75 3.75 0 1 1 -7.5 0zM11.125 17.75a3.25 3.25 0 1 1 6.5 0a3.25 3.25 0 1 1 -6.5 0z",
             ),
+            Icon::Shield => Shape::Fill(
+                "M11.298 2.196a2 2 0 0 1 1.404 0l7 2.625A2 2 0 0 1 21 6.694v5.362a9 9 0 0 1-4.975 8.05l-3.354 1.677a1.5 1.5 0 0 1-1.342 0l-3.354-1.677A9 9 0 0 1 3 12.056V6.694A2 2 0 0 1 4.298 4.82zM12 8a1 1 0 0 0-1 1v2H9a1 1 0 0 0 0 2h2v2a1 1 0 1 0 2 0v-2h2a1 1 0 1 0 0-2h-2V9a1 1 0 0 0-1-1",
+            ),
             Icon::Star => Shape::Fill(
                 "M10.92 2.37a1.25 1.25 0 0 1 2.16 0l2.795 4.8l5.428 1.175a1.25 1.25 0 0 1 .667 2.054l-3.7 4.142l.56 5.525a1.25 1.25 0 0 1-1.748 1.27L12 19.096l-5.082 2.24a1.25 1.25 0 0 1-1.747-1.27l.559-5.525l-3.7-4.142a1.25 1.25 0 0 1 .667-2.054L8.125 7.17z",
             ),
@@ -152,7 +157,7 @@ pub fn Ico(icon: Icon, #[prop(default = 24)] size: u32) -> impl IntoView {
 mod tests {
     use super::*;
 
-    const ALL: [Icon; 23] = [
+    const ALL: [Icon; 24] = [
         Icon::Add,
         Icon::ArrowBack,
         Icon::Check,
@@ -170,6 +175,7 @@ mod tests {
         Icon::Restore,
         Icon::Search,
         Icon::Share,
+        Icon::Shield,
         Icon::Star,
         Icon::StarOutline,
         Icon::ThumbDown,

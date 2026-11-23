@@ -2348,6 +2348,7 @@ dependencies = [
  "leptos",
  "leptos_router",
  "percent-encoding",
+ "reqwest",
  "serde",
  "serde_json",
  "starbooru-client",

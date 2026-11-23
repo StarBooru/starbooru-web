@@ -30,13 +30,14 @@ src/
   main.rs       loads the store, picks the language, mounts the app
   app.rs        theme and language on the root, and the routes
   route.rs      the navigation's tabs, which tab a path is under, search addresses
-  api.rs        the shared Client and the session signal
+  api.rs        the shared Client, api::call (a 401 signs out), errors in words
+  oidc.rs       sign-in through the identity provider, away and back to /oidc
   store.rs      session and preferences in localStorage
   theme.rs      the browser's bar colour (theme-color) from the seed hue
   i18n.rs       t!() over the Fluent catalogues
   pages/        one module per page; shell.rs is the frame, soon.rs the placeholder
   components/   icons, brand, snackbar; later tiles, chips, menus, the tag box, the viewer stage
-  logic/        pure Rust with unit tests: tile layout, zoom, the word at the caret, file names
+  logic/        pure Rust with unit tests: server addresses; later tile layout, zoom, the word at the caret, file names
 locales/        en.ftl, it.ftl
 style/          tokens.css, base.css, shell.css, pages/<page>.css
 index.html      Trunk's entry, with the loading screen

@@ -39,6 +39,9 @@
   --glass-line: oklch(0.2 0.04 var(--h) / 0.1);
   --stage: oklch(0.2 0.015 var(--h));
   --glow-a: 0.42;
+  /* the third light of the sign-in screen's aurora, after --primary and
+     --tertiary: the same in both themes */
+  --aurora: oklch(0.75 0.14 calc(var(--h) - 60) / 0.35);
   /* controls over media: the stage is dark in both themes */
   --scrim: oklch(0.12 0.01 var(--h) / 0.55);
   --on-scrim: oklch(0.97 0.01 var(--h));

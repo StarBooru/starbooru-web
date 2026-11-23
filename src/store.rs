@@ -16,10 +16,11 @@ use leptos::prelude::*;
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Deserializer, Serialize};
 use serde_json::{Map, Value};
-use starbooru_core::User;
 use starbooru_core::color::Rgb;
+use starbooru_core::{AuthResponse, User};
 
 use crate::i18n::Lang;
+use crate::logic::address;
 
 /// The signed-in account. Sign-in fills it in.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -146,6 +147,7 @@ thread_local! {
     static SESSION: ArcRwSignal<Option<Session>> = ArcRwSignal::new(None);
     static PREFS: ArcRwSignal<Prefs> = ArcRwSignal::new(Prefs::default());
     static OTHER: RefCell<Map<String, Value>> = RefCell::new(Map::new());
+    static SIGN_IN_NOTE: RefCell<Option<String>> = const { RefCell::new(None) };
 }
 
 /// Reads what the browser kept. Called once, before the app is mounted.
@@ -170,9 +172,92 @@ fn save() {
 
 /// The signed-in session, if any. Read inside a view, it redraws on sign-in
 /// and sign-out.
-#[allow(dead_code, reason = "sign-in and the API client read it")]
 pub fn session() -> Option<Session> {
     SESSION.with(|s| s.get())
+}
+
+/// The session, outside a view.
+pub fn session_untracked() -> Option<Session> {
+    SESSION.with(|s| s.get_untracked())
+}
+
+/// Whether someone is signed in. Read inside a view, it redraws only when
+/// that changes.
+pub fn signed_in() -> bool {
+    SESSION.with(|s| s.with(Option::is_some))
+}
+
+/// Keeps the session from a sign-in, and its server for the next one.
+pub fn sign_in(server: String, auth: AuthResponse) {
+    SIGN_IN_NOTE.with_borrow_mut(|note| *note = None);
+    PREFS.with(|p| p.update(|p| p.last_server.clone_from(&server)));
+    SESSION.with(|s| {
+        s.set(Some(Session {
+            server,
+            token: auth.token,
+            user: auth.user,
+        }));
+    });
+    save();
+}
+
+/// The account as the server has it now, after a rename or a new role.
+pub fn update_user(user: User) {
+    let changed =
+        SESSION.with(|s| s.with_untracked(|s| s.as_ref().is_some_and(|s| s.user != user)));
+    if changed {
+        SESSION.with(|s| {
+            s.update(|s| {
+                if let Some(s) = s {
+                    s.user = user;
+                }
+            });
+        });
+        save();
+    }
+}
+
+/// Signs out here and on the server. The server's answer doesn't matter: the
+/// token is forgotten either way.
+pub fn sign_out() {
+    if let Some(client) = crate::api::client() {
+        leptos::task::spawn_local(async move {
+            let _ = client.logout().await;
+        });
+    }
+    // Where the gallery was in each search belongs to this account.
+    OTHER.with_borrow_mut(|o| {
+        o.remove("memory");
+    });
+    forget_session();
+}
+
+/// Drops the session here only, as after the server said it's no good.
+pub fn forget_session() {
+    crate::api::forget();
+    SESSION.with(|s| s.set(None));
+    save();
+}
+
+/// Says on the sign-in screen why it's showing, such as a session that
+/// expired. Kept until that screen shows it or someone signs in.
+pub fn set_sign_in_note(text: String) {
+    SIGN_IN_NOTE.with_borrow_mut(|note| *note = Some(text));
+}
+
+/// The note for the sign-in screen, once.
+pub fn take_sign_in_note() -> Option<String> {
+    SIGN_IN_NOTE.with_borrow_mut(Option::take)
+}
+
+/// The address the sign-in screen starts with (`logic::address::prefill`).
+pub fn default_server() -> String {
+    let origin = backend::origin().unwrap_or_default();
+    address::prefill(
+        &prefs_untracked().last_server,
+        option_env!("STARBOORU_SERVER"),
+        &origin,
+    )
 }
 
 /// The preferences. Read inside a view, it redraws when they change.
@@ -211,6 +296,11 @@ mod backend {
             let _ = storage.set_item(KEY, json);
         }
     }
+
+    /// The page's own address, `https://host[:port]`.
+    pub fn origin() -> Option<String> {
+        web_sys::window()?.location().origin().ok()
+    }
 }
 
 /// The host, where the tests run, has no browser storage.
@@ -221,6 +311,10 @@ mod backend {
     }
 
     pub fn write(_json: &str) {}
+
+    pub fn origin() -> Option<String> {
+        None
+    }
 }
 
 #[cfg(test)]
@@ -310,6 +404,59 @@ mod tests {
         );
         // Prefs that aren't an object.
         assert_eq!(parse(r#"{"prefs":[1,2]}"#).prefs, Prefs::default());
+    }
+
+    #[test]
+    fn signing_in_keeps_the_session_and_its_server() {
+        set_sign_in_note("expired".into());
+        sign_in(
+            "https://booru.example".into(),
+            AuthResponse {
+                token: "t0k3n".into(),
+                user: user(),
+            },
+        );
+        assert!(signed_in());
+        let session = session_untracked().unwrap();
+        assert_eq!(session.server, "https://booru.example");
+        assert_eq!(session.user.username, "ada");
+        assert_eq!(prefs_untracked().last_server, "https://booru.example");
+        // A note from before is no longer true.
+        assert_eq!(take_sign_in_note(), None);
+
+        let mut renamed = user();
+        renamed.username = "ada2".into();
+        update_user(renamed);
+        assert_eq!(session_untracked().unwrap().user.username, "ada2");
+
+        forget_session();
+        assert!(!signed_in());
+        // The next sign-in starts from the same server.
+        assert_eq!(prefs_untracked().last_server, "https://booru.example");
+    }
+
+    #[test]
+    fn the_sign_in_note_shows_once() {
+        assert_eq!(take_sign_in_note(), None);
+        set_sign_in_note("Your session has expired.".into());
+        assert_eq!(
+            take_sign_in_note().as_deref(),
+            Some("Your session has expired.")
+        );
+        assert_eq!(take_sign_in_note(), None);
+    }
+
+    #[test]
+    fn signing_out_forgets_where_the_gallery_was() {
+        OTHER.with_borrow_mut(|o| {
+            o.insert("memory".into(), serde_json::json!({"owner": "x|1"}));
+            o.insert("kept".into(), serde_json::json!(1));
+        });
+        sign_out();
+        OTHER.with_borrow(|o| {
+            assert!(!o.contains_key("memory"));
+            assert!(o.contains_key("kept"));
+        });
     }
 
     #[test]
