@@ -10,6 +10,7 @@ use starbooru_core::filter::SizeField;
 use starbooru_core::{FigureTerm, MediaKind, Order, Rating, SortKey, parse_query};
 
 use super::{figure_kind_label, query_error_text, rating_label};
+use crate::components::back::BackButton;
 use crate::components::icons::{Ico, Icon};
 use crate::route;
 
@@ -236,7 +237,10 @@ pub fn Help() -> impl IntoView {
     };
     view! {
         <div class="page narrow help">
-            <h1 class="page-title">{move || t!("help-title")}</h1>
+            <div class="titled">
+                <BackButton up=route::SETTINGS />
+                <h1 class="page-title">{move || t!("help-title")}</h1>
+            </div>
             <section class="card">
                 <h2 class="card-title">{move || t!("help-try")}</h2>
                 <form class="try-query" on:submit=submit>

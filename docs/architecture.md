@@ -36,13 +36,14 @@ src/
   theme.rs      the accent as hue, chroma and lightness (--seed-*), the browser's bar colour (theme-color)
   power.rs      the battery saver: data-saver on the root, from the setting, the battery and data saver
   pace.rs       the effects: data-effects on the root, from the setting or from frame times while scrolling
+  install.rs    registers the service worker, and keeps the browser's offer to install for Settings › About
   i18n.rs       t!() over the Fluent catalogues
   pages/        one module per page; shell.rs is the frame, post/ the viewer and its media editor, share/
                   the share sheet, the list of links and the public /s/ page, settings/ the Settings cards,
                   admin/ the administration's tabs, legal.rs the privacy policy and the terms
   components/   icons, brand, snackbar, tiles and their swipes, downloads, the tag box and its grip, a tag's menu,
                   the button that asks "Sure?", the links to the legal pages, the menu that looks a picture up on
-                  other sites, the video player
+                  other sites, the video player, the Back button of the pages under a tab
   logic/        pure Rust with unit tests: server addresses, the gallery's lists and layout, zoom, the viewer's
                   tags, people, details and file names, the video player's clock, seek bar, keys and resting
                   controls, the word at the caret, the tag editor's text and who may edit,
@@ -50,10 +51,11 @@ src/
                   when two searches are the same, the posts opened lately, the booru browser's sites, addresses and
                   results, the library import's text, the media editor's crop, turns and trim, share links'
                   lifetimes, the days a picked end date takes, addresses and expiry text, reverse search's copy to
-                  send and how each site gets it, Settings' accent, lists and password checks, swipes, and the
-                  administration's limits, chart, form checks and AI requests
+                  send and how each site gets it, Settings' accent, lists and password checks, swipes, the
+                  administration's limits, chart, form checks and AI requests, and the pages a tab went through
 locales/        en.ftl, it.ftl
 style/          tokens.css, base.css, shell.css, player.css, pages/<page>.css
+assets/         the icons, the web app manifest and the service worker (sw.js), copied to the root as they are
 index.html      Trunk's entry, with the loading screen
 ```
 
@@ -85,6 +87,12 @@ Component CSS uses only the role variables, never a literal colour. The navigati
 - **Recently viewed.** Each post the viewer loads, previous and next included, goes first in a list of up to 60 ids kept in the store under the account's owner key; booru posts and share pages don't count, and signing out empties it. Explore shows it first, 12 at a time. The API has no way to fetch several posts by id (the search syntax has no `id:` term), so each tile is a `GET /posts/{id}`, all sent at once. Posts that come back missing or in the recycle bin leave the list quietly. A search can't narrow a list of ids, so the section steps aside while `?q=` is set. Clear empties it, with Undo in the snackbar.
 - **Other boorus.** The server searches them (`/remote/search`), keeps the accounts and relays the pictures a site won't serve to other pages. The browser keeps the last results for a few hours while the tab is open, and saving a post queues an import on the server.
 - **Reverse search.** Find source, in the viewer's bar and a tile's menu, looks the post's thumbnail up on Google Lens, iqdb, SauceNAO or trace.moe. The thumbnail is read from the server as the menu opens, and nothing goes to a site until one is picked. iqdb and SauceNAO get it from a form posted into a new tab. Lens and trace.moe get its signed address when the server's host is on the internet; for a server at home, a private network or a VPN, the app copies it as PNG and opens the site to paste it (on a touch screen, or without a clipboard for pictures, it saves it instead). Lens doesn't take an upload: in the EU, Google's consent page swallows a form posted from another site.
+- **Installing.** `manifest.webmanifest` makes the app installable: standalone, starting at `/`, in the default light canvas, with a maskable icon for Android. Chromium offers installing with `beforeinstallprompt`; the page catches it even before the app starts, and Settings › About shows Install StarBooru until the offer is taken, turned down or the app runs in its own window. Safari and Firefox make no offer, so nothing shows there. An installed app has no browser Back button, so every page has its own way back: the viewer and the booru post their Back, Trash, Duplicates, Help, the administration and a tag's page an arrow before the title (back through history when the page before is in the app, else up to Settings or Tags), the legal pages theirs, and a share page's brand leads home.
+- **Service worker.** `assets/sw.js` lets the app start without a network, and nothing more. The app registers it after the page has loaded. It answers two kinds of request:
+  - A page (any navigation) comes from the network, and the copy of `index.html` it keeps only when the network fails or the server answers 5xx. Online, a new version is always the one that starts.
+  - A file of the bundle (`/<name>.js`, `.wasm`, `.css`, `.png`, `.svg`, `.webmanifest`) comes from the cache, else from the network. The cache holds the files the last `index.html` names: each new page drops the files it no longer names, fetches the ones it names, and fetches the unhashed icons and manifest again.
+  - Everything else goes to the network untouched, with no `respondWith`: `/api/`, `/media/`, `/remote/`, `/backups/`, `/healthz`, other origins (a session on another server included), and every request that isn't a GET. Nothing the API or `/media` returns is ever stored, so the cache holds no private data.
+  - A new `sw.js` installs and takes over at once, and its activation deletes the app's other caches; bump `CACHE` when the worker starts keeping things another way. Offline, the shell starts and each page says it can't reach the server, as for any failed request.
 - **Share link end dates.** The server takes a link's lifetime in whole days from when it makes it. A day picked on the calendar becomes the days from now to the end of that day on the browser's clock, rounded up, so the link ends on the day after, at the time of day it was made.
 
 The server decides which booru pictures it relays: the previews and samples of sites that serve them only to their own pages come as its signed `/api/v1/remote/media` addresses. Everything else loads in the browser straight from the booru, as the privacy page says, so the app shows a picture only from one of those addresses or over `https:`. Anything else (`http:`, `data:`, `//host`) gets the tile's colour instead.

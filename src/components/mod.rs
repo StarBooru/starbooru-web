@@ -1,5 +1,6 @@
 //! Pieces more than one page uses.
 
+pub mod back;
 pub mod banner;
 pub mod brand;
 #[rustfmt::skip]

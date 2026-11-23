@@ -22,6 +22,14 @@ trunk build --release
 STARBOORU_WEB_DIR=$PWD/dist cargo run -p starbooru-server   # in starbooru-server
 ```
 
+## Installing and offline
+
+The service worker (`assets/sw.js`) runs wherever the app does on `http://127.0.0.1` or `localhost`, which browsers count as secure: under `trunk serve` and on any server that serves `dist/`. On any other address it needs HTTPS. It fetches pages from the network first, so a rebuild shows on the next reload; DevTools › Application › Service workers can unregister it.
+
+To check installing in Chromium, open DevTools › Application › Manifest (it lists any problem) and use Install in the address bar or Settings › About › Install StarBooru. Over CDP, `Page.getAppManifest` and `Page.getInstallabilityErrors` say the same. Headless Chromium fires `beforeinstallprompt` but never settles the prompt, so tests dispatch their own event with `prompt()` and `userChoice`.
+
+To check offline, open the app once, then tick Offline in DevTools › Network (or `context.setOffline(true)` in Playwright) and reload: the shell starts from the cache, and each page says it can't reach the server. Back online, Try again brings it back. For an update, rebuild, reload once online, and the new wasm loads; offline after that, the new version starts.
+
 ## Tests
 
 - `cargo test` runs the logic on the host: `src/logic/`, the stores, and the check that every catalogue has every message with the same variables.

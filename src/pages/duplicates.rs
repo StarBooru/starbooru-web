@@ -13,6 +13,7 @@ use starbooru_core::{
 
 use super::{gallery, post, trash};
 use crate::api;
+use crate::components::back::BackButton;
 use crate::components::banner::{ErrorBanner, Spinner};
 use crate::components::icons::{Ico, Icon};
 use crate::components::snackbar::{notify, notify_undo};
@@ -145,7 +146,10 @@ pub fn Duplicates() -> impl IntoView {
     view! {
         <div class="page duplicates">
             <div class="page-head">
-                <h1 class="page-title">{move || t!("dup-title")}</h1>
+                <div class="titled">
+                    <BackButton up=route::SETTINGS />
+                    <h1 class="page-title">{move || t!("dup-title")}</h1>
+                </div>
                 <div class="segmented" role="radiogroup" aria-label=move || t!("dup-matching")>
                     {levels}
                 </div>

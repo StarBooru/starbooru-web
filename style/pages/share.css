@@ -55,8 +55,15 @@
 /* ---------- the public page ---------- */
 
 /* No bars around it: the brand at the top, the heading, then the posts. */
-.shared-page { min-height: 100vh; min-height: 100dvh; max-width: 1600px; margin: 0 auto; padding: 24px 16px 48px; }
-.shared-brand { display: flex; align-items: center; gap: 8px; margin-bottom: 20px; color: var(--primary); }
+.shared-page {
+  min-height: 100vh; min-height: 100dvh; max-width: 1600px; margin: 0 auto;
+  padding: max(24px, env(safe-area-inset-top)) max(16px, env(safe-area-inset-right)) max(48px, env(safe-area-inset-bottom)) max(16px, env(safe-area-inset-left));
+}
+.shared-brand {
+  display: flex; align-items: center; gap: 8px; width: fit-content; margin-bottom: 20px;
+  border-radius: 999px; color: var(--primary); text-decoration: none;
+}
+.shared-brand:hover .mark-star { transform: rotate(90deg) scale(1.08); }
 .shared-head { margin-bottom: 16px; }
 .shared-head .page-title { margin: 0 0 4px; overflow-wrap: anywhere; }
 .shared-head p { margin: 0; overflow-wrap: anywhere; }

@@ -16,6 +16,7 @@ use starbooru_core::{Tag, TagCategory, TagDetail, TagOrder, TagUpdate};
 
 use super::{CATEGORIES, category_label, gallery};
 use crate::api::{self, Failure};
+use crate::components::back::BackButton;
 use crate::components::banner::{ErrorBanner, Spinner};
 use crate::components::icons::{Ico, Icon};
 use crate::components::tag_menu::TagPress;
@@ -601,7 +602,10 @@ pub fn TagPage() -> impl IntoView {
                 let count = t.post_count;
                 view! {
                     <div class="page-head">
-                        <h1 class="page-title break">{t.name.clone()}</h1>
+                        <div class="titled">
+                            <BackButton up=route::TAGS />
+                            <h1 class="page-title break">{t.name.clone()}</h1>
+                        </div>
                         <a class="btn tonal" href=browse>
                             <Ico icon=Icon::Gallery />
                             {move || t!("tags-browse", count = count)}

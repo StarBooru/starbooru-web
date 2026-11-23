@@ -152,10 +152,12 @@ pub fn SharedPage() -> impl IntoView {
 
     view! {
         <div class="shared-page">
-            <div class="shared-brand" role="img" aria-label=move || t!("app-name")>
+            // The way out, where nothing else leads anywhere: an installed app
+            // has no address bar. Without a session, "/" is the sign-in card.
+            <a class="shared-brand" href="/" aria-label=move || t!("app-name")>
                 <Mark height=30 compact=true />
                 <Wordmark height=19 />
-            </div>
+            </a>
             {body}
         </div>
     }

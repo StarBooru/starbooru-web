@@ -84,6 +84,7 @@ web-sys = { version = "0.3", features = [
   "ScrollLogicalPosition",
   "ScrollRestoration",
   "ScrollToOptions",
+  "ServiceWorkerContainer",
   "Storage",
   "StorageEvent",
   "TimeRanges",

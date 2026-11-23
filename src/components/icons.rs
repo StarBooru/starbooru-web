@@ -35,6 +35,8 @@ pub enum Icon {
     Help,
     /// A file that was already uploaded, and the posts opened lately.
     History,
+    /// Installing the app: a screen with an arrow into it.
+    Install,
     /// A tag.
     Label,
     /// The gallery's layout.
@@ -171,6 +173,10 @@ impl Icon {
             ),
             Icon::History => Shape::Fill(
                 "M2.907 6.75c2.9-5.022 9.321-6.743 14.343-3.844a10.5 10.5 0 0 1 4.916 11.733c-.331 1.271-1.928 1.595-2.753.646l-2.251-2.588c-1.033-1.187.088-2.995 1.61-2.598l.518.136a7.5 7.5 0 1 0-3.136 8.013l.33-.233a1.5 1.5 0 0 1 1.753 2.435q-.2.146-.404.284a10.5 10.5 0 0 1-11.083.359c-5.02-2.9-6.743-9.32-3.843-14.343M12 5.5A1.5 1.5 0 0 1 13.5 7v4.38l2.061 2.06a1.5 1.5 0 0 1-2.122 2.12l-2.5-2.5a1.5 1.5 0 0 1-.438-1.06V7A1.5 1.5 0 0 1 12 5.5",
+            ),
+            Icon::Install => Shape::Stroke(
+                "3",
+                "M8 4H6a3 3 0 0 0-3 3v6a3 3 0 0 0 3 3h12a3 3 0 0 0 3-3V7a3 3 0 0 0-3-3h-2M8.5 21h7M12 2.5v9m-3.25-3.25L12 11.5l3.25-3.25",
             ),
             Icon::Label => Shape::Fill(
                 "M10.537 2.164a3 3 0 0 1 2.393.866l7.823 7.824a3 3 0 0 1 0 4.242l-5.657 5.657a3 3 0 0 1-4.242 0L3.03 12.93a3 3 0 0 1-.866-2.393l.472-5.185a3 3 0 0 1 2.716-2.716zm.316 5.862a2 2 0 1 0-2.828 2.827a2 2 0 0 0 2.828-2.827",
@@ -338,7 +344,7 @@ pub fn Ico(icon: Icon, #[prop(default = 24)] size: u32) -> impl IntoView {
 mod tests {
     use super::*;
 
-    const ALL: [Icon; 62] = [
+    const ALL: [Icon; 63] = [
         Icon::Add,
         Icon::ArrowBack,
         Icon::Article,
@@ -364,6 +370,7 @@ mod tests {
         Icon::GitHub,
         Icon::Help,
         Icon::History,
+        Icon::Install,
         Icon::Label,
         Icon::Layout,
         Icon::Link,

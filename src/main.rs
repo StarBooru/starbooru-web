@@ -8,6 +8,7 @@ mod app;
 mod components;
 mod dom;
 mod files;
+mod install;
 mod logic;
 mod oidc;
 mod pace;

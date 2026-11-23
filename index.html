@@ -5,11 +5,25 @@
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
     <meta name="referrer" content="no-referrer">
     <title>StarBooru</title>
-    <link data-trunk rel="icon" href="assets/brand/favicon.svg">
+    <!-- Installing (install.rs): the manifest and its icons, and the service
+         worker, which has to sit at the root to look after every page. -->
+    <link data-trunk rel="copy-file" href="assets/brand/favicon.svg">
     <link data-trunk rel="copy-file" href="assets/brand/favicon-32.png">
     <link data-trunk rel="copy-file" href="assets/brand/apple-touch-icon.png">
+    <link data-trunk rel="copy-file" href="assets/brand/icon-192.png">
+    <link data-trunk rel="copy-file" href="assets/brand/icon-512.png">
+    <link data-trunk rel="copy-file" href="assets/brand/icon-maskable-512.png">
+    <link data-trunk rel="copy-file" href="assets/manifest.webmanifest">
+    <link data-trunk rel="copy-file" href="assets/sw.js">
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg">
     <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32.png">
     <link rel="apple-touch-icon" href="/apple-touch-icon.png">
+    <link rel="manifest" href="/manifest.webmanifest">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-title" content="StarBooru">
+    <!-- An opaque bar in the system's light or dark: a see-through one keeps
+         white text, which the light theme can't carry. -->
+    <meta name="apple-mobile-web-app-status-bar-style" content="default">
     <!-- The browser's own bars take the canvas colour. The app keeps these in
          step with the theme and the accent (app.rs). -->
     <meta id="theme-color-light" name="theme-color" content="#f9fafe" media="(prefers-color-scheme: light)">
@@ -116,6 +130,12 @@
           for (const bar of bars) document.getElementById(`theme-color-${bar}`)?.setAttribute("content", "#000000");
         }
       } catch {}
+      // Chromium's offer to install can come before the app has started:
+      // it's kept for install.rs, which shows it as a button in Settings.
+      addEventListener("beforeinstallprompt", (event) => {
+        event.preventDefault();
+        window.starbooruInstall = event;
+      });
     </script>
   </body>
 </html>

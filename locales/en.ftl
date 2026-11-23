@@ -7,6 +7,7 @@ app-name = StarBooru
 notfound-title = Nothing here
 notfound-body = There is no page at { $path }.
 notfound-back = Back to the gallery
+page-back = Back
 notice-close = Close
 
 ## Navigation
@@ -238,6 +239,9 @@ keys-error-long = The name is longer than { $max } characters.
 keys-error-control = The name can't hold control characters.
 keys-error-days = A key can last 1 to { $max } days.
 about-title = About StarBooru
+install-app = Install StarBooru
+install-note = In a window of its own, with an icon among your apps
+install-done = StarBooru is installed: you’ll find it among your apps.
 about-made-by = Made by
 about-made-by-name = FilipNone
 about-icons = Icons
@@ -979,7 +983,7 @@ privacy-device = What stays on your device
 privacy-device-storage = This app keeps one entry in the browser’s local storage: the server address, your sign-in token, your username and role, your preferences (such as the theme, the language, the gallery’s layout and the boorus you added by address), where the gallery was in your last 30 searches, and the last 60 posts you opened.
 privacy-device-sign-in = While you sign in through an identity provider, the tab keeps a one-time handle in its session storage, removed when you come back.
 privacy-device-sign-out = Signing out removes the token, your username and role, the searches the gallery remembered and the posts you opened. The server address and the preferences stay until you clear this site’s data in the browser.
-privacy-device-cache = StarBooru sets no cookies. Pictures and videos go into the browser’s cache, as on any website, and everything else the app loads stays in the tab’s memory until you close it.
+privacy-device-cache = StarBooru sets no cookies. Pictures and videos go into the browser’s cache, as on any website. The app keeps its own files (its page, code, styles and icons) so it can start without a network; none of your data is among them. Everything else it loads stays in the tab’s memory until you close it.
 privacy-not-done = What StarBooru does not do
 privacy-not-done-tracking = No analytics, advertising or tracking, and no third-party services beyond an identity provider or an AI provider the operator chooses to set up. This app loads its code, styles and icons from this server alone.
 privacy-not-done-contacts = The server contacts other sites only when you search, browse or import from another booru, import from a URL or sign in through the operator’s identity provider, and when an administrator installs a local AI model, which it downloads from where the model is published. Its requests name StarBooru as the client and carry none of your details, except the account you saved for that site, which goes to that site alone.

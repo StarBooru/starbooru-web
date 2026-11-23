@@ -15,6 +15,7 @@ use starbooru_core::{Post, Role};
 
 use super::{gallery, post};
 use crate::api::{self, Refused};
+use crate::components::back::BackButton;
 use crate::components::banner::{ErrorBanner, Spinner};
 use crate::components::confirm::ConfirmButton;
 use crate::components::icons::{Ico, Icon};
@@ -300,7 +301,10 @@ pub fn Trash() -> impl IntoView {
     view! {
         <div class="page trash">
             <div class="page-head">
-                <h1 class="page-title">{move || t!("trash-title")}</h1>
+                <div class="titled">
+                    <BackButton up=route::SETTINGS />
+                    <h1 class="page-title">{move || t!("trash-title")}</h1>
+                </div>
                 <Show when=move || !posts.with(Vec::is_empty)>
                     <div class="page-tools">
                         <button

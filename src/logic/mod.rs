@@ -25,6 +25,7 @@ pub mod share;
 pub mod spots;
 pub mod swipe;
 pub mod tags;
+pub mod trail;
 pub mod upload;
 pub mod viewer;
 pub mod votes;

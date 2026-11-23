@@ -20,12 +20,12 @@ use self::keys::ApiKeysCard;
 use self::sessions::SessionsCard;
 use super::library::LibraryImportCard;
 use super::share::SharesCard;
-use crate::api;
 use crate::components::icons::{Ico, Icon};
 use crate::components::legal::note_opener;
 use crate::logic::settings::{Sections, sections, version};
 use crate::route;
 use crate::store;
+use crate::{api, install};
 
 /// Where this app's code lives, and the list of everyone whose work it uses.
 const REPOSITORY: &str = env!("CARGO_PKG_REPOSITORY");
@@ -134,12 +134,29 @@ pub fn Settings() -> impl IntoView {
 }
 
 /// Who made StarBooru, with what, where its code lives and which version this
-/// is.
+/// is, and installing it while the browser offers that.
 #[component]
 fn AboutCard() -> impl IntoView {
+    let install_row = move || {
+        install::offered().then(|| {
+            view! {
+                <button
+                    type="button"
+                    class="list-link install-row"
+                    disabled=install::asking
+                    on:click=|_| install::ask()
+                >
+                    <Ico icon=Icon::Install />
+                    <span>{move || t!("install-app")}</span>
+                    <span class="muted">{move || t!("install-note")}</span>
+                </button>
+            }
+        })
+    };
     view! {
         <section class="card">
             <h2 class="card-title">{move || t!("about-title")}</h2>
+            {install_row}
             <dl class="meta about-credits">
                 <dt>{move || t!("about-made-by")}</dt>
                 <dd>{move || t!("about-made-by-name")}</dd>

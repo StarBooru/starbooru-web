@@ -5,8 +5,8 @@ use leptos::prelude::*;
 use leptos_router::components::{ParentRoute, Route, Router, Routes};
 use leptos_router::path;
 
+use crate::components::back;
 use crate::components::snackbar::Snackbar;
-use crate::i18n;
 use crate::pages::NotFound;
 use crate::pages::admin::Admin;
 use crate::pages::boorus::{BooruPost, Boorus};
@@ -23,6 +23,7 @@ use crate::pages::shell::Shell;
 use crate::pages::tags::{TagPage, Tags};
 use crate::pages::trash::Trash;
 use crate::pages::upload::Upload;
+use crate::{i18n, install};
 use crate::{pace, power, store, theme};
 
 #[component]
@@ -37,6 +38,8 @@ pub fn App() -> impl IntoView {
     let lite = Memo::new(|_| pace::lite());
     power::watch();
     pace::watch();
+    install::watch();
+    install::register_worker();
     // A language picked in Settings, else the browser's.
     Effect::new(move |_| {
         i18n::set_lang(i18n::resolve(picked.get(), &i18n::browser_languages()));
@@ -75,6 +78,7 @@ pub fn App() -> impl IntoView {
 /// Every address the app has, the reference's.
 #[component]
 fn AppRoutes() -> impl IntoView {
+    back::follow();
     view! {
         <Routes fallback=NotFound>
             // The sign-in pages, shared posts and the legal pages stand alone.

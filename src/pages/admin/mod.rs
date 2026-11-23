@@ -19,9 +19,10 @@ use self::ai::AiCard;
 use self::backups::Backups;
 use self::overview::Overview;
 use self::server::{BinCard, ServerCard};
+use crate::components::back::BackButton;
 use crate::components::banner::Spinner;
 use crate::logic::admin::Tab;
-use crate::store;
+use crate::{route, store};
 
 fn tab_label(tab: Tab) -> String {
     match tab {
@@ -37,7 +38,10 @@ pub fn Admin() -> impl IntoView {
     let admin = Memo::new(|_| store::session().is_some_and(|s| s.user.role == Role::Admin));
     view! {
         <div class="page narrow admin">
-            <h1 class="page-title break">{move || t!("admin-title")}</h1>
+            <div class="titled">
+                <BackButton up=route::SETTINGS />
+                <h1 class="page-title break">{move || t!("admin-title")}</h1>
+            </div>
             <Show
                 when=move || admin.get()
                 fallback=|| {

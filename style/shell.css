@@ -9,6 +9,9 @@
   --bar-h: 52px; --bar-gap: 12px; --side: 200px;
   --bar-top: max(var(--bar-gap), env(safe-area-inset-top));
   --bar-end: calc(var(--bar-top) + var(--bar-h));
+  /* Clear of a phone's notch when it lies on its side. */
+  --inset-l: max(var(--bar-gap), env(safe-area-inset-left));
+  --inset-r: max(var(--bar-gap), env(safe-area-inset-right));
   /* how far fixed things keep from the rail, when there is one */
   --rail-l: 0px; --rail-r: 0px;
 }
@@ -16,7 +19,7 @@
 .topbar {
   position: fixed; inset: 0 0 auto; z-index: 10;
   display: grid; grid-template-columns: var(--side) minmax(0, 1fr) var(--side); align-items: center; gap: var(--bar-gap);
-  padding: var(--bar-top) var(--bar-gap) 0; pointer-events: none;
+  padding: var(--bar-top) var(--inset-r) 0 var(--inset-l); pointer-events: none;
 }
 .topbar > * { pointer-events: auto; }
 
@@ -178,7 +181,10 @@ a.brand:hover .mark-star, a.search-home:hover .mark-star { transform: rotate(90d
 
 /* ---------- content ---------- */
 
-.content { --pad-x: 16px; padding: calc(var(--bar-end) + 16px) var(--pad-x) 48px; }
+.content {
+  --pad-x: 16px;
+  padding: calc(var(--bar-end) + 16px) max(var(--pad-x), env(safe-area-inset-right)) 48px max(var(--pad-x), env(safe-area-inset-left));
+}
 .page { max-width: 1600px; margin: 0 auto; animation: fade-up var(--med) var(--ease); }
 .page.narrow { max-width: 720px; }
 .center-page { display: grid; place-items: center; min-height: 50vh; padding: 16px; }
@@ -209,13 +215,14 @@ a.brand:hover .mark-star, a.search-home:hover .mark-star { transform: rotate(90d
   .search > .icon { display: none; }
   .search-home { display: block; border-radius: 999px; }
   .nav-bottom {
-    position: fixed; left: 12px; right: 12px; bottom: max(12px, env(safe-area-inset-bottom)); z-index: 10;
+    position: fixed; left: max(12px, env(safe-area-inset-left)); right: max(12px, env(safe-area-inset-right));
+    bottom: max(12px, env(safe-area-inset-bottom)); z-index: 10;
     margin-inline: auto; max-width: 480px;
     display: grid; grid-auto-flow: column; grid-auto-columns: 1fr;
   }
   .nav-bottom .nav-item { flex-direction: column; gap: 1px; min-height: 52px; padding: 0 2px; font-size: 12px; }
   .nav-bottom .nav-item .icon { width: 22px; height: 22px; }
-  .content { --pad-x: 8px; padding: calc(var(--bar-end) + 12px) var(--pad-x) calc(96px + env(safe-area-inset-bottom)); }
+  .content { --pad-x: 8px; padding-top: calc(var(--bar-end) + 12px); padding-bottom: calc(96px + env(safe-area-inset-bottom)); }
   .snackbar-slot { bottom: calc(96px + env(safe-area-inset-bottom)); }
 }
 
@@ -224,14 +231,14 @@ a.brand:hover .mark-star, a.search-home:hover .mark-star { transform: rotate(90d
    of a thumb. `data-hand` picks the side; `--rail-l`/`--rail-r` keep fixed
    things clear of it. */
 @media (min-width: 761px) and (max-width: 1529px) {
-  .app { --rail-w: 76px; --rail-l: calc(var(--rail-w) + 16px); }
-  .app[data-hand="right"] { --rail-l: 0px; --rail-r: calc(var(--rail-w) + 16px); }
+  .app { --rail-w: 76px; --rail-l: calc(var(--inset-l) + var(--rail-w) + 4px); }
+  .app[data-hand="right"] { --rail-l: 0px; --rail-r: calc(var(--inset-r) + var(--rail-w) + 4px); }
   .nav-bottom {
-    position: fixed; z-index: 9; left: var(--bar-gap); width: var(--rail-w); height: fit-content;
+    position: fixed; z-index: 9; left: var(--inset-l); width: var(--rail-w); height: fit-content;
     top: calc(var(--bar-end) + var(--bar-gap)); bottom: var(--bar-gap); margin-block: auto;
     display: grid; grid-auto-rows: 1fr; border-radius: calc(var(--rail-w) / 2);
   }
-  .app[data-hand="right"] .nav-bottom { left: auto; right: var(--bar-gap); }
+  .app[data-hand="right"] .nav-bottom { left: auto; right: var(--inset-r); }
   /* Standing up: the same, down the rail. */
   .nav-bottom .slider-thumb { --end: calc(var(--rail-w) / 2 - var(--pad)); transform-origin: 50% calc((var(--i) + 0.5) * var(--step)); }
   .nav-bottom :is(.slider-clip, .slider-unclip, .slider-fill) { left: 0; right: 0; width: auto; top: 0; bottom: auto; height: 100%; }
@@ -251,7 +258,10 @@ a.brand:hover .mark-star, a.search-home:hover .mark-star { transform: rotate(90d
     border-radius: calc(var(--rail-w) / 2 - var(--pad));
   }
   .nav-bottom .nav-item .icon { width: 22px; height: 22px; }
-  .content { padding-left: calc(8px + var(--rail-l)); padding-right: calc(8px + var(--rail-r)); }
+  .content {
+    padding-left: max(calc(8px + var(--rail-l)), env(safe-area-inset-left));
+    padding-right: max(calc(8px + var(--rail-r)), env(safe-area-inset-right));
+  }
   .bulk-bar, .snackbar-slot { left: var(--rail-l); right: var(--rail-r); }
 }
 @media (min-width: 761px) and (max-width: 1100px) {

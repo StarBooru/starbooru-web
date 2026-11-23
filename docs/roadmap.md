@@ -90,7 +90,7 @@ Both modes:
 
 ## 9. Install
 
-- [ ] Installable as a progressive web app in Chrome, a web app in Firefox and a Safari web app
+- [x] Installable as a progressive web app in Chrome, a web app in Firefox and a Safari web app
 
 ## Ideas
 

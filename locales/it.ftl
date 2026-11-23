@@ -7,6 +7,7 @@ app-name = StarBooru
 notfound-title = Qui non c'è niente
 notfound-body = Non esiste una pagina { $path }.
 notfound-back = Torna alla galleria
+page-back = Indietro
 notice-close = Chiudi
 
 ## Navigation
@@ -238,6 +239,9 @@ keys-error-long = Il nome supera i { $max } caratteri.
 keys-error-control = Il nome non può contenere caratteri di controllo.
 keys-error-days = Una chiave può durare da 1 a { $max } giorni.
 about-title = Informazioni su StarBooru
+install-app = Installa StarBooru
+install-note = In una finestra tutta sua, con un'icona tra le tue app
+install-done = StarBooru è installata: la trovi tra le tue app.
 about-made-by = Creato da
 about-made-by-name = FilipNone
 about-icons = Icone
@@ -988,7 +992,7 @@ privacy-device = Cosa resta sul tuo dispositivo
 privacy-device-storage = Questa app tiene una sola voce nella memoria locale del browser: l'indirizzo del server, il tuo token di accesso, il tuo nome utente e ruolo, le tue preferenze (come il tema, la lingua, l'aspetto della galleria e i booru aggiunti per indirizzo), il punto in cui era la galleria nelle tue ultime 30 ricerche e gli ultimi 60 post che hai aperto.
 privacy-device-sign-in = Mentre accedi tramite un provider di identità, la scheda tiene un codice monouso nella sua memoria di sessione, rimosso quando torni.
 privacy-device-sign-out = Uscendo vengono rimossi il token, il nome utente e il ruolo, le ricerche ricordate dalla galleria e i post che hai aperto. L'indirizzo del server e le preferenze restano finché non cancelli i dati di questo sito nel browser.
-privacy-device-cache = StarBooru non usa cookie. Immagini e video finiscono nella cache del browser, come su qualsiasi sito, e tutto il resto che l'app carica resta nella memoria della scheda finché non la chiudi.
+privacy-device-cache = StarBooru non usa cookie. Immagini e video finiscono nella cache del browser, come su qualsiasi sito. L'app conserva i propri file (la pagina, il codice, gli stili e le icone) per potersi avviare anche senza rete; tra questi non c'è nessun tuo dato. Tutto il resto che carica resta nella memoria della scheda finché non la chiudi.
 privacy-not-done = Cosa StarBooru non fa
 privacy-not-done-tracking = Niente statistiche d'uso, pubblicità o tracciamento, e nessun servizio di terze parti oltre a un provider di identità o a un fornitore di IA che il gestore sceglie di configurare. Questa app carica codice, stili e icone solo da questo server.
 privacy-not-done-contacts = Il server contatta altri siti solo quando cerchi, sfogli o importi da un altro booru, importi da un URL o accedi tramite il provider di identità del gestore, e quando un amministratore installa un modello di IA locale, che scarica da dove è pubblicato. Le sue richieste si presentano come StarBooru e non portano nessuno dei tuoi dati, tranne l'account che hai salvato per quel sito, che va solo a quel sito.

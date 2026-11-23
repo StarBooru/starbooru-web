@@ -1,7 +1,10 @@
 /* The privacy policy and the terms (pages/legal.rs): outside the shell, a way
    back over one card with the text in a column short enough to read. */
 
-.legal-page { min-height: 100vh; min-height: 100dvh; padding: 24px 16px 48px; }
+.legal-page {
+  min-height: 100vh; min-height: 100dvh;
+  padding: max(24px, env(safe-area-inset-top)) max(16px, env(safe-area-inset-right)) max(48px, env(safe-area-inset-bottom)) max(16px, env(safe-area-inset-left));
+}
 .legal-top, .legal { max-width: calc(68ch + 64px); margin: 0 auto; }
 .legal-top { margin-bottom: 8px; }
 .legal-back { margin-left: -8px; padding: 0 14px 0 8px; }

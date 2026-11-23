@@ -22,6 +22,12 @@ html { overflow-y: scroll; }
 a { color: var(--primary); }
 h1, h2 { line-height: 1.2; margin: 0; }
 .page-title { font-size: 28px; font-weight: 600; margin: 8px 0 20px; overflow-wrap: anywhere; }
+/* A page under a tab: the way back before its title (components/back.rs),
+   the arrow lined up with the page's edge. */
+.titled { display: flex; align-items: center; gap: 2px; min-width: 0; margin: 8px 0 20px -10px; }
+.titled .page-title { margin: 0; min-width: 0; }
+.page-head .titled { margin-block: 0; }
+.page-back { flex: none; color: var(--on-surface); }
 .card-title { font-size: 16px; font-weight: 600; margin-bottom: 12px; }
 .muted { color: var(--on-surface-2); margin: 0; }
 /* What a page is for, under its title. */
