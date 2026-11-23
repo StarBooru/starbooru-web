@@ -214,7 +214,7 @@ fn ran() {
     if ended == Ended::default() {
         return;
     }
-    notify(summary(ended, true));
+    notify(untrack(|| summary(ended, true)));
     if ended.done > 0 {
         api::forget_tags();
         gallery::posts_arrived();
@@ -336,6 +336,20 @@ async fn send_imports(batch: Vec<(u64, ImportRequest)>) {
     pump();
 }
 
+/// Queues imports on the server for a page other than Upload (the booru
+/// browser's selection). They show up as jobs here, on the Upload page and
+/// in the navigation's badge. The words to show when the server refuses.
+pub async fn queue_imports(requests: Vec<ImportRequest>) -> Result<(), String> {
+    for chunk in requests.chunks(MAX_IMPORT_BATCH) {
+        let items = chunk.to_vec();
+        let jobs = api::call(move |c| async move { c.queue_imports(items).await }).await?;
+        WATCHED.with_borrow_mut(|w| w.extend(jobs.iter().map(|j| j.id)));
+        JOBS.with(|j| j.update(|list| *list = merge(list, jobs)));
+    }
+    STALE.set(true);
+    Ok(())
+}
+
 /// Cancels an import that hasn't started.
 pub fn cancel_job(id: i64) {
     spawn_local(async move {
@@ -373,7 +387,8 @@ async fn poll() {
     };
     let ended = WATCHED.with_borrow_mut(|w| finished(w, &now));
     if let Some(ended) = ended {
-        notify(summary(ended, false));
+        // Out of any view: the language is read, not followed.
+        notify(untrack(|| summary(ended, false)));
         if ended.done > 0 {
             api::forget_tags();
             gallery::posts_arrived();

@@ -131,6 +131,58 @@ pub fn tag(name: &str) -> String {
     format!("/tag?name={}", query_value(name))
 }
 
+/// What the booru browser's `u` and `s` keep as they are besides: the
+/// slashes of an address and the signs that part the sites.
+const ADDRESS_VALUE: &AsciiSet = &QUERY_VALUE.remove(b'/').remove(b',').remove(b'|');
+
+/// The query string of the booru browser's pages: `pairs` with an empty
+/// value left out, each written as `to_address` writes it (`q` and `u`) or
+/// as `sites_param` did (`s`).
+fn booru_query(pairs: &[(&str, &str)]) -> String {
+    let parts: Vec<String> = pairs
+        .iter()
+        .filter(|(_, value)| !value.is_empty())
+        .map(|(name, value)| {
+            let set = if *name == "q" {
+                QUERY_VALUE
+            } else {
+                ADDRESS_VALUE
+            };
+            let value = match *name {
+                "s" => (*value).to_owned(),
+                _ => crate::logic::boorus::to_address(value),
+            };
+            let encoded = utf8_percent_encode(&value, set)
+                .to_string()
+                .replace(' ', "+");
+            format!("{name}={encoded}")
+        })
+        .collect();
+    if parts.is_empty() {
+        String::new()
+    } else {
+        format!("?{}", parts.join("&"))
+    }
+}
+
+/// The booru browser for search `q` on the sites `s` names
+/// (`logic::boorus::sites_param`).
+pub fn boorus(q: &str, s: &str) -> String {
+    format!("{BOORUS}{}", booru_query(&[("q", q.trim()), ("s", s)]))
+}
+
+/// The post at page `u` on another booru, opened from search `q` on the
+/// sites `s`.
+pub fn booru_post(u: &str, q: &str, s: &str) -> String {
+    format!(
+        "{BOORUS}/post{}",
+        booru_query(&[("u", u), ("q", q.trim()), ("s", s)])
+    )
+}
+
+/// The booru browser.
+pub const BOORUS: &str = "/boorus";
+
 /// The list of tags.
 pub const TAGS: &str = "/tags";
 /// The Upload page.
@@ -237,6 +289,80 @@ mod tests {
         // The signs that would end the value or change it are escaped.
         assert_eq!(query_value("a&b=c#d+e%f?"), "a%26b%3Dc%23d%2Be%25f%3F");
         assert_eq!(query_value("猫"), "%E7%8C%AB");
+    }
+
+    /// The value of `name` in the query of `address`, read back as a browser
+    /// does (`URLSearchParams`).
+    fn param(address: &str, name: &str) -> Option<String> {
+        let (_, query) = address.split_once('?')?;
+        query.split('&').find_map(|pair| {
+            let (key, value) = pair.split_once('=')?;
+            let value = value.replace('+', " ");
+            (key == name).then(|| {
+                percent_encoding::percent_decode_str(&value)
+                    .decode_utf8_lossy()
+                    .into_owned()
+            })
+        })
+    }
+
+    #[test]
+    fn the_booru_browser_carries_its_search_and_sites() {
+        use crate::logic::boorus::{from_address, parse_sites, sites_param};
+        assert_eq!(boorus("", ""), "/boorus");
+        assert_eq!(
+            boorus(" rating:g landscape ", "danbooru,e926"),
+            "/boorus?q=rating:g+landscape&s=danbooru,e926"
+        );
+        assert_eq!(boorus("", "e926"), "/boorus?s=e926");
+        assert_eq!(
+            booru_post("https://danbooru.donmai.us/posts/7", "sky", "danbooru"),
+            "/boorus/post?u=https://danbooru.donmai.us/posts/7&q=sky&s=danbooru"
+        );
+        let path = |to: String| to.split('?').next().unwrap_or_default().to_owned();
+        assert_eq!(tab_of(&path(boorus("sky", ""))), Some(Tab::Explore));
+        assert_eq!(tab_of(&path(booru_post("x", "", ""))), Some(Tab::Explore));
+        assert!(!has_search("/boorus"));
+
+        let sites = sites_param(&[
+            starbooru_core::RemoteSite {
+                api: starbooru_core::BooruApi::Moebooru,
+                base: "https://yande.re".into(),
+            },
+            starbooru_core::RemoteSite {
+                api: starbooru_core::BooruApi::Blombooru,
+                base: "http://nas:8000/a,b&c%20d".into(),
+            },
+        ]);
+        for text in [
+            "",
+            "blue_sky rating:safe",
+            "https://gelbooru.com/index.php?page=post&s=view&id=7#comments",
+            "panty_&_stocking_with_garterbelt 100% c++ ~either a,b",
+            "già_visto ★ 日本語 (fate) ?=/",
+            "~7E ~zz ~",
+        ] {
+            // Through the address and back, as a reload or a shared link does.
+            let grid = boorus(text, &sites);
+            let q = param(&grid, "q").unwrap_or_default();
+            assert_eq!(from_address(&q), text.trim(), "{grid}");
+            let s = param(&grid, "s").unwrap_or_default();
+            assert_eq!(s, sites);
+            assert_eq!(parse_sites(&s).len(), 2);
+            let post = booru_post(text, text, &sites);
+            let u = param(&post, "u").unwrap_or_default();
+            assert_eq!(from_address(&u), text, "{post}");
+            assert_eq!(param(&post, "s").as_deref(), Some(sites.as_str()));
+            // Nothing in a value ends it or starts another.
+            for address in [&grid, &post] {
+                let (_, query) = address.split_once('?').unwrap_or_default();
+                assert!(!query.contains('#'), "{address}");
+                assert!(query.split('&').count() <= 3, "{address}");
+            }
+        }
+        // A link from the reference, which encoded the same way.
+        let old = "/boorus?q=panty_~26_stocking&s=danbooru";
+        assert_eq!(from_address(&param(old, "q").unwrap()), "panty_&_stocking");
     }
 
     #[test]

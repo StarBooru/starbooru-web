@@ -67,6 +67,7 @@ h1, h2 { line-height: 1.2; margin: 0; }
 .icon-btn.on .icon { animation: pop var(--slow) var(--ease-spring); }
 .icon-btn.danger:hover:not(:disabled) { background: var(--danger-container); color: var(--on-danger-container); }
 .icon-btn:disabled { opacity: 0.45; cursor: default; }
+.icon-btn.small { width: 36px; height: 36px; }
 
 /* An on/off switch, its icon on the knob. Off it sits in the track's start;
    on, the track fills with the primary colour and the knob slides across. */

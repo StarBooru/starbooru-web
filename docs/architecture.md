@@ -38,8 +38,9 @@ src/
   pages/        one module per page; shell.rs is the frame, soon.rs the placeholder, post/ the viewer
   components/   icons, brand, snackbar, tiles, downloads, the tag box and its grip, a tag's menu
   logic/        pure Rust with unit tests: server addresses, the gallery's lists and layout, zoom, the viewer's
-                 tags, details and file names, the word at the caret, the tag editor's text and who may edit,
-                 the gallery's selection and the mass edit it sends
+                  tags, details and file names, the word at the caret, the tag editor's text and who may edit,
+                  the gallery's selection and the mass edit it sends, the booru browser's sites, addresses and
+                  results, and the library import's text
 locales/        en.ftl, it.ftl
 style/          tokens.css, base.css, shell.css, pages/<page>.css
 index.html      Trunk's entry, with the loading screen
@@ -66,6 +67,7 @@ Component CSS uses only the role variables, never a literal colour. The navigati
 - **Long lists.** Only the tiles within a screen and a half of the view are in the DOM, as in the reference gallery. A tile shows its post's main colour until the thumbnail arrives.
 - **Motion.** CSS transitions and the Web Animations API. View Transitions where the browser has them, with a plain fallback. Everything heavy goes quiet under `prefers-reduced-motion` and the battery saver.
 - **Uploads.** `Client::upload_file` sends files in chunks and resends a failed one. The queue lives in a signal at the root, so it keeps going while the user moves between pages.
+- **Other boorus.** The server searches them (`/remote/search`), keeps the accounts and relays the pictures a site won't serve to other pages. The browser keeps the last results for a few hours while the tab is open, and saving a post queues an import on the server.
 
 ## Open questions
 

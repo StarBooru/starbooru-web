@@ -3,6 +3,7 @@
 
 use leptos::prelude::*;
 
+use super::library::LibraryImportCard;
 use crate::api;
 use crate::components::brand::Mark;
 use crate::components::icons::{Ico, Icon};
@@ -49,11 +50,16 @@ fn SoonCard() -> impl IntoView {
 }
 
 /// `/settings` until it's built: the account, with a way to sign out, as the
-/// reference's Settings had at its foot, and the way to the recycle bin from
-/// its Library card.
+/// reference's Settings had at its foot, the way to the recycle bin from its
+/// Library card, and under that the import of a whole library from another
+/// booru, unless the server is set never to reach other sites.
 #[component]
 pub fn SettingsSoon() -> impl IntoView {
     let info = LocalResource::new(api::server_info);
+    let library_import = move || {
+        let reaches_out = info.get().flatten().is_some_and(|i| i.url_import);
+        (store::signed_in() && reaches_out).then(|| view! { <LibraryImportCard /> })
+    };
     let account = move || {
         store::session().map(|s| {
             view! {
@@ -102,6 +108,7 @@ pub fn SettingsSoon() -> impl IntoView {
                     <span class="muted">{move || t!("settings-trash-note")}</span>
                 </a>
             </section>
+            {library_import}
             {account}
             <SoonCard />
         </div>

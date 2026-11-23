@@ -63,6 +63,20 @@ pub fn finished(watched: &mut HashSet<i64>, now: &[ImportJob]) -> Option<Ended> 
     (ended != Ended::default()).then_some(ended)
 }
 
+/// Each job by the page it came from (its source, else its address), the
+/// latest for a page that was imported more than once. A post from another
+/// booru is known by its page.
+pub fn by_source(jobs: &[ImportJob]) -> HashMap<String, ImportJob> {
+    let mut map: HashMap<String, ImportJob> = HashMap::new();
+    for job in jobs {
+        let page = job.source.as_ref().unwrap_or(&job.url);
+        if map.get(page).is_none_or(|j| j.id < job.id) {
+            map.insert(page.clone(), job.clone());
+        }
+    }
+    map
+}
+
 #[cfg(test)]
 mod tests {
     use chrono::Utc;
@@ -136,5 +150,24 @@ mod tests {
         // A watched job cancelled or cleared elsewhere isn't counted.
         let mut watched = HashSet::from([9]);
         assert_eq!(finished(&mut watched, &[]), None);
+    }
+
+    #[test]
+    fn a_job_is_found_by_its_page_and_the_latest_wins() {
+        let mut by_page = job(1, JobState::Failed);
+        by_page.url = "https://a.org/posts/1".into();
+        let mut again = job(2, JobState::Queued);
+        again.url = "https://cdn.a.org/1.png".into();
+        again.source = Some("https://a.org/posts/1".into());
+        let other = job(3, JobState::Done);
+        let map = by_source(&[again.clone(), by_page, other]);
+        assert_eq!(map.len(), 2);
+        assert_eq!(map.get("https://a.org/posts/1").map(|j| j.id), Some(2));
+        assert_eq!(map.get("https://example.org/3.png").map(|j| j.id), Some(3));
+        // Whatever order the list comes in.
+        let mut older = job(1, JobState::Failed);
+        older.source = again.source.clone();
+        let map = by_source(&[older, again]);
+        assert_eq!(map.get("https://a.org/posts/1").map(|j| j.id), Some(2));
     }
 }

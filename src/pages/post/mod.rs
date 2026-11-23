@@ -4,10 +4,10 @@
 //! tags card turns into the tag editor in place.
 
 mod edit;
-mod glow;
+pub(crate) mod glow;
 mod related;
 mod side;
-mod stage;
+pub(crate) mod stage;
 
 use std::cell::RefCell;
 use std::collections::VecDeque;
@@ -24,7 +24,7 @@ use self::edit::EditCard;
 use self::glow::PostGlow;
 use self::related::Related;
 use self::side::{DetailsCard, TagsCard};
-use self::stage::Stage;
+use self::stage::{Shown, Stage};
 use super::{gallery, trash};
 use crate::api::{self, Failure};
 use crate::components::banner::{ErrorBanner, Spinner};
@@ -572,6 +572,7 @@ pub fn PostView() -> impl IntoView {
         }
     };
 
+    let shown = Memo::new(move |_| post.with(|p| p.as_deref().map(Shown::of)));
     let ready = move || {
         let post = Signal::derive(move || post.get());
         view! {
@@ -580,7 +581,7 @@ pub fn PostView() -> impl IntoView {
                 <TagPress q=q />
                 <div class="post-main">
                     <Stage
-                        post=post
+                        shown=shown
                         src=src
                         thumb=thumb
                         zoom=zoom

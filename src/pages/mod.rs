@@ -1,9 +1,11 @@
 //! The app's pages. `app.rs` says which address shows which.
 
+pub mod boorus;
 mod bulk;
 pub mod explore;
 pub mod gallery;
 pub mod help;
+mod library;
 pub mod login;
 pub mod post;
 mod post_menu;

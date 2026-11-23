@@ -22,7 +22,7 @@ use crate::logic::layout::Place;
 
 /// Where a tile goes and how big it is, for `.masonry .thumb` in
 /// `style/pages/gallery.css`: so many tile widths and so many gaps.
-fn place_style(p: Place) -> String {
+pub(crate) fn place_style(p: Place) -> String {
     format!(
         "; --x: {:.5}; --x-gaps: {:.5}; --y: {:.5}; --y-gaps: {:.5}\
          ; --w: {:.5}; --w-gaps: {:.5}; --h: {:.5}; --h-gaps: {:.5}",

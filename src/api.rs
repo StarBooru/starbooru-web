@@ -8,7 +8,7 @@ use std::future::Future;
 
 use chrono::{DateTime, Utc};
 use starbooru_client::{Client, ClientError};
-use starbooru_core::{AiStatus, ServerInfo};
+use starbooru_core::{AiStatus, RemoteSite, RemoteTagQuery, ServerInfo};
 
 use crate::logic::search::{Answers, Hint, SUGGESTIONS};
 use crate::store::{self, Session};
@@ -19,6 +19,7 @@ thread_local! {
     static SERVER_INFO: RefCell<Kept<ServerInfo>> = const { RefCell::new(Kept::new()) };
     static AI_STATUS: RefCell<Kept<AiStatus>> = const { RefCell::new(Kept::new()) };
     static TAG_HINTS: RefCell<Answers<Hint>> = RefCell::new(Answers::default());
+    static REMOTE_HINTS: RefCell<Answers<Hint>> = RefCell::new(Answers::default());
 }
 
 /// The client for the signed-in session, or `None` when no one is.
@@ -53,6 +54,7 @@ pub fn forget() {
     SERVER_INFO.with_borrow_mut(|kept| kept.0 = None);
     AI_STATUS.with_borrow_mut(|kept| kept.0 = None);
     forget_tags();
+    REMOTE_HINTS.with_borrow_mut(|k| *k = Answers::default());
 }
 
 /// Runs `request` with the session's client. A failure comes back as words
@@ -256,6 +258,38 @@ pub async fn tag_hints(typed: String) -> Vec<Hint> {
 /// changed their categories or counts.
 pub fn forget_tags() {
     TAG_HINTS.with_borrow_mut(|k| *k = Answers::default());
+}
+
+/// Whose another site's tags are: the account asking, and the site.
+fn remote_owner(site: &RemoteSite) -> String {
+    format!("{}|{}|{}", store::owner(), site.api.as_str(), site.base)
+}
+
+/// The tags on `site` starting with `typed`, kept from a moment ago.
+pub fn kept_remote_tags(site: &RemoteSite, typed: &str) -> Option<Vec<Hint>> {
+    let owner = remote_owner(site);
+    REMOTE_HINTS.with_borrow(|k| k.get(&owner, typed, Utc::now()))
+}
+
+/// The tags on another booru starting with `typed`, most used first, for
+/// the search box on the booru browser. The server asks the site; a failure
+/// offers none.
+pub async fn remote_tag_hints(site: RemoteSite, typed: String) -> Vec<Hint> {
+    if let Some(known) = kept_remote_tags(&site, &typed) {
+        return known;
+    }
+    let owner = remote_owner(&site);
+    let query = RemoteTagQuery {
+        api: site.api,
+        base: site.base,
+        term: typed.clone(),
+    };
+    let Ok(tags) = call(move |c| async move { c.remote_tags(&query).await }).await else {
+        return Vec::new();
+    };
+    let hints: Vec<Hint> = tags.into_iter().map(Hint::from).collect();
+    REMOTE_HINTS.with_borrow_mut(|k| k.put(&owner, typed, hints.clone(), Utc::now()));
+    hints
 }
 
 /// Whose an answer is: one account on one server.

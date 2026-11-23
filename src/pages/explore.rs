@@ -12,8 +12,8 @@ use leptos_router::hooks::{use_navigate, use_query_map};
 use send_wrapper::SendWrapper;
 use starbooru_core::{Explore as Found, Post, TagCorrection, TagTrend};
 
-use super::post;
 use super::post_menu::PostPress;
+use super::{boorus, post};
 use crate::api;
 use crate::components::banner::{CorrectionBanner, ErrorBanner, Spinner};
 use crate::components::icons::{Ico, Icon};
@@ -28,14 +28,51 @@ use crate::logic::viewer::category_class;
 use crate::route;
 
 thread_local! {
-    // Where Explore was last, for the navigation to go back to. Reference
-    // counted, as it outlives any one page.
+    // Where Explore was last, and whether on its boorus side, for the
+    // navigation to go back to. Reference counted, as they outlive any one
+    // page.
     static LAST: ArcRwSignal<String> = ArcRwSignal::new(route::explore("", window(None)));
+    static ON_BOORUS: ArcRwSignal<bool> = ArcRwSignal::new(false);
 }
 
-/// The address Explore was last left at.
+/// Where the navigation's Explore leads: to the side open last, and there
+/// to where it was left. Read inside a view, it follows both.
 pub fn last_route() -> String {
-    LAST.with(|l| l.get())
+    if ON_BOORUS.with(|b| b.get()) {
+        boorus::last_route()
+    } else {
+        LAST.with(|l| l.get())
+    }
+}
+
+/// Explore's boorus side is open, or its collection side.
+pub fn on_boorus(on: bool) {
+    ON_BOORUS.with(|b| {
+        if b.get_untracked() != on {
+            b.set(on);
+        }
+    });
+}
+
+/// The two sides of Explore, where a page's title stands: what the
+/// collection has to show, and the other boorus. Both pages have it, so the
+/// navigation needs no item for the boorus. Each leads back to where it was
+/// left.
+#[component]
+pub fn Sides(boorus: bool) -> impl IntoView {
+    let collection = Memo::new(|_| LAST.with(|l| l.get()));
+    let other = Memo::new(|_| boorus::last_route());
+    let current = |on: bool| if on { "page" } else { "false" };
+    view! {
+        <nav class="sides" aria-label=move || t!("nav-explore")>
+            <a class="side" class:on=!boorus aria-current=current(!boorus) href=move || collection.get()>
+                {move || t!("explore-collection")}
+            </a>
+            <a class="side" class:on=boorus aria-current=current(boorus) href=move || other.get()>
+                {move || t!("nav-boorus")}
+            </a>
+        </nav>
+    }
 }
 
 /// How a window reads in a sentence: "today", "this week", …
@@ -81,14 +118,6 @@ impl From<Found> for Sections {
             corrected: f.corrected,
         }
     }
-}
-
-/// Where the page title stands: the side of Explore that's open. The booru
-/// browser (roadmap 3.1) makes it a switch between the collection and the
-/// boorus; until then it's the title.
-#[component]
-fn Sides() -> impl IntoView {
-    view! { <h1 class="page-title">{move || t!("nav-explore")}</h1> }
 }
 
 /// Posts as the gallery's tiles, in a grid. Each opens its post with no
@@ -387,10 +416,12 @@ pub fn Explore() -> impl IntoView {
         )
     };
 
+    on_boorus(false);
     view! {
         <div class="page explore">
             <div class="page-head">
-                <Sides />
+                <h1 class="page-title visually-hidden">{move || t!("nav-explore")}</h1>
+                <Sides boorus=false />
                 <div class="segmented" role="radiogroup" aria-label=move || t!("explore-window")>
                     {window_buttons}
                 </div>

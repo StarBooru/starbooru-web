@@ -646,3 +646,88 @@ explain-order-tags-desc = By tag count, most first
 explain-order-tags-asc = By tag count, fewest first
 explain-order-updated-desc = By last edit, latest first
 explain-order-updated-asc = By last edit, earliest first
+
+## Other boorus
+
+explore-collection = Collection
+boorus-search = Search boorus
+boorus-sites = Sites
+boorus-site = Site
+boorus-site-remove = Remove { $site }
+boorus-address = Address
+boorus-api = Kind of site
+boorus-account = Account
+boorus-account-forget = Forget
+boorus-account-again = Enter it again
+boorus-login = Username
+boorus-user-id = User ID
+boorus-key = API key
+boorus-password-hash = Password hash
+boorus-dedupe = Hide duplicates
+boorus-known = Already here
+boorus-extra-tags = Extra tags
+boorus-save-label = Save the selected posts
+boorus-save = Save { $count }
+boorus-open-site = Open on site
+boorus-also = Also on
+boorus-score = Score
+boorus-bad-address = Enter the site’s address, like https://booru.example.
+boorus-need-account = Enter both the username (or user ID) and the key.
+boorus-too-long = That’s longer than a site takes.
+boorus-saving = Saving…
+
+## Library imports
+
+library-title = Import from another booru
+library-lead = Moves a whole library here from szurubooru, Shimmie2, Danbooru, Stash, Blombooru, Monbooru or LANBooru: every post with its tags, rating, source, date and your likes, plus aliases, implications, tag trees, and pools or albums as tags. Your server does the work, so you can close this app. Importing again adds what’s new, and a post you already have only gains tags. Aliases and implications come only when an administrator imports. Your key stays on the server while the import runs and is erased when it ends.
+library-left-out = Stays behind: comments, other users and their accounts, notes on images, titles and descriptions, site-wide scores and the order inside pools. StarBooru has no place for them.
+library-source = Import from
+library-hint-szurubooru = Log in with your username and a login token from your account’s Login tokens tab. Without them, you get what guests can see.
+library-hint-shimmie2 = Needs the Ouroboros API turned on in Shimmie’s Extension Manager, and an API key if guests can’t see everything. Its aliases and auto-tag rules come across if they’re public, except those of several words. Its pools can’t be read: Shimmie has no API for them.
+library-hint-danbooru = Your username and the API key from your profile. Without them, you get what guests can see, and your favourites stay behind. On large sites this means millions of posts, so use it on your own instance.
+library-hint-stash = Scenes and images, oldest first. The API key is in Settings › Security. Stash has no safety ratings, so every post gets the rating you choose below. Performers become character tags, studios artist tags, and a rating of 60 or more becomes a like.
+library-hint-blombooru = The API key from your account. Aliases and implications need an admin’s key on that side; tag-pattern implications don’t come across.
+library-hint-monbooru = A token with read access, if the site uses them. Every gallery on the server comes across. Its aliases can’t be read: Monbooru has no API for them.
+library-hint-lanbooru = No account needed: LANBooru’s reads are open. It has no aliases, implications or albums.
+library-unrated = Rating for posts without a defining tag
+library-check = Check
+library-checking = Checking…
+library-start = Import everything
+library-found = Found { $count } posts.
+library-found-some = The site answers, but doesn’t say how many posts it has.
+library-no-rules = Aliases and implications will stay behind, because only an administrator can import them here.
+library-full = Up to five imports can wait or run at once. Start this one when another ends.
+library-bad-address = That address isn’t valid. Write it like http://192.168.1.4:8080.
+library-need-login = This site needs the username along with the key.
+library-need-key = This site needs the key along with the username.
+library-list = Imports
+library-state-queued = Waiting
+library-state-rules = Reading aliases and implications
+library-state-posts = Importing posts
+library-state-groups = Reading pools and likes
+library-state-done = Finished
+library-state-stopped = Stopped
+library-state-failed = Failed
+library-count = { $done } done
+library-count-of = { $done } of { $total }
+library-count-merged = { $count } already here
+library-count-failed = { $count } failed
+library-count-rules = { $count } aliases and implications
+library-stop = Stop
+library-retry = Import again
+library-remove = Remove from list
+library-show-failed = Show failed
+library-account-again = The key was erased when this import ended. Enter it again, or leave it empty to read what guests can see.
+ago-now = just now
+ago-minutes =
+    { $count ->
+        [one] 1 minute ago
+       *[other] { $count } minutes ago
+    }
+ago-hours =
+    { $count ->
+        [one] 1 hour ago
+       *[other] { $count } hours ago
+    }
+ago-yesterday = yesterday
+ago-days = { $count } days ago

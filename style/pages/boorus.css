@@ -1,0 +1,92 @@
+/* The booru browser (src/pages/boorus/). The grid is the gallery's: the same
+   tiles in the same layout, under the same kind of head. */
+
+.page.boorus { animation: none; }
+.app[data-tiles="flush"] .page.boorus { max-width: none; }
+.boorus .page-head { justify-content: flex-start; margin-bottom: 12px; }
+.boorus .page-head .page-title { margin: 0; }
+@media (max-width: 760px) {
+  .boorus .page-tools { gap: 4px; }
+}
+
+/* The sites a search goes to. On a phone they're one row to run a thumb
+   along; the room above and below is for a chip's lift and its focus ring. */
+.booru-sites { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 0 0 12px; }
+.booru-sites .chip { flex: none; font-family: inherit; cursor: pointer; }
+.booru-sites .chip.warn { background: var(--warn-container); color: var(--on-warn-container); border-color: currentColor; }
+.booru-sites .chip.warn::after { content: "!"; margin-left: 6px; font-weight: 700; }
+.booru-sites .icon-btn { flex: none; }
+.boorus .saved-searches { margin-bottom: 12px; }
+@media (max-width: 760px) {
+  .booru-sites {
+    flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none;
+    margin: -6px calc(var(--pad-x) * -1) 6px; padding: 6px var(--pad-x);
+  }
+  /* The sheet's button stays at the end of the row as the chips pass under it. */
+  .booru-sites .sites-edit {
+    position: sticky; right: 0; margin-left: auto; background: var(--canvas);
+    box-shadow: -8px 0 8px var(--canvas), 18px 0 0 var(--canvas);
+  }
+  /* The row's padding after it, which the chips would show through. */
+  .booru-sites .sites-edit::after {
+    content: ""; position: absolute; top: -6px; bottom: -6px; left: 100%;
+    width: var(--pad-x); background: var(--canvas);
+  }
+  .booru-sites .sites-edit:hover:not(:disabled) { background: var(--surface-3); }
+}
+
+/* On a tile: the site at the bottom left, and how saving it stands at the top
+   right, across from a selection's tick. */
+.badge.remote-site {
+  left: 8px; right: auto; max-width: calc(100% - 56px); display: block;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap; line-height: 20px;
+}
+.remote-status { position: absolute; top: 8px; right: 8px; max-width: calc(100% - 16px); }
+.remote-mark {
+  position: absolute; top: 8px; right: 8px; display: grid; place-items: center; width: 28px; height: 28px;
+  border-radius: 999px; background: var(--primary); color: var(--on-primary); box-shadow: var(--shadow-1);
+}
+.remote-mark[role="link"] { cursor: pointer; }
+.dedupe.on { color: var(--on-primary-container); }
+
+/* The sheet of sites: a line for each, and under it the boxes of its account. */
+.sites-sheet { display: grid; gap: 12px; }
+.sites-sheet .field-error { margin: 0; }
+.site-list { list-style: none; margin: 0; padding: 0; display: grid; }
+.site-row { display: grid; gap: 8px; padding: 6px 0; border-top: 1px solid oklch(from var(--outline) l c h / 0.5); }
+.site-row:first-child { border-top: 0; }
+.site-line { display: flex; align-items: center; gap: 8px; min-width: 0; min-height: 36px; }
+.site-name { flex: 0 1 auto; min-width: 64px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.site-kind { flex: none; font-size: 13px; }
+/* What's left of the line, so the buttons after it stand at its end. */
+.site-login {
+  flex: 1 1 auto; min-width: 48px; display: flex; align-items: center; justify-content: flex-end; gap: 4px;
+  font-size: 14px; color: var(--on-surface-2);
+}
+.site-login > span:not(.pill) { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.site-login .pill { max-width: 100%; }
+.site-login > .icon { color: var(--primary); }
+.site-line .btn, .site-line .icon-btn { flex: none; }
+.site-account, .site-add { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto; gap: 8px; align-items: center; }
+.site-account { padding-bottom: 6px; animation: slide-in var(--med) var(--ease); }
+.site-add { padding-top: 12px; border-top: 1px solid oklch(from var(--outline) l c h / 0.5); }
+.site-account input, .site-add input {
+  width: 100%; min-width: 0; min-height: 40px; padding: 0 14px; border: 1px solid var(--outline); border-radius: 999px;
+  background: var(--surface); color: var(--on-surface); font: inherit; font-size: 14px;
+}
+.site-account input:focus, .site-add input:focus {
+  outline: none; border-color: var(--primary); box-shadow: 0 0 0 3px oklch(from var(--primary) l c h / 0.25);
+}
+.site-add .select { min-width: 0; }
+@media (max-width: 520px) {
+  .site-kind { display: none; }
+  .site-account { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+  .site-account .btn { grid-column: 1 / -1; }
+  .site-add { grid-template-columns: minmax(0, 1fr) auto; }
+  .site-add input { grid-column: 1 / -1; }
+}
+
+/* A post on another site: the viewer's stage and panels. */
+.booru-post .post-bar { gap: 8px; padding: 8px 10px; }
+.booru-post .post-bar .pill { max-width: none; }
+.booru-also { display: flex; flex-wrap: wrap; gap: 4px 12px; }

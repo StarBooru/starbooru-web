@@ -8,6 +8,7 @@ use leptos_router::path;
 use crate::components::snackbar::Snackbar;
 use crate::i18n;
 use crate::pages::NotFound;
+use crate::pages::boorus::{BooruPost, Boorus};
 use crate::pages::explore::Explore;
 use crate::pages::gallery::Gallery;
 use crate::pages::help::Help;
@@ -73,8 +74,8 @@ fn AppRoutes() -> impl IntoView {
                 <Route path=path!("/tags") view=Tags />
                 <Route path=path!("/tag") view=TagPage />
                 <Route path=path!("/upload") view=Upload />
-                <Route path=path!("/boorus") view=|| view! { <Soon title=|| t!("nav-boorus") /> } />
-                <Route path=path!("/boorus/post") view=|| view! { <Soon title=|| t!("nav-boorus") /> } />
+                <Route path=path!("/boorus") view=Boorus />
+                <Route path=path!("/boorus/post") view=BooruPost />
                 <Route path=path!("/settings") view=SettingsSoon />
                 <Route path=path!("/trash") view=Trash />
                 <Route path=path!("/duplicates") view=|| view! { <Soon title=|| t!("dup-title") /> } />

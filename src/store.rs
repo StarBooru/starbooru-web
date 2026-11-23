@@ -89,6 +89,23 @@ impl GalleryView {
     }
 }
 
+/// A booru the user added to the browser by its address. `login` and
+/// `api_key` are only read: an older version of the reference kept the
+/// account here, and the browser moves it to the server, which keeps the key
+/// sealed (`pages/boorus/accounts.rs`).
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct SavedBooru {
+    /// `BooruApi::as_str`. Plain text, so a kind from a newer version
+    /// doesn't stop the settings from loading.
+    pub api: String,
+    pub base: String,
+    #[serde(skip_serializing_if = "String::is_empty")]
+    pub login: String,
+    #[serde(skip_serializing_if = "String::is_empty")]
+    pub api_key: String,
+}
+
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(default)]
 pub struct Prefs {
@@ -118,6 +135,18 @@ pub struct Prefs {
     /// The viewer shows originals even where the server has a smaller copy.
     #[serde(deserialize_with = "lenient")]
     pub originals: bool,
+    /// The boorus the user added by their address, in the order of their
+    /// chips: the latest last.
+    #[serde(deserialize_with = "lenient")]
+    pub boorus: Vec<SavedBooru>,
+    /// The sites the booru browser searched last, as their keys
+    /// (`logic::boorus::site_key`). Empty until one is chosen.
+    #[serde(deserialize_with = "lenient")]
+    pub booru_sites: Vec<String>,
+    /// Whether the booru browser leaves out a file another site already
+    /// showed.
+    #[serde(deserialize_with = "lenient_yes")]
+    pub booru_dedupe: bool,
     /// Settings this version doesn't have yet (the reference's, or a newer
     /// version's), written back untouched.
     #[serde(flatten)]
@@ -139,6 +168,9 @@ impl Default for Prefs {
             gallery_columns: None,
             flush_tiles: false,
             originals: false,
+            boorus: Vec::new(),
+            booru_sites: Vec::new(),
+            booru_dedupe: true,
             other: Map::new(),
         }
     }
@@ -243,6 +275,15 @@ where
 {
     let value = Value::deserialize(d)?;
     Ok(T::deserialize(value).unwrap_or_default())
+}
+
+/// A switch that is on unless it says otherwise.
+fn lenient_yes<'de, D>(d: D) -> Result<bool, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    let value = Value::deserialize(d)?;
+    Ok(bool::deserialize(value).unwrap_or(true))
 }
 
 /// A hue, or the default one when the value is no hue at all.
@@ -513,6 +554,13 @@ mod tests {
                 gallery_columns: Some(4),
                 flush_tiles: true,
                 originals: true,
+                boorus: vec![SavedBooru {
+                    api: "danbooru".into(),
+                    base: "http://nas:8000".into(),
+                    ..SavedBooru::default()
+                }],
+                booru_sites: vec!["danbooru".into(), "e926".into()],
+                booru_dedupe: false,
                 other: Map::new(),
             },
             memory: GalleryMemory {
@@ -539,6 +587,37 @@ mod tests {
         // The reference's name, so its setting carries over.
         assert_eq!(value["prefs"]["originals"], true);
         assert_eq!(value["memory"]["spots"][0]["post"], 12);
+        // The reference's names, and no empty account written back.
+        assert_eq!(value["prefs"]["booru_sites"][1], "e926");
+        assert_eq!(value["prefs"]["booru_dedupe"], false);
+        assert_eq!(
+            value["prefs"]["boorus"][0],
+            serde_json::json!({"api": "danbooru", "base": "http://nas:8000"})
+        );
+    }
+
+    #[test]
+    fn the_booru_browser_starts_from_prefs_without_its_fields() {
+        let prefs = parse(r#"{"prefs":{"theme":"dark"}}"#).prefs;
+        assert!(prefs.boorus.is_empty());
+        assert!(prefs.booru_sites.is_empty());
+        assert!(prefs.booru_dedupe, "duplicates are hidden unless asked for");
+        // As an older reference wrote them, with the account still on the device.
+        let prefs = parse(
+            r#"{"prefs":{"boorus":[{"api":"e621","base":"https://e926.net","login":"me","api_key":"k"}],
+                "booru_sites":["danbooru","danbooru|http://nas:8000"],"booru_dedupe":false}}"#,
+        )
+        .prefs;
+        assert_eq!(prefs.boorus.len(), 1);
+        assert_eq!(prefs.boorus[0].login, "me");
+        assert_eq!(prefs.booru_sites, ["danbooru", "danbooru|http://nas:8000"]);
+        assert!(!prefs.booru_dedupe);
+        // Odd values cost only themselves.
+        let prefs =
+            parse(r#"{"prefs":{"boorus":"x","booru_sites":[1],"booru_dedupe":"no"}}"#).prefs;
+        assert!(prefs.boorus.is_empty());
+        assert!(prefs.booru_sites.is_empty());
+        assert!(prefs.booru_dedupe);
     }
 
     #[test]

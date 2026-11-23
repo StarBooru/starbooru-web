@@ -135,19 +135,29 @@ pub fn update_post(post: Arc<Post>) {
     LISTS.with_borrow_mut(|l| l.replace(&post));
 }
 
+/// The grid's width as it was last, so a grid coming back (this one, or the
+/// booru browser's) lays out at once.
+pub(crate) fn kept_width() -> f64 {
+    GRID_WIDTH.get()
+}
+
+pub(crate) fn keep_width(width: f64) {
+    GRID_WIDTH.set(width);
+}
+
 /// The grid's measurements as they are now.
 #[derive(Clone, Copy, Debug, PartialEq)]
-struct Grid {
-    view: GalleryView,
-    columns: u32,
-    gap: f64,
-    width: f64,
+pub(crate) struct Grid {
+    pub view: GalleryView,
+    pub columns: u32,
+    pub gap: f64,
+    pub width: f64,
     /// A tile's width in pixels.
-    tile: f64,
+    pub tile: f64,
 }
 
 impl Grid {
-    fn new((view, chosen, flush): (GalleryView, Option<u8>, bool), width: f64) -> Self {
+    pub(crate) fn new((view, chosen, flush): (GalleryView, Option<u8>, bool), width: f64) -> Self {
         let gap = if flush { 0.0 } else { TILE_GAP };
         let columns = layout::columns(width, gap, view, chosen);
         Self {
@@ -159,14 +169,19 @@ impl Grid {
         }
     }
 
-    fn place(self, posts: &[Arc<Post>]) -> Layout {
+    /// The tiles' places for pictures of these sizes, in order.
+    pub(crate) fn lay(self, sizes: impl IntoIterator<Item = (Option<i32>, Option<i32>)>) -> Layout {
         layout::place(
             self.view,
-            posts
-                .iter()
-                .map(|p| layout::tile_ratio(self.view, p.width, p.height)),
+            sizes
+                .into_iter()
+                .map(|(w, h)| layout::tile_ratio(self.view, w, h)),
             self.columns,
         )
+    }
+
+    fn place(self, posts: &[Arc<Post>]) -> Layout {
+        self.lay(posts.iter().map(|p| (p.width, p.height)))
     }
 
     /// The top of post `id`'s tile in pixels, from the top of the grid.
@@ -1064,7 +1079,7 @@ pub fn Gallery() -> impl IntoView {
 /// its own, so the gallery isn't drawn again each time it comes or goes. It
 /// keeps out of the way of a selection's bar.
 #[component]
-fn ToTop(selecting: RwSignal<bool>) -> impl IntoView {
+pub(crate) fn ToTop(selecting: RwSignal<bool>) -> impl IntoView {
     let far = RwSignal::new(false);
     let check = move || {
         let (y, tall) = dom::scroll();
@@ -1219,7 +1234,7 @@ fn ColorMenu(q: Memo<String>) -> impl IntoView {
 /// between them. The column limits follow the grid's width, so the slider only
 /// offers counts that work here.
 #[component]
-fn ViewMenu(grid: Memo<Grid>) -> impl IntoView {
+pub(crate) fn ViewMenu(grid: Memo<Grid>) -> impl IntoView {
     let open = RwSignal::new(false);
     let prefs = Memo::new(|_| {
         let p = store::prefs();

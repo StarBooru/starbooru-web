@@ -1,7 +1,7 @@
 //! The stage: the picture or video, with zoom and pan for pictures, previous
-//! and next, fullscreen, and the keys and gestures for all of them.
+//! and next, fullscreen, and the keys and gestures for all of them. The booru
+//! browser's post page has it too.
 
-use std::sync::Arc;
 use std::time::Duration;
 
 use leptos::ev::{MouseEvent, PointerEvent};
@@ -73,6 +73,37 @@ impl Fingers {
     }
 }
 
+/// What the stage shows, from this server or another booru.
+#[derive(Clone, Debug, PartialEq)]
+pub struct Shown {
+    /// Tells one post from the next, so a new one makes its entrance.
+    pub key: String,
+    pub kind: MediaKind,
+    pub size: Option<(i32, i32)>,
+    /// The picture's main colour, which fills its box while it loads.
+    pub tint: Option<String>,
+    pub alt: String,
+    /// A video's still, before it plays.
+    pub poster: Option<String>,
+    /// The stage's name for a screen reader.
+    pub label: String,
+}
+
+impl Shown {
+    /// A post on this server.
+    pub fn of(p: &Post) -> Self {
+        Self {
+            key: p.id.to_string(),
+            kind: p.kind,
+            size: p.width.zip(p.height),
+            tint: p.palette.first().cloned(),
+            alt: p.tags.join(" "),
+            poster: p.sample_url.as_deref().map(super::absolute),
+            label: t!("post-number", id = p.id),
+        }
+    }
+}
+
 fn document() -> Option<web_sys::Document> {
     web_sys::window()?.document()
 }
@@ -109,7 +140,7 @@ fn within(target: Option<web_sys::EventTarget>, selector: &str) -> bool {
 
 #[component]
 pub fn Stage(
-    #[prop(into)] post: Signal<Option<Arc<Post>>>,
+    #[prop(into)] shown: Signal<Option<Shown>>,
     /// What the stage shows: the sample or the original, absolute.
     #[prop(into)]
     src: Signal<String>,
@@ -133,7 +164,7 @@ pub fn Stage(
     on_edit: Callback<()>,
 ) -> impl IntoView {
     let stage: NodeRef<html::Section> = NodeRef::new();
-    let kind = Memo::new(move |_| post.with(|p| p.as_ref().map(|p| p.kind)));
+    let kind = Memo::new(move |_| shown.with(|s| s.as_ref().map(|s| s.kind)));
     let zoomable = move || kind.get().is_some_and(|k| k != MediaKind::Video);
     let fingers = StoredValue::new_local(Fingers::default());
     let dragging = RwSignal::new(false);
@@ -518,18 +549,18 @@ pub fn Stage(
     };
 
     // The media, made anew for each post so its entrance plays.
-    let media_key = Memo::new(move |_| post.with(|p| p.as_ref().map(|p| (p.id, p.kind))));
+    let media_key = Memo::new(move |_| shown.with(|s| s.as_ref().map(|s| (s.key.clone(), s.kind))));
     let media = move || {
         let (_, kind) = media_key.get()?;
         let entrance = enter_class(enter.get_untracked());
-        let size = post.with_untracked(|p| p.as_ref().and_then(|p| p.width.zip(p.height)));
-        let tint = post.with_untracked(|p| {
-            p.as_ref()
-                .and_then(|p| p.palette.first().cloned())
+        let size = shown.with_untracked(|s| s.as_ref().and_then(|s| s.size));
+        let tint = shown.with_untracked(|s| {
+            s.as_ref()
+                .and_then(|s| s.tint.as_ref())
                 .map(|hex| format!("; --tint: {hex}"))
                 .unwrap_or_default()
         });
-        let alt = post.with_untracked(|p| p.as_ref().map(|p| p.tags.join(" ")).unwrap_or_default());
+        let alt = shown.with_untracked(|s| s.as_ref().map(|s| s.alt.clone()).unwrap_or_default());
         let swiped = move || {
             swipe_x
                 .get()
@@ -542,12 +573,7 @@ pub fn Stage(
                     class=entrance
                     src=move || src.get()
                     poster=move || {
-                        post.with(|p| {
-                            p.as_ref()
-                                .and_then(|p| p.sample_url.as_deref())
-                                .map(super::absolute)
-                        })
-                        .or_else(|| thumb.get())
+                        shown.with(|s| s.as_ref().and_then(|s| s.poster.clone())).or_else(|| thumb.get())
                     }
                     style=move || format!("{}{tint}{}", fit_style(size), swiped())
                     controls=true
@@ -600,7 +626,7 @@ pub fn Stage(
             class:dragging=move || dragging.get()
             class:swiping=move || swipe_x.with(Option::is_some)
             data-rest=move || rest.get().then_some("")
-            aria-label=move || media_key.get().map(|(id, _)| t!("post-number", id = id))
+            aria-label=move || shown.with(|s| s.as_ref().map(|s| s.label.clone()))
             on:pointerdown=down
             on:pointermove=moved
             on:pointerup=up

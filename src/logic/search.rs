@@ -4,7 +4,7 @@
 //! box's typing demo, and the words of the correction banner.
 
 use chrono::{DateTime, Utc};
-use starbooru_core::{Tag, TagCategory, TagCorrection, split_category};
+use starbooru_core::{RemoteTag, Tag, TagCategory, TagCorrection, split_category};
 
 // ---------- the word at the caret ----------
 
@@ -149,6 +149,9 @@ pub const SUGGESTIONS: u32 = 8;
 /// How long the typing has to pause before the server is asked, in
 /// milliseconds. A word typed in one go then costs one request.
 pub const TYPING_PAUSE_MS: i32 = 150;
+/// The same for another booru's tags, which the server asks that site for:
+/// longer, as each site only takes so many requests.
+pub const REMOTE_PAUSE_MS: i32 = 250;
 
 /// How many answers are kept, and for how long: tags and their counts change.
 const KEPT_ANSWERS: usize = 48;
@@ -231,6 +234,17 @@ impl From<Tag> for Hint {
         Self {
             class: category_class(tag.category),
             count: u64::try_from(tag.post_count).ok(),
+            name: tag.name,
+        }
+    }
+}
+
+/// Another booru's tag, as that site writes it.
+impl From<RemoteTag> for Hint {
+    fn from(tag: RemoteTag) -> Self {
+        Self {
+            class: category_class(tag.category),
+            count: tag.count,
             name: tag.name,
         }
     }
@@ -543,6 +557,20 @@ mod tests {
             ""
         );
         assert_eq!(Hint::from(tag("x", TagCategory::Meta, -1)).count, None);
+        let remote = |category, count| RemoteTag {
+            name: "hatsune_miku".into(),
+            category,
+            count,
+        };
+        assert_eq!(
+            Hint::from(remote(TagCategory::Character, Some(4_217_021))),
+            Hint {
+                name: "hatsune_miku".into(),
+                class: "cat-character",
+                count: Some(4_217_021)
+            }
+        );
+        assert_eq!(Hint::from(remote(TagCategory::General, None)).count, None);
         // The colours are in the stylesheet, for the list under the box.
         let css = include_str!("../../style/shell.css");
         for class in ["cat-artist", "cat-character", "cat-copyright", "cat-meta"] {

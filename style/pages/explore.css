@@ -4,6 +4,29 @@
 
 .explore .page-head { margin-bottom: 8px; }
 .explore .page-head .page-title { margin: 0; }
+/* Explore's two sides, where a title would stand, on its page and on the
+   booru browser's. The one open is told by its weight and the line under it.
+   Kept under `.sides`: the viewer's column of panels has the class `side` too. */
+.sides { display: flex; align-items: center; gap: 4px; margin-left: -10px; }
+.sides > .side {
+  position: relative; display: inline-flex; align-items: center; min-height: 44px; padding: 0 10px;
+  border-radius: 999px; font-size: 22px; font-weight: 500; color: var(--on-surface-2); text-decoration: none;
+  transition: color var(--fast) var(--ease), background-color var(--fast) var(--ease);
+}
+.sides > .side.on { font-weight: 600; color: var(--on-surface); }
+.sides > .side:focus-visible { outline-offset: -3px; }
+@media (hover: hover) {
+  .sides > .side:hover { background: var(--surface-3); color: var(--on-surface); }
+}
+.sides > .side.on::after {
+  content: ""; position: absolute; left: 10px; right: 10px; bottom: 5px; height: 3px;
+  border-radius: 999px; background: var(--primary);
+}
+@media (max-width: 760px) {
+  .sides { margin-left: -8px; gap: 2px; }
+  .sides > .side { padding: 0 8px; font-size: 17px; }
+  .sides > .side.on::after { left: 8px; right: 8px; }
+}
 .explore-filter {
   display: flex; align-items: center; gap: 8px; flex: 0 1 300px; margin-left: auto;
   min-height: 40px; padding: 0 16px; border: 1px solid var(--outline); border-radius: 999px;

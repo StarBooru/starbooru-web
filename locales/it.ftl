@@ -655,3 +655,88 @@ explain-order-tags-desc = Per numero di tag, prima i più numerosi
 explain-order-tags-asc = Per numero di tag, prima i meno numerosi
 explain-order-updated-desc = Per ultima modifica, prima la più recente
 explain-order-updated-asc = Per ultima modifica, prima la meno recente
+
+## Altri booru
+
+explore-collection = Raccolta
+boorus-search = Cerca nei booru
+boorus-sites = Siti
+boorus-site = Sito
+boorus-site-remove = Rimuovi { $site }
+boorus-address = Indirizzo
+boorus-api = Tipo di sito
+boorus-account = Account
+boorus-account-forget = Dimentica
+boorus-account-again = Inseriscilo di nuovo
+boorus-login = Nome utente
+boorus-user-id = ID utente
+boorus-key = Chiave API
+boorus-password-hash = Hash della password
+boorus-dedupe = Nascondi i duplicati
+boorus-known = Già presente
+boorus-extra-tags = Tag in più
+boorus-save-label = Salva i post selezionati
+boorus-save = Salva { $count }
+boorus-open-site = Apri sul sito
+boorus-also = Anche su
+boorus-score = Punteggio
+boorus-bad-address = Inserisci l’indirizzo del sito, come https://booru.example.
+boorus-need-account = Inserisci sia il nome utente (o l’ID utente) sia la chiave.
+boorus-too-long = È più lungo di quanto un sito accetti.
+boorus-saving = Salvataggio…
+
+## Importazioni di raccolte
+
+library-title = Importa da un altro booru
+library-lead = Sposta qui un’intera raccolta da szurubooru, Shimmie2, Danbooru, Stash, Blombooru, Monbooru o LANBooru: ogni post con tag, classificazione, fonte, data e i tuoi “mi piace”, più alias, implicazioni, alberi di tag, e pool o album come tag. Il lavoro lo fa il tuo server, quindi puoi chiudere l’app. Importando di nuovo si aggiunge ciò che è nuovo, e un post che hai già riceve solo i tag. Alias e implicazioni arrivano solo se importa un amministratore. La tua chiave resta sul server mentre l’importazione è in corso e viene cancellata quando finisce.
+library-left-out = Restano fuori: commenti, altri utenti e i loro account, note sulle immagini, titoli e descrizioni, punteggi del sito e l’ordine interno dei pool. StarBooru non ha un posto per questi dati.
+library-source = Importa da
+library-hint-szurubooru = Accedi con il tuo nome utente e un token dalla scheda Login tokens del tuo account. Senza, ottieni ciò che vedono gli ospiti.
+library-hint-shimmie2 = Serve Ouroboros API attivata nell’Extension Manager di Shimmie, e una chiave API se gli ospiti non vedono tutto. I suoi alias e le regole di auto-tag arrivano se sono pubblici, tranne quelli di più parole. I pool non si possono leggere: Shimmie non ha un’API per questi.
+library-hint-danbooru = Il tuo nome utente e la chiave API dal profilo. Senza, ottieni ciò che vedono gli ospiti e i tuoi preferiti restano fuori. Sui siti grandi sono milioni di post, quindi usalo sulla tua istanza.
+library-hint-stash = Scene e immagini, dalle più vecchie. La chiave API è in Settings › Security. Stash non ha classificazioni di sicurezza, quindi ogni post riceve quella che scegli qui sotto. Gli interpreti diventano tag personaggio, gli studi tag artista, e un voto da 60 in su diventa un “mi piace”.
+library-hint-blombooru = La chiave API del tuo account. Per alias e implicazioni serve la chiave di un amministratore di quel sito; le implicazioni basate su schemi di tag non arrivano.
+library-hint-monbooru = Un token con accesso in lettura, se il sito li usa. Arrivano tutte le gallerie del server. I suoi alias non si possono leggere: Monbooru non ha un’API per questi.
+library-hint-lanbooru = Nessun account: le letture di LANBooru sono aperte. Non ha alias, implicazioni o album.
+library-unrated = Classificazione dei post senza un tag che la definisca
+library-check = Controlla
+library-checking = Controllo…
+library-start = Importa tutto
+library-found = Trovati { $count } post.
+library-found-some = Il sito risponde, ma non dice quanti post ha.
+library-no-rules = Alias e implicazioni resteranno fuori, perché qui solo un amministratore può importarli.
+library-full = Possono attendere o essere in corso fino a cinque importazioni. Avvia questa quando un’altra finisce.
+library-bad-address = Questo indirizzo non è valido. Scrivilo come http://192.168.1.4:8080.
+library-need-login = Questo sito richiede il nome utente insieme alla chiave.
+library-need-key = Questo sito richiede la chiave insieme al nome utente.
+library-list = Importazioni
+library-state-queued = In attesa
+library-state-rules = Lettura di alias e implicazioni
+library-state-posts = Importazione dei post
+library-state-groups = Lettura di pool e “mi piace”
+library-state-done = Finita
+library-state-stopped = Fermata
+library-state-failed = Non riuscita
+library-count = { $done } fatti
+library-count-of = { $done } di { $total }
+library-count-merged = { $count } già presenti
+library-count-failed = { $count } non riusciti
+library-count-rules = { $count } alias e implicazioni
+library-stop = Ferma
+library-retry = Importa di nuovo
+library-remove = Togli dall’elenco
+library-show-failed = Mostra i non riusciti
+library-account-again = La chiave è stata cancellata alla fine di questa importazione. Inseriscila di nuovo, o lascia vuoto per leggere ciò che vedono gli ospiti.
+ago-now = adesso
+ago-minutes =
+    { $count ->
+        [one] 1 minuto fa
+       *[other] { $count } minuti fa
+    }
+ago-hours =
+    { $count ->
+        [one] 1 ora fa
+       *[other] { $count } ore fa
+    }
+ago-yesterday = ieri
+ago-days = { $count } giorni fa

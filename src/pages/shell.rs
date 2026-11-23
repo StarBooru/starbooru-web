@@ -21,9 +21,10 @@ use crate::api;
 use crate::components::brand::{Mark, Wordmark};
 use crate::components::icons::{Ico, Icon};
 use crate::dom;
+use crate::logic::boorus;
 use crate::logic::search::{
-    Hint, Latest, ListKey, TYPING_PAUSE_MS, byte_index, complete, list_key, short_count,
-    still_fitting, utf16_index, word_at,
+    Hint, Latest, ListKey, REMOTE_PAUSE_MS, TYPING_PAUSE_MS, byte_index, complete, list_key,
+    short_count, still_fitting, utf16_index, word_at,
 };
 use crate::route::{self, Tab};
 use crate::store;
@@ -83,28 +84,74 @@ fn Frame() -> impl IntoView {
     }
 }
 
-/// What the search box searches. The booru browser's pages will search the
-/// sites chosen there, with their own tags to suggest.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+/// What the search box searches: the collection, or on the booru browser's
+/// pages the sites its address names (`s`), with their own tags to suggest.
+#[derive(Clone, Debug, PartialEq, Eq)]
 enum Scope {
     Collection,
+    Boorus(String),
 }
 
-fn scope_of(_path: &str) -> Scope {
-    Scope::Collection
-}
-
-/// Where a search typed in the box goes.
-fn search_href(scope: Scope, q: &str) -> String {
-    match scope {
-        Scope::Collection => route::gallery(q),
+fn scope_of(path: &str, s: Option<String>) -> Scope {
+    if path == route::BOORUS || path.starts_with("/boorus/") {
+        Scope::Boorus(s.unwrap_or_default())
+    } else {
+        Scope::Collection
     }
 }
 
-/// Suggestions for `typed` in `scope`.
+/// Where a search typed in the box goes. On the boorus it goes to the sites
+/// the page searched, or else to those chosen last.
+fn search_href(scope: &Scope, q: &str, last_sites: &[String]) -> String {
+    match scope {
+        Scope::Collection => route::gallery(q),
+        Scope::Boorus(s) => {
+            let sites = boorus::sites_param(&boorus::chosen_sites(s, last_sites));
+            route::boorus(&boorus::tidy_query(q), &sites)
+        }
+    }
+}
+
+/// The search a page shows in the box: the gallery's and a post's own, the
+/// booru browser's as its address carries it, and the last one elsewhere.
+fn shown_search(path: &str, q: Option<String>, last: &str) -> String {
+    match scope_of(path, None) {
+        Scope::Boorus(_) => boorus::from_address(&q.unwrap_or_default()),
+        Scope::Collection if route::has_search(path) => q.unwrap_or_default(),
+        Scope::Collection => last.to_owned(),
+    }
+}
+
+/// Suggestions kept from a moment ago for `typed` in `scope`.
+fn kept(scope: &Scope, typed: &str) -> Option<Vec<Hint>> {
+    match scope {
+        Scope::Collection => api::kept_tags(typed),
+        Scope::Boorus(s) => {
+            let site = boorus::completing_site(s, &store::prefs_untracked().booru_sites)?;
+            api::kept_remote_tags(&site, typed)
+        }
+    }
+}
+
+/// How long the typing pauses before `scope` is asked.
+fn pause(scope: &Scope) -> i32 {
+    match scope {
+        Scope::Collection => TYPING_PAUSE_MS,
+        Scope::Boorus(_) => REMOTE_PAUSE_MS,
+    }
+}
+
+/// Suggestions for `typed` in `scope`. On the boorus, the first site chosen
+/// completes the tags.
 async fn suggest(scope: Scope, typed: String) -> Vec<Hint> {
     match scope {
         Scope::Collection => api::tag_hints(typed).await,
+        Scope::Boorus(s) => {
+            match boorus::completing_site(&s, &store::prefs_untracked().booru_sites) {
+                Some(site) => api::remote_tag_hints(site, typed).await,
+                None => Vec::new(),
+            }
+        }
     }
 }
 
@@ -149,13 +196,11 @@ fn SearchBox() -> impl IntoView {
     let search = location.search;
     let last = Memo::new(|_| store::last_search());
     let current = Memo::new(move |_| {
-        if path.with(|p| route::has_search(p)) {
-            query.with(|q| q.get("q").unwrap_or_default())
-        } else {
-            last.get()
-        }
+        let q = query.with(|q| q.get("q"));
+        path.with(|p| last.with(|last| shown_search(p, q, last)))
     });
-    let scope = Memo::new(move |_| path.with(|p| scope_of(p)));
+    let scope = Memo::new(move |_| path.with(|p| scope_of(p, query.with(|q| q.get("s")))));
+    let remote = Memo::new(move |_| scope.with(|s| matches!(s, Scope::Boorus(_))));
     let text = RwSignal::new(current.get_untracked());
     let focused = RwSignal::new(false);
     // Typing opens the list; Escape, a choice and leaving close it.
@@ -205,15 +250,15 @@ fn SearchBox() -> impl IntoView {
             hints.set(Vec::new());
             return;
         };
-        if let Some(known) = api::kept_tags(&typed) {
+        let scope = scope.get_untracked();
+        if let Some(known) = kept(&scope, &typed) {
             hints.set(known);
             return;
         }
         hints.update(|h| still_fitting(h, &typed));
-        let scope = scope.get_untracked();
         let latest = move || turn.try_with_value(|t| t.is(n)).unwrap_or(false);
         spawn_local(async move {
-            dom::sleep(TYPING_PAUSE_MS).await;
+            dom::sleep(pause(&scope)).await;
             if !latest() {
                 return;
             }
@@ -297,8 +342,9 @@ fn SearchBox() -> impl IntoView {
     let submit = move |ev: SubmitEvent| {
         ev.prevent_default();
         close();
+        let last_sites = store::prefs_untracked().booru_sites;
         navigate(
-            &search_href(scope.get_untracked(), &text.get_untracked()),
+            &search_href(&scope.get_untracked(), &text.get_untracked(), &last_sites),
             NavigateOptions::default(),
         );
         // On a phone, this puts the keyboard away.
@@ -359,8 +405,12 @@ fn SearchBox() -> impl IntoView {
                     enterkeyhint="search"
                     autocomplete="off"
                     spellcheck="false"
-                    placeholder=move || t!("search-placeholder")
-                    aria-label=move || t!("search-label")
+                    placeholder=move || {
+                        if remote.get() { t!("boorus-search") } else { t!("search-placeholder") }
+                    }
+                    aria-label=move || {
+                        if remote.get() { t!("boorus-search") } else { t!("search-label") }
+                    }
                     role="combobox"
                     aria-autocomplete="list"
                     aria-controls=LIST_ID
@@ -545,14 +595,43 @@ mod tests {
 
     #[test]
     fn the_box_searches_the_collection() {
-        for path in ["/", "/post/3", "/tags", "/help"] {
-            assert_eq!(scope_of(path), Scope::Collection);
+        for path in ["/", "/post/3", "/tags", "/help", "/booruss", "/explore"] {
+            assert_eq!(scope_of(path, Some("e926".into())), Scope::Collection);
         }
         assert_eq!(
-            search_href(Scope::Collection, " fractal -abstract "),
+            search_href(&Scope::Collection, " fractal -abstract ", &[]),
             "/?q=fractal+-abstract"
         );
-        assert_eq!(search_href(Scope::Collection, ""), "/");
+        assert_eq!(search_href(&Scope::Collection, "", &[]), "/");
+        assert_eq!(shown_search("/", Some("sky".into()), "sea"), "sky");
+        assert_eq!(shown_search("/tags", Some("sky".into()), "sea"), "sea");
+        assert_eq!(pause(&Scope::Collection), TYPING_PAUSE_MS);
+    }
+
+    #[test]
+    fn on_the_boorus_the_box_searches_the_sites_chosen() {
+        let scope = scope_of("/boorus", Some("gelbooru,e926".into()));
+        assert_eq!(scope, Scope::Boorus("gelbooru,e926".into()));
+        assert_eq!(scope_of("/boorus/post", None), Scope::Boorus(String::new()));
+        assert_eq!(
+            search_href(&scope, "  blue_sky   rating:g ", &[]),
+            "/boorus?q=blue_sky+rating:g&s=gelbooru,e926"
+        );
+        // A page that names none searches the ones chosen last, or the first.
+        let none = Scope::Boorus(String::new());
+        assert_eq!(
+            search_href(&none, "sky", &["yande.re".into()]),
+            "/boorus?q=sky&s=yande.re"
+        );
+        assert_eq!(search_href(&none, "", &[]), "/boorus?s=danbooru");
+        // What the address carries reads back as it was typed.
+        assert_eq!(
+            shown_search("/boorus", Some("panty_~26_stocking".into()), "sea"),
+            "panty_&_stocking"
+        );
+        assert_eq!(shown_search("/boorus/post", None, "sea"), "");
+        // Each site takes so many requests: the box waits a little longer.
+        assert!(pause(&scope) > TYPING_PAUSE_MS);
     }
 
     #[test]
