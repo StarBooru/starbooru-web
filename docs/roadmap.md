@@ -1,6 +1,6 @@
 # Roadmap
 
-_Status as of 2026-11-23: section 1 is done; section 2 is under way (search, tags). Scope comes from starbooru-server's `docs/checklist.md`; the target is everything the reference web app did._
+_Status as of 2026-11-23: section 1 is done; section 2 is under way (search, tags, upload). Scope comes from starbooru-server's `docs/checklist.md`; the target is everything the reference web app did._
 
 ## 1. Foundation
 
@@ -14,7 +14,7 @@ _Status as of 2026-11-23: section 1 is done; section 2 is under way (search, tag
 
 - [x] Search with tag autocomplete, typo correction and the cheat sheet (`/help`)
 - [x] Tag editor, the Tags page and each tag's page
-- [ ] Upload: drag and drop, folders, paste, links, chunks with progress
+- [x] Upload: drag and drop, folders, paste, links, chunks with progress
 - [ ] Explore, saved searches, votes, related posts
 - [ ] Recycle bin, mass edit
 

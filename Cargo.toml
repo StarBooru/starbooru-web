@@ -20,6 +20,10 @@ serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 percent-encoding = "2"
 wasm-bindgen = "0.2"
+# The chunks of an upload, as the client reads them.
+bytes = "1"
+# Stops an upload on its way.
+futures-util = { version = "0.3", default-features = false, features = ["alloc"] }
 wasm-bindgen-futures = "0.4"
 js-sys = "0.3"
 # Lets a browser handle go into Leptos's cleanups, which want `Send`.
@@ -29,13 +33,24 @@ web-sys = { version = "0.3", features = [
   "Blob",
   "CanvasRenderingContext2d",
   "Clipboard",
+  "ClipboardEvent",
   "CssStyleDeclaration",
+  "DataTransfer",
+  "DataTransferItem",
+  "DataTransferItemList",
   "Document",
   "DomRect",
   "DomTokenList",
+  "DragEvent",
   "Element",
   "Event",
   "EventTarget",
+  "File",
+  "FileList",
+  "FileSystemDirectoryEntry",
+  "FileSystemDirectoryReader",
+  "FileSystemEntry",
+  "FileSystemFileEntry",
   "History",
   "HtmlAnchorElement",
   "HtmlCanvasElement",

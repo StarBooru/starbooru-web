@@ -1,0 +1,235 @@
+/* Upload (pages/upload/): a grid of tiles, one for each file or address, the
+   floating bar that sends them, the sheet a tile opens, and on the gallery
+   the sheet for files dropped there. */
+
+/* Only a fade: a moving page would carry the floating bar along while it
+   comes in, as the gallery's would. */
+.page.upload { animation: fade-in var(--med) var(--ease); }
+.page.upload.sending { padding-bottom: 136px; }
+/* The head's buttons keep together at the far side, as the gallery's do. */
+.page.upload .page-head { justify-content: flex-start; gap: 4px; }
+.page.upload .page-title { margin: 0 auto 0 0; }
+.page.upload .page-head label.icon-btn { cursor: pointer; }
+.page.upload .page-head label.icon-btn:has(input:focus-visible) { outline: 3px solid var(--primary); outline-offset: 2px; }
+.up-switches { display: inline-flex; align-items: center; gap: 8px; margin: 0 6px; }
+.page.upload .page-head + .banner, .url-add + .banner { margin: 12px 0 0; }
+
+/* ---------- links ---------- */
+
+.url-add { margin: 12px 0 0; align-items: flex-start; }
+.url-add textarea {
+  flex: 1; min-width: 0; min-height: 40px; padding: 9px 16px; border: 1px solid var(--outline); border-radius: 20px;
+  background: var(--canvas); color: var(--on-surface); font: inherit; font-size: 14px; line-height: 20px;
+}
+.url-add textarea:focus { outline: none; border-color: var(--primary); box-shadow: 0 0 0 3px oklch(from var(--primary) l c h / 0.25); }
+.url-add .btn { flex: none; }
+
+/* ---------- the grid ---------- */
+
+.up-grid {
+  display: grid; gap: var(--tile-gap); margin-top: 16px;
+  grid-template-columns: repeat(auto-fill, minmax(min(168px, 30vw), 1fr));
+}
+.up-drop {
+  position: relative; display: grid; place-content: center; justify-items: center; gap: 8px; aspect-ratio: 1; padding: 12px;
+  border: 2px dashed var(--outline); border-radius: var(--tile-radius); text-align: center;
+  color: var(--on-surface-2); background: var(--surface); cursor: pointer; font-size: 14px;
+  transition: border-color var(--med) var(--ease), background-color var(--med) var(--ease), color var(--med) var(--ease);
+}
+.up-drop:hover { border-color: var(--primary); background: var(--primary-container); color: var(--on-primary-container); }
+.up-drop:has(input:focus-visible) { outline: 3px solid var(--primary); outline-offset: 2px; }
+/* The box lifts off while the veil is out of it. */
+.up-drop.lifted { opacity: 0; transition: opacity var(--fast) var(--ease); }
+/* With nothing chosen yet, the drop box is the page. */
+.up-grid.empty { display: block; }
+.up-grid.empty .up-drop { aspect-ratio: auto; min-height: min(52vh, 420px); border-radius: var(--radius-l); font-size: 16px; }
+
+/* Files dragged over the page: the gallery's veil, grown out of the drop box
+   wherever it is and however big, and shrunk back into it after. */
+.up-veil { overflow: hidden; animation: veil-grow var(--slow) var(--ease); }
+.up-veil.closing { pointer-events: none; animation: veil-shrink var(--med) var(--ease) forwards; }
+.up-veil .drop-veil-card { animation: pop-in var(--slow) var(--ease-spring); }
+@keyframes veil-grow {
+  from { inset: var(--box-t) var(--box-r) var(--box-b) var(--box-l); border-radius: var(--box-radius); background: var(--primary-container); }
+}
+@keyframes veil-shrink {
+  to { inset: var(--box-t) var(--box-r) var(--box-b) var(--box-l); border-radius: var(--box-radius); background: var(--primary-container); opacity: 0; }
+}
+
+/* ---------- tiles ---------- */
+
+/* A folder can bring thousands of tiles: only those near the screen are drawn,
+   and only the first screenful makes an entrance. */
+.up-tile { content-visibility: auto; contain-intrinsic-size: auto 168px; }
+.up-tile:nth-child(n + 40) { animation: none; }
+/* Unlike the gallery's, these pictures are on this computer already. */
+.up-tile img, .up-tile video { width: 100%; height: 100%; object-fit: cover; display: block; opacity: 1; }
+.up-face { display: grid; align-content: center; justify-items: center; gap: 6px; padding: 12px; text-align: center; }
+.up-name {
+  display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 3; overflow: hidden;
+  max-width: 100%; font-size: 12px; line-height: 1.3; overflow-wrap: anywhere;
+}
+.up-tile .thumb-media { transition: transform var(--med) var(--ease), filter var(--med) var(--ease); }
+.up-tile.busy .thumb-media, .up-tile.failed .thumb-media { filter: brightness(0.6); }
+/* A waiting tile opens its sheet, a finished one its post. */
+.up-open {
+  position: absolute; inset: 0; display: block; width: 100%; padding: 0; border: 0;
+  background: none; color: inherit; font: inherit; cursor: pointer; border-radius: inherit;
+}
+.up-open:focus-visible { outline-offset: -3px; }
+/* On the tile, not just its picture, so it stays zoomed under the cross. */
+.up-tile.draft:hover .thumb-media { transform: scale(1.04); }
+/* Marks and buttons sit on pictures of any colour, like the gallery's badge. */
+.up-btn, .up-mark {
+  position: absolute; display: grid; place-items: center; width: 30px; height: 30px; padding: 0;
+  border: 0; border-radius: 999px; background: var(--scrim); color: var(--on-scrim);
+}
+.up-btn { cursor: pointer; transition: transform var(--fast) var(--ease-spring), background-color var(--fast) var(--ease); }
+.up-btn:hover { background: oklch(from var(--scrim) l c h / 0.85); }
+.up-btn:active { transform: scale(0.88); }
+.up-x { top: 6px; right: 6px; }
+.up-again { top: 6px; right: 42px; }
+.up-mark { top: 6px; left: 6px; }
+.up-mark.ok { background: var(--primary); color: var(--on-primary); }
+.up-mark.bad { background: var(--danger); color: var(--on-primary); cursor: pointer; }
+/* How many tags of its own a waiting tile has. */
+.up-count {
+  position: absolute; left: 6px; bottom: 6px; display: inline-flex; align-items: center; gap: 4px;
+  height: 26px; padding: 0 10px 0 8px; border-radius: 999px; pointer-events: none;
+  background: var(--primary); color: var(--on-primary); font-size: 12px; font-weight: 600;
+}
+.up-progress {
+  position: absolute; left: 8px; right: 8px; bottom: 8px; display: flex; align-items: center; min-height: 28px;
+  padding: 4px 10px; border-radius: 999px; background: var(--scrim); pointer-events: none;
+}
+.up-progress .transfer { flex: 1; gap: 8px; }
+.up-progress .transfer-text { color: var(--on-scrim); font-size: 12px; }
+.up-progress .meter { background: oklch(from var(--on-scrim) l c h / 0.25); }
+.up-state { color: var(--on-scrim); font-size: 12px; font-weight: 600; }
+
+/* ---------- the floating bar ---------- */
+
+/* It starts with a field as round as the button at its end: the same on both sides. */
+.up-bar { padding: 10px; }
+.up-overall { flex: 1 1 100%; display: flex; align-items: center; gap: 12px; min-width: 0; padding: 2px 8px; }
+.up-overall .transfer { flex: 1; }
+.up-overall-text { flex: none; font-size: 14px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.up-form { flex: 1 1 100%; display: flex; flex-wrap: wrap; align-items: center; gap: 8px; min-width: 0; }
+.up-tags { position: relative; flex: 3 1 220px; min-width: 0; }
+.up-tags textarea {
+  width: 100%; min-height: 40px; height: 40px; padding: 9px 16px; border: 1px solid var(--outline); border-radius: 20px;
+  background: var(--surface); color: var(--on-surface); font: inherit; font-size: 14px; line-height: 20px;
+}
+.up-tags textarea:focus { outline: none; border-color: var(--primary); box-shadow: 0 0 0 3px oklch(from var(--primary) l c h / 0.25); }
+.up-tags textarea[aria-invalid="true"] { border-color: var(--danger); }
+.up-tags .grip { display: none; }
+/* At the foot of the window, what opens from the bar opens upwards. */
+.up-bar .tag-offers {
+  position: absolute; left: 0; right: 0; bottom: calc(100% + 8px); padding: 8px;
+  border-radius: var(--radius-m); background: var(--surface); box-shadow: var(--shadow-2);
+}
+.up-bar .select-list { top: auto; bottom: calc(100% + 6px); transform-origin: bottom right; }
+.up-source { flex: 1 1 160px; }
+@media (min-width: 761px) {
+  .up-source { max-width: 240px; }
+}
+
+/* ---------- a tile's sheet ---------- */
+
+/* It comes out of its tile and goes back into it (`--from-x`, `--from-y`). */
+.item-sheet { width: min(820px, 100%); animation: from-tab var(--slow) var(--ease); }
+.sheet-scrim.closing .item-sheet { animation: to-tab var(--med) var(--ease) forwards; }
+/* Taken off the list from the sheet: its tile is going, so it fades where it is. */
+.sheet-scrim.closing.fading .item-sheet { animation: sheet-out var(--med) var(--ease) forwards; }
+.item-head { justify-content: flex-start; }
+.item-head .item-title {
+  flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 18px;
+}
+.item-body { display: grid; grid-template-columns: minmax(0, 320px) minmax(0, 1fr); gap: 12px 20px; margin-top: 12px; }
+.item-preview {
+  position: relative; align-self: start; aspect-ratio: 1; overflow: hidden;
+  border-radius: var(--radius-m); background: var(--surface-2);
+}
+.item-preview .thumb-media { position: absolute; inset: 0; }
+.item-preview img, .item-preview video { width: 100%; height: 100%; object-fit: contain; display: block; }
+.item-preview .up-face { height: 100%; color: var(--on-surface-2); }
+.item-about, .item-fields, .item-top, .item-note { display: grid; align-content: start; gap: 12px; min-width: 0; }
+.item-facts { font-size: 13px; gap: 4px 14px; }
+.item-facts dd { min-width: 0; }
+.item-fields .field { margin: 0; }
+.item-note .queue-error { margin: 0; }
+.select.boxed { display: block; }
+.select.boxed .select-button { min-height: 48px; border-radius: var(--radius-s); font-weight: 400; }
+.select.boxed .select-list li { white-space: normal; }
+/* At the foot: the link on one side, and well away from the cross at the
+   top, the bin that takes the item off the list. */
+.item-foot { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 16px; }
+.item-foot .bin { margin-left: auto; }
+.btn.text.bin { color: var(--on-surface-2); }
+.btn.text.bin:hover:not(:disabled), .btn.text.bin:focus-visible { background: var(--danger); color: var(--on-primary); }
+.app[data-hand="left"] .item-head, .app[data-hand="left"] .item-foot { flex-direction: row-reverse; }
+.app[data-hand="left"] .item-foot .bin { margin-left: 0; margin-right: auto; }
+/* Side by side, the details go under the picture and the rating and tags
+   beside it, the tag box reaching down to the picture's foot. */
+@media (min-width: 601px) {
+  .item-body { grid-template-rows: auto minmax(0, 1fr); }
+  .item-preview { grid-area: 1 / 1; }
+  .item-about { grid-area: 2 / 1; }
+  .item-fields { grid-column: 2; grid-row: 1 / 3; display: grid; grid-template-rows: subgrid; }
+  .item-top { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+  .item-note { min-height: 66px; }
+  .item-tag-field { flex: 1 0 auto; display: flex; flex-direction: column; position: relative; }
+  .item-tag-field .text-box { flex: 1 0 auto; display: flex; flex-direction: column; }
+  .item-tag-field textarea { flex: 1 0 auto; height: 96px; }
+  /* The offers cover the note under the box while there are any, so nothing moves. */
+  .item-tag-field .tag-offers {
+    position: absolute; top: calc(100% + 12px); left: 0; right: 0; max-height: 66px; overflow: hidden;
+  }
+  .item-body:has(.tag-offers) .item-note > * { visibility: hidden; }
+  .app[data-hand="left"] .item-body { grid-template-columns: minmax(0, 1fr) minmax(0, 320px); }
+  .app[data-hand="left"] .item-preview { grid-area: 1 / 2; }
+  .app[data-hand="left"] .item-about { grid-area: 2 / 2; }
+  .app[data-hand="left"] .item-fields { grid-column: 1; }
+  /* A box made taller by its grip leaves the picture's row and grows past
+     the details without pushing them down. */
+  .app .item-body > .item-fields:has(textarea[style*="height"]) {
+    display: flex; flex-direction: column; gap: 12px; align-self: start;
+  }
+}
+@media (max-width: 600px) {
+  .item-body { grid-template-columns: 1fr; gap: 14px; }
+  .item-preview { aspect-ratio: 4 / 3; }
+  .item-tag-field textarea { min-height: 160px; }
+}
+
+/* ---------- files dropped on the gallery ---------- */
+
+/* Out of the Upload item in the navigation and back into it. */
+.upload-sheet { animation: from-tab var(--slow) var(--ease); }
+.sheet-scrim.closing .upload-sheet { animation: to-tab var(--med) var(--ease) forwards; }
+.upload-sheet .queue { margin: 12px 0 16px; max-height: 32dvh; overflow-y: auto; }
+
+@media (max-width: 760px) {
+  .page.upload.sending { padding-bottom: 210px; }
+  .up-bar { padding: 8px; }
+  .up-tags { flex-basis: 100%; }
+  .up-source { order: 2; flex: 1 1 100%; }
+  .up-bar .bulk-rating { order: 3; }
+  .up-bar .up-form .btn { order: 4; }
+  .up-overall { padding: 2px 4px; }
+  /* Narrower buttons and switches, so the head stays one line on a phone. */
+  .page.upload .page-head .icon-btn { width: 40px; height: 40px; }
+  .up-switches { gap: 6px; margin: 0 2px; }
+  .up-switches .switch { width: 48px; height: 30px; }
+  .up-switches .switch-knob { width: 22px; height: 22px; }
+  .up-switches .switch.on .switch-knob { translate: 18px 0; }
+}
+
+/* Nothing flies or grows: the sheets and the veil only fade. */
+@media (prefers-reduced-motion: reduce) {
+  .up-veil, .up-veil.closing { animation-name: fade-in; }
+  .up-veil.closing { animation-name: fade-out; }
+  .item-sheet, .upload-sheet { animation-name: fade-in; }
+  .sheet-scrim.closing .item-sheet, .sheet-scrim.closing .upload-sheet { animation-name: fade-out; }
+  .up-tile.draft:hover .thumb-media { transform: none; }
+}

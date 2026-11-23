@@ -43,6 +43,10 @@ pub fn TagBox(
     /// The box lost the focus.
     #[prop(optional)]
     on_blur: Option<Callback<()>>,
+    #[prop(optional, into)] placeholder: Option<Signal<String>>,
+    /// Its name, where no `label` names it.
+    #[prop(optional, into)]
+    label: Option<Signal<String>>,
 ) -> impl IntoView {
     let area = area.unwrap_or_default();
     // Offers only follow typing: none for the tags the box opened with.
@@ -188,6 +192,8 @@ pub fn TagBox(
                 aria-autocomplete="list"
                 aria-controls=controls
                 aria-invalid=move || invalid.get().then_some("true")
+                aria-label=move || label.map(|l| l.get())
+                placeholder=move || placeholder.map(|p| p.get())
                 prop:value=move || text.get()
                 on:input=move |e| {
                     text.set(event_target_value(&e));

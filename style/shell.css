@@ -253,7 +253,7 @@ a.brand:hover .mark-star, a.search-home:hover .mark-star { transform: rotate(90d
   }
   .nav-bottom .nav-item .icon { width: 22px; height: 22px; }
   .content { padding-left: calc(8px + var(--rail-l)); padding-right: calc(8px + var(--rail-r)); }
-  .snackbar-slot { left: var(--rail-l); right: var(--rail-r); }
+  .bulk-bar, .snackbar-slot { left: var(--rail-l); right: var(--rail-r); }
 }
 @media (min-width: 761px) and (max-width: 1100px) {
   .app { --side: var(--bar-h); }

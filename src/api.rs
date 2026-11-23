@@ -80,23 +80,52 @@ where
     F: FnOnce(Client) -> Fut,
     Fut: Future<Output = Result<T, ClientError>>,
 {
-    let failure = |message| Failure {
+    attempt(request).await.map_err(|r| Failure {
+        message: r.message,
+        missing: r.missing,
+    })
+}
+
+/// A failed request with the status and the error code the server gave, for
+/// a page that tells some failures apart, such as a file already uploaded.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Refused {
+    pub message: String,
+    pub missing: bool,
+    pub status: Option<u16>,
+    pub code: Option<String>,
+}
+
+/// [`call`], with the whole of a failure.
+pub async fn attempt<T, F, Fut>(request: F) -> Result<T, Refused>
+where
+    F: FnOnce(Client) -> Fut,
+    Fut: Future<Output = Result<T, ClientError>>,
+{
+    let refused = |message| Refused {
         message,
         missing: false,
+        status: None,
+        code: None,
     };
     let Some(session) = store::session_untracked() else {
-        return Err(failure(t!("error-session-expired")));
+        return Err(refused(t!("error-session-expired")));
     };
     let Some(client) = client_for(&session) else {
-        return Err(failure(t!("error-bad-address")));
+        return Err(refused(t!("error-bad-address")));
     };
     request(client).await.map_err(|e| {
         if e.is_unauthorized() {
             expire(&session.token);
         }
-        Failure {
+        Refused {
             message: error_text(&e, &session.server),
             missing: is_missing(&e),
+            status: match &e {
+                ClientError::Api { status, .. } => Some(*status),
+                _ => None,
+            },
+            code: e.code().map(str::to_owned),
         }
     })
 }
@@ -128,6 +157,8 @@ enum Trouble<'a> {
     RateLimited(Option<u64>),
     /// The server's own words.
     Said(&'a str),
+    /// A file to upload that the browser couldn't read, and why.
+    Unreadable(&'a str),
     Other,
 }
 
@@ -151,7 +182,8 @@ fn trouble(e: &ClientError) -> Trouble<'_> {
         ClientError::RateLimited { retry_after } => {
             Trouble::RateLimited(retry_after.map(|s| s.div_ceil(60).max(1)))
         }
-        ClientError::TooLarge { .. } | ClientError::Io(_) | ClientError::Read(_) => Trouble::Other,
+        ClientError::Read(why) => Trouble::Unreadable(why),
+        ClientError::TooLarge { .. } | ClientError::Io(_) => Trouble::Other,
     }
 }
 
@@ -167,6 +199,7 @@ pub fn error_text(e: &ClientError, server: &str) -> String {
         Trouble::RateLimited(None) => t!("error-rate-limited"),
         Trouble::RateLimited(Some(minutes)) => t!("error-rate-limited-minutes", minutes = minutes),
         Trouble::Said(message) => message.to_owned(),
+        Trouble::Unreadable(why) => t!("upload-unreadable", error = why.to_owned()),
         Trouble::Other => e.to_string(),
     }
 }
@@ -309,6 +342,14 @@ mod tests {
         assert_eq!(
             trouble(&api(409, "username_taken", "username taken")),
             Trouble::Said("username taken")
+        );
+        assert_eq!(
+            trouble(&ClientError::Read("the file changed".into())),
+            Trouble::Unreadable("the file changed")
+        );
+        assert_eq!(
+            error_text(&ClientError::Read("gone".into()), "x"),
+            "Can't read the file: gone"
         );
     }
 

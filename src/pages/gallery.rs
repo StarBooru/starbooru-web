@@ -21,6 +21,7 @@ use send_wrapper::SendWrapper;
 use starbooru_core::color::{NAMED_COLORS, to_hex};
 use starbooru_core::{Post, TagCorrection, parse_query};
 
+use super::upload::DropToUpload;
 use crate::api;
 use crate::components::banner::{CorrectionBanner, ErrorBanner, Spinner};
 use crate::components::color_picker::ColorPicker;
@@ -100,8 +101,9 @@ fn keep_list(list: List) {
 }
 
 thread_local! {
-    // Reference counted, as it outlives any one gallery.
+    // Reference counted, as they outlive any one gallery.
     static CHANGED: ArcRwSignal<u32> = ArcRwSignal::new(0);
+    static ARRIVED: ArcRwSignal<u32> = ArcRwSignal::new(0);
 }
 
 /// Drops the kept results, after a change that can move posts in or out of
@@ -109,6 +111,14 @@ thread_local! {
 pub fn forget_lists() {
     LISTS.with_borrow_mut(Lists::clear);
     CHANGED.with(|c| c.update(|n| *n = n.wrapping_add(1)));
+}
+
+/// New posts came in, from uploads or imports. The kept results are dropped,
+/// and a gallery on the page takes in the new head of its list where it is,
+/// without starting over.
+pub fn posts_arrived() {
+    LISTS.with_borrow_mut(Lists::clear);
+    ARRIVED.with(|a| a.update(|n| *n = n.wrapping_add(1)));
 }
 
 /// Takes a post that went to the recycle bin out of the kept results.
@@ -598,6 +608,9 @@ pub fn Gallery() -> impl IntoView {
         move |_, _, _| restart(shown_q.get_untracked()),
         false,
     );
+    // Uploads finished while the gallery shows.
+    let arrived = ARRIVED.with(Clone::clone);
+    Effect::watch(move || arrived.get(), move |_, _, _| refresh_head(), false);
 
     // More of the list comes before the user gets to the end of it.
     Effect::new(move |_| {
@@ -935,6 +948,7 @@ pub fn Gallery() -> impl IntoView {
             </div>
         </div>
         <ToTop />
+        <DropToUpload />
     }
 }
 

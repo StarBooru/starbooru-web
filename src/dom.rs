@@ -204,6 +204,60 @@ pub fn dock_top() -> f64 {
         .map_or(tall, |r| r.top())
 }
 
+/// How far the middle of the first element matching `selector` that is
+/// drawn lies from the middle of the window, for something to grow out of it.
+pub fn offset_from_middle(selector: &str) -> Option<(f64, f64)> {
+    let window = web_sys::window()?;
+    let list = window.document()?.query_selector_all(selector).ok()?;
+    let wide = window.inner_width().ok()?.as_f64()?;
+    let tall = window.inner_height().ok()?.as_f64()?;
+    (0..list.length())
+        .filter_map(|i| list.item(i)?.dyn_into::<Element>().ok())
+        .map(|el| el.get_bounding_client_rect())
+        .find(|r| r.width() > 0.0 && r.height() > 0.0)
+        .map(|r| {
+            (
+                r.left() + r.width() / 2.0 - wide / 2.0,
+                r.top() + r.height() / 2.0 - tall / 2.0,
+            )
+        })
+}
+
+/// Where the first element matching `selector` sits, as its distance from
+/// each edge of the window (top, right, bottom, left) and how round its
+/// corners are. One out of sight stands in as a small square in the middle.
+pub fn edges_of(selector: &str) -> Option<[f64; 5]> {
+    let window = web_sys::window()?;
+    let wide = window.inner_width().ok()?.as_f64()?;
+    let tall = window.inner_height().ok()?.as_f64()?;
+    let middle = || {
+        let side = 80.0;
+        let (across, down) = ((wide / 2.0 - side).max(0.0), (tall / 2.0 - side).max(0.0));
+        [down, across, down, across, 24.0]
+    };
+    let Some(el) = window.document()?.query_selector(selector).ok()? else {
+        return Some(middle());
+    };
+    let r = el.get_bounding_client_rect();
+    if r.width() == 0.0 || r.bottom() <= 0.0 || r.top() >= tall {
+        return Some(middle());
+    }
+    let radius = window
+        .get_computed_style(&el)
+        .ok()
+        .flatten()
+        .and_then(|s| s.get_property_value("border-top-left-radius").ok())
+        .and_then(|v| v.trim().trim_end_matches("px").parse().ok())
+        .unwrap_or(0.0);
+    Some([
+        r.top().max(0.0),
+        (wide - r.right()).max(0.0),
+        (tall - r.bottom()).max(0.0),
+        r.left().max(0.0),
+        radius,
+    ])
+}
+
 /// Puts class `name` on `<html>`, or takes it off.
 pub fn root_class(name: &str, on: bool) {
     if let Some(root) = web_sys::window()

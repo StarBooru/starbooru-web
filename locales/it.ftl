@@ -321,6 +321,88 @@ tag-menu-copy = Copia il nome
 tag-copied = Nome del tag copiato
 tag-copy-failed = Non è stato possibile copiare il nome del tag
 
+## Caricamento
+
+upload-files = Scegli i file
+upload-folder = Scegli una cartella
+upload-folder-tags = Tagga i file con il nome della loro cartella
+upload-autotag = Fai aggiungere i tag all'AI
+upload-link = Aggiungi un link
+upload-clear = Svuota l'elenco
+upload-drop = Trascina o incolla qui file o link
+upload-drop-now = Rilascia per caricare
+upload-urls-placeholder = Incolla link a file o a post di un booru, uno per riga
+upload-urls-label = Link a file o a post di un booru
+upload-urls-only = Inserisci indirizzi che iniziano con http:// o https://.
+upload-skipped =
+    { $more ->
+        [0] Si accettano solo immagini e video. Esclusi: { $names }.
+        [one] Si accettano solo immagini e video. Esclusi: { $names } e un altro.
+       *[other] Si accettano solo immagini e video. Esclusi: { $names } e altri { $more }.
+    }
+upload-paste-nothing = Non c'era nessun file o link da incollare.
+upload-shared-tags = Tag per tutti i file
+upload-source = Fonte
+upload-source-placeholder = Fonte (facoltativa)
+upload-source-hint = Da dove vengono i file. Un link è la fonte di sé stesso.
+upload-start =
+    { $count ->
+        [0] Carica
+        [one] Carica 1 file
+       *[other] Carica { $count } file
+    }
+upload-progress = { $done } di { $count } completati
+upload-queued = In coda
+upload-uploading = In caricamento
+upload-uploaded = Caricato
+upload-stopped = Annullato
+upload-failed = Non riuscito
+upload-known = Già presente
+upload-known-post = Già presente come post #{ $id }
+upload-open-post = Apri il post #{ $id }
+upload-too-big = Più grande di quanto accetta questo server (al massimo { $max }).
+upload-unsupported = Questo server accetta solo un'immagine o un video in un formato che conosce.
+upload-unreadable = Impossibile leggere il file: { $error }
+upload-gone = Il file non è più disponibile. Aggiungilo di nuovo.
+upload-file-tags-placeholder = Tag solo per questo file
+upload-file-tags-label = Tag per { $name }
+upload-remove = Rimuovi { $name }
+upload-cancel = Interrompi il caricamento di { $name }
+upload-retry = Riprova { $name }
+upload-open = Apri { $name }
+upload-close = Chiudi
+upload-remove-item = Togli dal caricamento
+upload-open-link = Apri il link
+upload-rating-usual = Come gli altri ({ $rating })
+upload-done = Importato
+upload-job-running = In importazione
+upload-job-cancel = Annulla
+activity-pending =
+    { $count ->
+        [one] 1 caricamento o importazione in corso
+       *[other] { $count } caricamenti e importazioni in corso
+    }
+activity-uploaded =
+    { $count ->
+        [one] 1 file caricato
+       *[other] { $count } file caricati
+    }
+activity-imported =
+    { $count ->
+        [one] 1 post importato
+       *[other] { $count } post importati
+    }
+activity-known =
+    { $count ->
+        [one] 1 già presente
+       *[other] { $count } già presenti
+    }
+activity-failed =
+    { $count ->
+        [one] 1 non riuscito
+       *[other] { $count } non riusciti
+    }
+
 ## Guida alla ricerca
 
 help-try = Prova una ricerca

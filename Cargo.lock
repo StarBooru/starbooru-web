@@ -2341,9 +2341,11 @@ dependencies = [
 name = "starbooru-web"
 version = "0.1.0"
 dependencies = [
+ "bytes",
  "chrono",
  "fluent-bundle",
  "fluent-syntax",
+ "futures-util",
  "js-sys",
  "leptos",
  "leptos_router",

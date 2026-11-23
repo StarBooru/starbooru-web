@@ -321,6 +321,79 @@ tag-menu-copy = Copy name
 tag-copied = Tag name copied
 tag-copy-failed = Couldn't copy the tag name
 
+## Upload
+
+upload-files = Choose files
+upload-folder = Choose a folder
+upload-folder-tags = Tag files with their folder name
+upload-autotag = Let the AI tag these uploads
+upload-link = Add a link
+upload-clear = Clear list
+upload-drop = Drop or paste files or links
+upload-drop-now = Drop to upload
+upload-urls-placeholder = Paste links to files or booru posts, one per line
+upload-urls-label = Links to files or booru posts
+upload-urls-only = Enter addresses that start with http:// or https://.
+upload-skipped =
+    { $more ->
+        [0] Only images and videos are taken. Left out: { $names }.
+       *[other] Only images and videos are taken. Left out: { $names } and { $more } more.
+    }
+upload-paste-nothing = There was no file or link to paste.
+upload-shared-tags = Tags for all files
+upload-source = Source
+upload-source-placeholder = Source (optional)
+upload-source-hint = Where the files come from. A link is its own source.
+upload-start =
+    { $count ->
+        [0] Upload
+        [one] Upload 1 file
+       *[other] Upload { $count } files
+    }
+upload-progress = { $done } of { $count } done
+upload-queued = Queued
+upload-uploading = Uploading
+upload-uploaded = Uploaded
+upload-stopped = Cancelled
+upload-failed = Failed
+upload-known = Already here
+upload-known-post = Already here as post #{ $id }
+upload-open-post = Open post #{ $id }
+upload-too-big = Bigger than this server takes ({ $max } at most).
+upload-unsupported = This server only takes an image or a video in a format it knows.
+upload-unreadable = Can't read the file: { $error }
+upload-gone = The file is no longer at hand. Add it again.
+upload-file-tags-placeholder = Tags for this file only
+upload-file-tags-label = Tags for { $name }
+upload-remove = Remove { $name }
+upload-cancel = Stop uploading { $name }
+upload-retry = Try { $name } again
+upload-open = Open { $name }
+upload-close = Close
+upload-remove-item = Remove from upload
+upload-open-link = Open link
+upload-rating-usual = Same as the rest ({ $rating })
+upload-done = Imported
+upload-job-running = Importing
+upload-job-cancel = Cancel
+activity-pending =
+    { $count ->
+        [one] 1 upload or import in progress
+       *[other] { $count } uploads and imports in progress
+    }
+activity-uploaded =
+    { $count ->
+        [one] 1 file uploaded
+       *[other] { $count } files uploaded
+    }
+activity-imported =
+    { $count ->
+        [one] 1 post imported
+       *[other] { $count } posts imported
+    }
+activity-known = { $count } already here
+activity-failed = { $count } failed
+
 ## Search cheat sheet
 
 help-try = Try a query

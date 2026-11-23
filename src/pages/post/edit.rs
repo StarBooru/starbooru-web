@@ -9,31 +9,18 @@ use leptos::ev::SubmitEvent;
 use leptos::html;
 use leptos::prelude::*;
 use leptos::task::spawn_local;
-use starbooru_core::tag::{MAX_TAG_CHARS, MAX_TAGS_PER_POST, TagError};
 use starbooru_core::{Post, PostUpdate, Rating, TagCorrection, TagSuggestions};
 
 use crate::api;
 use crate::components::banner::ErrorBanner;
 use crate::components::icons::{Ico, Icon};
+use crate::components::rating::RatingPicker;
 use crate::components::tag_box::TagBox;
-use crate::logic::tags::{
-    BadTag, new_words, parse_tags, replace_tag, shown_fixes, untyped, with_tag,
-};
-use crate::pages::rating_label;
+use crate::logic::tags::{new_words, parse_tags, replace_tag, shown_fixes, untyped, with_tag};
+use crate::pages::{bad_tag_text, rating_label};
 
 /// The tag box's id, for its label.
 const TAG_BOX: &str = "post-tags";
-
-/// Why a word can't be saved as a tag, in words.
-fn bad_tag_text(bad: &BadTag) -> String {
-    let tag = bad.word.clone();
-    match bad.error {
-        TagError::BadPrefix(_) => t!("tag-error-prefix", tag = tag),
-        TagError::TooLong => t!("tag-error-long", tag = tag, max = MAX_TAG_CHARS),
-        TagError::TooMany => t!("tag-error-many", max = MAX_TAGS_PER_POST),
-        TagError::ControlChar | TagError::Empty => t!("tag-error-other", tag = tag),
-    }
-}
 
 /// The editor for `post` as it was when editing began. `on_saved` gets the
 /// post as the server has it after saving.
@@ -291,49 +278,5 @@ fn TagSuggester(id: i64, text: RwSignal<String>, rating: RwSignal<Rating>) -> im
                 {answer}
             </div>
         </Show>
-    }
-}
-
-/// The four ratings, one of them chosen.
-#[component]
-fn RatingPicker(value: RwSignal<Rating>) -> impl IntoView {
-    let choices = Rating::ALL
-        .into_iter()
-        .map(|r| {
-            let on = move || value.get() == r;
-            view! {
-                <button
-                    type="button"
-                    role="radio"
-                    class="seg"
-                    class:on=on
-                    aria-checked=move || if on() { "true" } else { "false" }
-                    on:click=move |_| value.set(r)
-                >
-                    {move || rating_label(r)}
-                </button>
-            }
-        })
-        .collect_view();
-    view! {
-        <div class="segmented" role="radiogroup" aria-label=move || t!("rating")>
-            {choices}
-        </div>
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn a_bad_tag_says_which_and_why() {
-        let bad = |word: &str, error| BadTag {
-            word: word.into(),
-            error,
-        };
-        assert!(bad_tag_text(&bad("-dog", TagError::BadPrefix("-dog".into()))).contains("-dog"));
-        assert!(bad_tag_text(&bad("x", TagError::TooLong)).contains("128"));
-        assert!(bad_tag_text(&bad("", TagError::TooMany)).contains("512"));
     }
 }

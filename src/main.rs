@@ -2,10 +2,12 @@
 
 #[macro_use]
 mod i18n;
+mod activity;
 mod api;
 mod app;
 mod components;
 mod dom;
+mod files;
 mod logic;
 mod oidc;
 mod pages;

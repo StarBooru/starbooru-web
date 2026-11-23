@@ -15,6 +15,7 @@ use leptos_router::hooks::{use_location, use_navigate, use_query_map};
 
 use super::login::Login;
 use super::search_demo::{SearchDemo, plays_on};
+use crate::activity::{self, Activity};
 use crate::api;
 use crate::components::brand::{Mark, Wordmark};
 use crate::components::icons::{Ico, Icon};
@@ -77,6 +78,7 @@ fn Frame() -> impl IntoView {
             <Outlet />
         </main>
         <NavSlider place="nav-bottom" here=here />
+        <Activity />
     }
 }
 
@@ -461,6 +463,8 @@ fn NavSlider(place: &'static str, here: Memo<Option<Tab>>) -> impl IntoView {
     let cells = Tab::ALL.len();
     // The gallery goes back to the search it showed last.
     let last = Memo::new(|_| store::last_search());
+    // Uploads and imports still going, on the Upload item.
+    let pending = Memo::new(|_| activity::pending());
     view! {
         <nav
             class=format!("{place} slider glass float")
@@ -480,9 +484,17 @@ fn NavSlider(place: &'static str, here: Memo<Option<Tab>>) -> impl IntoView {
                     .into_iter()
                     .map(|(tab, icon, label)| {
                         let active = move || here.get() == Some(tab);
+                        let upload = tab == Tab::Upload;
+                        let badge = move || pending.get().min(99);
+                        let note = move || {
+                            (upload && pending.get() != 0)
+                                .then(|| t!("activity-pending", count = pending.get()))
+                        };
                         view! {
                             <a
                                 class="nav-item"
+                                // The sheet of files dropped on the gallery comes out of this item.
+                                class:nav-upload=upload
                                 class:active=active
                                 href=move || {
                                     if tab == Tab::Gallery {
@@ -491,6 +503,7 @@ fn NavSlider(place: &'static str, here: Memo<Option<Tab>>) -> impl IntoView {
                                         tab.href().to_owned()
                                     }
                                 }
+                                title=note
                                 aria-current=move || if active() { "page" } else { "false" }
                             >
                                 <span class="nav-icon">
@@ -498,8 +511,16 @@ fn NavSlider(place: &'static str, here: Memo<Option<Tab>>) -> impl IntoView {
                                     <span class="nav-pop">
                                         <Ico icon=icon />
                                     </span>
+                                    <Show when=move || upload && pending.get() != 0>
+                                        <span class="nav-badge" aria-hidden="true">
+                                            {badge}
+                                        </span>
+                                    </Show>
                                 </span>
                                 <span class="nav-label">{label}</span>
+                                <Show when=move || upload && pending.get() != 0>
+                                    <span class="visually-hidden">{note}</span>
+                                </Show>
                             </a>
                         }
                     })
