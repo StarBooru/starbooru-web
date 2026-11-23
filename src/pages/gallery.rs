@@ -461,13 +461,14 @@ pub fn Gallery() -> impl IntoView {
             return;
         };
         let (y, _) = dom::scroll();
-        store::remember_spot(Spot {
+        let spot = Spot {
             q: shown_q.get_untracked(),
             post: posts.with_untracked(|p| p.get(index).map(|p| p.id)),
             offset: grid_top + top,
             y,
             count: u32::try_from(count).unwrap_or(u32::MAX),
-        });
+        };
+        store::remember_spot(spot, saved::queries().as_deref());
     };
 
     let keep = move || {
@@ -632,7 +633,7 @@ pub fn Gallery() -> impl IntoView {
         generation.update_value(|g| *g = g.wrapping_add(1));
         started.set(true);
         if parse_query(&q).is_ok() {
-            store::visit_search(&q);
+            store::visit_search(&q, saved::queries().as_deref());
         }
         seek.set_value(take_viewed(&q).map(|id| Seek::Landing(id, SEEK_PAGES)));
         shown_q.set(q.clone());

@@ -1,18 +1,56 @@
 //! The account's saved searches, as the gallery keeps them: in order of name,
-//! each found by its search.
+//! each found by its search, however that was written.
 
-use starbooru_core::SavedSearch;
+use std::fmt::Debug;
+
 use starbooru_core::saved::MAX_SEARCH_NAME_CHARS;
+use starbooru_core::{SavedSearch, parse_query};
 
 /// A search as it is saved: the server collapses the spaces too.
 pub fn tidy(q: &str) -> String {
     q.split_whitespace().collect::<Vec<_>>().join(" ")
 }
 
+/// What `q` finds, as a string to compare: two ways of writing one search
+/// give the same key. Spaces, the order of the terms, a tag's case or
+/// category and a repeated term don't change it. A search the parser turns
+/// down is its tidy form.
+pub fn search_key(q: &str) -> String {
+    let Ok(mut p) = parse_query(q) else {
+        return tidy(q);
+    };
+    for figure in p.figures.iter_mut().chain(p.exclude_figures.iter_mut()) {
+        figure.tags.sort();
+    }
+    sort(&mut p.include);
+    sort(&mut p.exclude);
+    sort(&mut p.ratings);
+    sort(&mut p.exclude_ratings);
+    sort(&mut p.text);
+    sort(&mut p.exclude_text);
+    sort(&mut p.figures);
+    sort(&mut p.exclude_figures);
+    sort(&mut p.dates);
+    sort(&mut p.exclude_dates);
+    sort(&mut p.sizes);
+    sort(&mut p.exclude_sizes);
+    sort(&mut p.colors);
+    sort(&mut p.exclude_colors);
+    format!("{p:?}")
+}
+
+/// The terms in one order, whatever order they were typed in. Not all of
+/// them can be compared, but all can be printed.
+fn sort<T: Debug>(terms: &mut [T]) {
+    terms.sort_by_cached_key(|t| format!("{t:?}"));
+}
+
 /// The saved search that runs `q`, if any.
 pub fn find(list: &[SavedSearch], q: &str) -> Option<i64> {
-    let q = tidy(q);
-    list.iter().find(|s| s.query == q).map(|s| s.id)
+    let key = search_key(q);
+    list.iter()
+        .find(|s| search_key(&s.query) == key)
+        .map(|s| s.id)
 }
 
 /// The name a search is saved under: the search itself, cut to the longest
@@ -61,9 +99,51 @@ mod tests {
             saved(2, "blue sky", "blue_sky -cloud"),
         ];
         assert_eq!(find(&list, "  blue_sky   -cloud "), Some(2));
+        assert_eq!(find(&list, "-cloud Blue_Sky"), Some(2));
         assert_eq!(find(&list, "cat"), Some(1));
         assert_eq!(find(&list, "dog"), None);
+        assert_eq!(find(&list, "blue_sky"), None);
         assert_eq!(find(&[], "cat"), None);
+    }
+
+    fn same_search(a: &str, b: &str) -> bool {
+        search_key(a) == search_key(b)
+    }
+
+    #[test]
+    fn one_search_written_two_ways_is_the_same() {
+        for (a, b) in [
+            ("fractal  order:score", "fractal order:score"),
+            // The sort and colour menus put their terms last.
+            ("order:score fractal", " fractal   order:score "),
+            ("color:red width:>100 cat", "cat width:>100 color:red"),
+            ("fractal -abstract rating:s", "rating:s -abstract fractal"),
+            ("Fractal", "fractal"),
+            ("artist:lavfi", "lavfi"),
+            ("{girl boots} cat", "cat {boots girl}"),
+            ("cat cat", "cat"),
+            ("order:top", "order:score"),
+            ("cat text:\"two words\"", "text:\"two   words\" cat"),
+        ] {
+            assert!(same_search(a, b), "{a} / {b}");
+        }
+        for (a, b) in [
+            ("cat", "dog"),
+            ("cat", "-cat"),
+            ("cat dog", "cat"),
+            // The last sort typed is the one that counts.
+            ("order:score order:new", "order:new order:score"),
+            ("text:\"a b\"", "text:a text:b"),
+            ("{girl boots}", "{girl} {boots}"),
+            ("fractal", "exact:true fractal"),
+            ("", "cat"),
+        ] {
+            assert!(!same_search(a, b), "{a} / {b}");
+        }
+        // One the parser turns down still matches its tidy form, and only that.
+        assert!(same_search("rating:x  cat", " rating:x cat"));
+        assert!(!same_search("rating:x cat", "cat rating:x"));
+        assert!(same_search("", "   "));
     }
 
     #[test]

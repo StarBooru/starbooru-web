@@ -33,6 +33,19 @@ fn current() -> Option<Vec<SavedSearch>> {
     })
 }
 
+/// The searches this account saved, `None` until they're known. The gallery
+/// keeps their places (`logic::spots`).
+pub fn queries() -> Option<Vec<String>> {
+    let owner = store::owner();
+    SAVED.with(|s| {
+        s.with_untracked(|s| {
+            s.as_ref()
+                .filter(|(whose, _)| *whose == owner)
+                .map(|(_, list)| list.iter().map(|s| s.query.clone()).collect())
+        })
+    })
+}
+
 /// Changes this account's list, once it's known.
 fn update(change: impl FnOnce(&mut Vec<SavedSearch>)) {
     let owner = store::owner();

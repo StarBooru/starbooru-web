@@ -21,6 +21,7 @@ pub mod saved;
 pub mod search;
 pub mod settings;
 pub mod share;
+pub mod spots;
 pub mod swipe;
 pub mod tags;
 pub mod upload;

@@ -22,7 +22,8 @@ use starbooru_core::color::Rgb;
 use starbooru_core::{AuthResponse, User};
 
 use crate::i18n::Lang;
-use crate::logic::{address, history};
+use crate::logic::saved::search_key;
+use crate::logic::{address, history, spots};
 
 /// The signed-in account. Sign-in fills it in.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -338,9 +339,8 @@ pub struct Spot {
     pub count: u32,
 }
 
-const MAX_SPOTS: usize = 30;
-
-/// The searches the gallery has shown this account, the latest first.
+/// The searches the gallery has shown this account, the latest first. It
+/// keeps the saved ones and the latest of the rest (`logic::spots`).
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
 #[serde(default)]
 pub struct GalleryMemory {
@@ -349,22 +349,24 @@ pub struct GalleryMemory {
 }
 
 impl GalleryMemory {
-    fn visit(&mut self, q: &str) {
-        let spot = self
-            .spots
-            .iter()
-            .position(|s| s.q == q)
-            .map(|i| self.spots.remove(i))
-            .unwrap_or_else(|| Spot {
-                q: q.to_owned(),
-                ..Spot::default()
-            });
+    /// `saved` holds the account's saved searches, `None` while they aren't
+    /// known.
+    fn visit(&mut self, q: &str, saved: Option<&[String]>) {
+        let key = search_key(q);
+        let found = self.spots.iter().position(|s| search_key(&s.q) == key);
+        let mut spot = found.map(|i| self.spots.remove(i)).unwrap_or_default();
+        // As the address has it now, which the search box shows.
+        q.clone_into(&mut spot.q);
         self.spots.insert(0, spot);
-        self.spots.truncate(MAX_SPOTS);
+        // Only a new search pushes another out, so a search forgotten with
+        // Undo at hand keeps its place a little longer.
+        if found.is_none() {
+            spots::keep(&mut self.spots, saved);
+        }
     }
 
-    fn remember(&mut self, spot: Spot) {
-        self.visit(&spot.q);
+    fn remember(&mut self, spot: Spot, saved: Option<&[String]>) {
+        self.visit(&spot.q, saved);
         if let Some(first) = self.spots.first_mut() {
             *first = spot;
         }
@@ -381,10 +383,16 @@ impl GalleryMemory {
         self
     }
 
+    /// Where the gallery was for `q`, however it was written then.
     fn spot(&self, owner: &str, q: &str) -> Option<Spot> {
-        (self.owner == owner)
-            .then(|| self.spots.iter().find(|s| s.q == q).cloned())
-            .flatten()
+        if self.owner != owner {
+            return None;
+        }
+        let key = search_key(q);
+        self.spots
+            .iter()
+            .find(|s| s.q == q || search_key(&s.q) == key)
+            .cloned()
     }
 
     fn last_search(&self, owner: &str) -> String {
@@ -805,17 +813,20 @@ fn update_memory(change: impl FnOnce(&mut GalleryMemory)) {
     save();
 }
 
-/// Makes `q` the search the gallery goes back to.
-pub fn visit_search(q: &str) {
-    update_memory(|memory| memory.visit(q));
+/// Makes `q` the search the gallery goes back to. `saved` holds the
+/// account's saved searches, whose places stay, or `None` while they aren't
+/// known.
+pub fn visit_search(q: &str, saved: Option<&[String]>) {
+    update_memory(|memory| memory.visit(q, saved));
 }
 
-/// Where the gallery is in its search, as the screen stops moving.
-pub fn remember_spot(spot: Spot) {
-    update_memory(|memory| memory.remember(spot));
+/// Where the gallery is in its search, as the screen stops moving. `saved`
+/// as for `visit_search`.
+pub fn remember_spot(spot: Spot, saved: Option<&[String]>) {
+    update_memory(|memory| memory.remember(spot, saved));
 }
 
-/// Where the gallery was for `q`.
+/// Where the gallery was for `q`, however it was written then.
 pub fn spot(q: &str) -> Option<Spot> {
     let owner = owner();
     MEMORY.with(|m| m.with_untracked(|m| m.spot(&owner, q)))
@@ -971,6 +982,7 @@ mod backend {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::logic::spots::MAX_SPOTS;
 
     fn user() -> User {
         serde_json::from_value(serde_json::json!({
@@ -1224,7 +1236,7 @@ mod tests {
         assert_eq!(merged.prefs, dark);
         // This tab signed out, another moved in the gallery.
         let mut moved = GalleryMemory::default();
-        moved.visit("cat");
+        moved.visit("cat", None);
         let ours = Stored {
             session: None,
             ..synced.clone()
@@ -1304,7 +1316,7 @@ mod tests {
         OTHER.with_borrow_mut(|o| {
             o.insert("kept".into(), serde_json::json!(1));
         });
-        visit_search("cat");
+        visit_search("cat", None);
         assert_eq!(last_search_untracked(), "cat");
         sign_out();
         assert_eq!(MEMORY.with(|m| m.get_untracked()), GalleryMemory::default());
@@ -1314,17 +1326,20 @@ mod tests {
     #[test]
     fn the_latest_search_comes_first_and_keeps_its_spot() {
         let mut memory = GalleryMemory::default();
-        memory.remember(Spot {
-            q: "cat".into(),
-            post: Some(7),
-            offset: 12.0,
-            y: 900.0,
-            count: 120,
-        });
-        memory.visit("dog");
+        memory.remember(
+            Spot {
+                q: "cat".into(),
+                post: Some(7),
+                offset: 12.0,
+                y: 900.0,
+                count: 120,
+            },
+            Some(&[]),
+        );
+        memory.visit("dog", Some(&[]));
         assert_eq!(memory.last_search(""), "dog");
         assert_eq!(memory.spot("", "dog").and_then(|s| s.post), None);
-        memory.visit("cat");
+        memory.visit("cat", Some(&[]));
         assert_eq!(memory.last_search(""), "cat");
         assert_eq!(memory.spot("", "cat").and_then(|s| s.post), Some(7));
         assert_eq!(memory.spots.len(), 2);
@@ -1334,21 +1349,115 @@ mod tests {
     fn old_searches_drop_off() {
         let mut memory = GalleryMemory::default();
         for i in 0..MAX_SPOTS + 5 {
-            memory.visit(&format!("tag{i}"));
+            memory.visit(&format!("tag{i}"), Some(&[]));
         }
         assert_eq!(memory.spots.len(), MAX_SPOTS);
         assert!(memory.spots.iter().all(|s| s.q != "tag0"));
     }
 
+    fn fractal_at(post: i64) -> Spot {
+        Spot {
+            q: "fractal  order:score".into(),
+            post: Some(post),
+            offset: 80.5,
+            y: 2400.0,
+            count: 120,
+        }
+    }
+
+    #[test]
+    fn a_saved_search_keeps_its_spot_however_many_come_after() {
+        let saved = ["fractal order:score".to_owned()];
+        let mut memory = GalleryMemory::default();
+        memory.remember(fractal_at(12), Some(&saved));
+        for i in 0..MAX_SPOTS + 10 {
+            memory.visit(&format!("tag{i}"), Some(&saved));
+        }
+        assert_eq!(memory.spots.len(), MAX_SPOTS + 1);
+        // Found as the chip writes it, or with its terms the other way round.
+        for q in ["fractal order:score", "order:score fractal"] {
+            assert_eq!(memory.spot("", q), Some(fractal_at(12)), "{q}");
+        }
+        // Opened from its chip: the latest, as the chip wrote it.
+        memory.visit("fractal order:score", Some(&saved));
+        assert_eq!(memory.last_search(""), "fractal order:score");
+        assert_eq!(memory.spot("", "fractal").map(|s| s.count), None);
+        assert_eq!(
+            memory.spot("", "fractal order:score").map(|s| s.post),
+            Some(Some(12))
+        );
+        assert_eq!(memory.spots.len(), MAX_SPOTS + 1);
+        // Forgotten, it ages out with the others.
+        for i in 0..MAX_SPOTS {
+            memory.visit(&format!("new{i}"), Some(&[]));
+        }
+        assert_eq!(memory.spots.len(), MAX_SPOTS);
+        assert_eq!(memory.spot("", "fractal order:score"), None);
+    }
+
+    #[test]
+    fn a_saved_search_stays_while_the_saved_ones_are_unknown() {
+        let mut memory = GalleryMemory::default();
+        memory.remember(fractal_at(12), None);
+        for i in 0..MAX_SPOTS + 10 {
+            memory.visit(&format!("tag{i}"), None);
+        }
+        assert_eq!(memory.spot("", "fractal order:score"), Some(fractal_at(12)));
+        // Once they're known, the next new search trims the rest.
+        let saved = ["fractal order:score".to_owned()];
+        memory.visit("dog", Some(&saved));
+        assert_eq!(memory.spots.len(), MAX_SPOTS + 1);
+        assert_eq!(memory.spot("", "fractal order:score"), Some(fractal_at(12)));
+    }
+
+    #[test]
+    fn a_memory_stored_before_saved_spots_still_loads() {
+        // As this version and the reference wrote it, 30 searches at most.
+        let mut spots: Vec<Value> = (0..MAX_SPOTS - 1)
+            .map(|i| serde_json::json!({"q": format!("tag{i}"), "post": i, "offset": 0.0, "y": 10.0, "count": 60}))
+            .collect();
+        spots.push(serde_json::json!({"q": "fractal  order:score", "post": 12, "offset": 80.5, "y": 2400.0, "count": 120}));
+        let json = serde_json::json!({
+            "prefs": {"theme": "dark"},
+            "memory": {"owner": "x|1", "spots": spots},
+        });
+        let mut stored = parse(&json.to_string());
+        assert_eq!(stored.prefs.theme, Theme::Dark);
+        assert_eq!(stored.memory.spots.len(), MAX_SPOTS);
+        let memory = stored.memory.for_owner("x|1");
+        assert_eq!(
+            memory.spot("x|1", "fractal order:score"),
+            Some(fractal_at(12))
+        );
+        // Saved since: it outlasts the searches that come after it.
+        let saved = ["fractal order:score".to_owned()];
+        for i in 0..MAX_SPOTS {
+            memory.visit(&format!("new{i}"), Some(&saved));
+        }
+        assert_eq!(
+            memory.spot("x|1", "fractal order:score"),
+            Some(fractal_at(12))
+        );
+        assert_eq!(memory.spot("x|1", "tag0"), None);
+        // Written back in the same shape.
+        let again: Value = serde_json::from_str(&to_json(&stored).unwrap()).unwrap();
+        assert_eq!(again["memory"]["owner"], "x|1");
+        assert_eq!(again["memory"]["spots"][0]["q"], "new29");
+        assert_eq!(
+            again["memory"]["spots"][MAX_SPOTS]["q"],
+            "fractal  order:score"
+        );
+    }
+
     #[test]
     fn one_account_never_sees_where_another_was() {
         let mut memory = GalleryMemory::default();
-        memory.for_owner("a|1").visit("cat");
+        memory.for_owner("a|1").visit("cat", Some(&[]));
         assert_eq!(memory.last_search("a|1"), "cat");
         assert_eq!(memory.last_search("a|2"), "");
         assert_eq!(memory.spot("a|2", "cat"), None);
         // Another account starts again.
-        memory.for_owner("a|2").visit("dog");
+        memory.for_owner("a|2").visit("dog", Some(&[]));
         assert_eq!(memory.last_search("a|1"), "");
         assert_eq!(memory.spots.len(), 1);
     }
