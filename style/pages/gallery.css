@@ -119,6 +119,13 @@ html.sb-scrolling .thumb img { filter: none; transition: opacity var(--med) var(
 .bulk-sheet .sheet-head { margin-bottom: 12px; }
 .bulk-sheet .field:last-of-type { margin-bottom: 12px; }
 .bulk-sheet .text-box textarea { min-height: 64px; }
+/* Dragging across tiles picks them (pages/drag_select.rs). The browser's own
+   drag of a link or a picture, its text selection and a phone's menu for a
+   held link would take the pointer instead. */
+.gallery .masonry { user-select: none; -webkit-user-select: none; }
+.gallery .masonry :is(.thumb, img) { -webkit-user-drag: none; }
+.gallery .masonry-box.selecting .thumb { -webkit-touch-callout: none; }
+html.sb-drag-select { user-select: none; -webkit-user-select: none; }
 @media (max-width: 760px) {
   .bulk-count { flex-basis: 100%; }
   .bulk-count .btn { flex: none; margin-left: auto; }

@@ -209,6 +209,39 @@ impl Layout {
         found
     }
 
+    /// The tile at `x`, `y` pixels from the corner of a grid `width` pixels
+    /// wide, by its place in the list. None in a gap between tiles. A point
+    /// off the grid, above it, beside it or past its end, finds the nearest
+    /// tile.
+    pub fn at(&self, tile: f64, gap: f64, width: f64, x: f64, y: f64) -> Option<usize> {
+        if tile <= 0.0 || !x.is_finite() || !y.is_finite() {
+            return None;
+        }
+        let mut boxes = self.tiles.iter().map(|p| {
+            let (left, top) = (p.left.px(tile, gap), p.top.px(tile, gap));
+            (
+                left,
+                top,
+                left + p.width.px(tile, gap),
+                top + p.height.px(tile, gap),
+            )
+        });
+        if (0.0..width).contains(&x) && (0.0..self.height.px(tile, gap)).contains(&y) {
+            return boxes.position(|(left, top, right, bottom)| {
+                (left..right).contains(&x) && (top..bottom).contains(&y)
+            });
+        }
+        // How far `v` lies outside `from..to`.
+        let off = |from: f64, to: f64, v: f64| (from - v).max(v - to).max(0.0);
+        boxes
+            .enumerate()
+            .map(|(i, (left, top, right, bottom))| {
+                (i, off(left, right, x).hypot(off(top, bottom, y)))
+            })
+            .min_by(|a, b| a.1.total_cmp(&b.1))
+            .map(|(i, _)| i)
+    }
+
     /// Takes a tile's length down the grid into account.
     fn reach(&mut self, bottom: Length) {
         if bottom.rough() > self.height.rough() {
@@ -1419,5 +1452,58 @@ mod tests {
         assert_eq!(first(600.0), None);
         assert_eq!(layout.first_below(0.0, 8.0, 0.0), None, "not measured");
         assert_eq!(Layout::default().first_below(100.0, 8.0, 0.0), None);
+    }
+
+    #[test]
+    fn a_point_finds_the_tile_under_it_by_its_place_in_the_list() {
+        // Three columns of squares 100 wide, 8 apart, in a grid 316 wide:
+        // columns start at 0, 108, 216 and rows the same.
+        let layout = stack([1.0; 10], 3);
+        let at = |x, y| layout.at(100.0, 8.0, 316.0, x, y);
+        assert_eq!(at(10.0, 10.0), Some(0));
+        assert_eq!(at(150.0, 50.0), Some(1));
+        assert_eq!(at(250.0, 150.0), Some(5));
+        assert_eq!(at(50.0, 350.0), Some(9));
+        // The gaps between tiles, and the empty end of the last row.
+        assert_eq!(at(104.0, 50.0), None);
+        assert_eq!(at(50.0, 104.0), None);
+        assert_eq!(at(150.0, 350.0), None);
+        assert_eq!(layout.at(0.0, 8.0, 316.0, 10.0, 10.0), None, "not measured");
+        assert_eq!(at(f64::NAN, 10.0), None);
+        assert_eq!(Layout::default().at(100.0, 8.0, 316.0, 10.0, 10.0), None);
+    }
+
+    #[test]
+    fn a_point_off_the_grid_finds_the_nearest_tile() {
+        let layout = stack([1.0; 10], 3);
+        let at = |x, y| layout.at(100.0, 8.0, 316.0, x, y);
+        // Above the grid, over its third column: the first row's third tile.
+        assert_eq!(at(250.0, -40.0), Some(2));
+        // Beside it, by the second row.
+        assert_eq!(at(-30.0, 150.0), Some(3));
+        assert_eq!(at(400.0, 150.0), Some(5));
+        // Past the end: the last tile.
+        assert_eq!(at(60.0, 900.0), Some(9));
+        assert_eq!(at(280.0, 900.0), Some(9));
+    }
+
+    #[test]
+    fn every_tile_of_a_staggered_layout_can_be_found() {
+        for view in [
+            GalleryView::StaggeredPortrait,
+            GalleryView::StaggeredLandscape,
+            GalleryView::StaggeredAll,
+        ] {
+            let ratios = unrelated(200, 3)
+                .into_iter()
+                .map(|r| r.clamp(WIDEST, TALLEST));
+            let layout = place(view, ratios, 4);
+            // Four columns of 100 and three gaps.
+            for (i, p) in layout.tiles.iter().enumerate() {
+                let x = p.left.px(100.0, 8.0) + p.width.px(100.0, 8.0) / 2.0;
+                let y = p.top.px(100.0, 8.0) + p.height.px(100.0, 8.0) / 2.0;
+                assert_eq!(layout.at(100.0, 8.0, 424.0, x, y), Some(i), "{view:?}");
+            }
+        }
     }
 }

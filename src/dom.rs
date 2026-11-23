@@ -276,6 +276,18 @@ pub fn scroll_to(top: f64, smooth: bool) {
     window.scroll_to_with_scroll_to_options(&options);
 }
 
+/// Scrolls the page `dy` pixels down, or up when below zero, at once: it's
+/// for a step of a scroll that goes on frame by frame.
+pub fn scroll_by(dy: f64) {
+    let Some(window) = web_sys::window() else {
+        return;
+    };
+    let options = ScrollToOptions::new();
+    options.set_top(dy);
+    options.set_behavior(ScrollBehavior::Instant);
+    window.scroll_by_with_scroll_to_options(&options);
+}
+
 /// The bottom edge of the top bar, in pixels from the top of the window:
 /// what's above it is hidden behind the search.
 pub fn bar_bottom() -> f64 {

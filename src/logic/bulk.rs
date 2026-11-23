@@ -43,22 +43,32 @@ impl Selection {
             Some((from, to))
         });
         match ends {
-            Some((from, to)) => {
-                // From the anchor outwards, so a full selection keeps the
-                // posts next to it.
-                let range = loaded.get(from.min(to)..=from.max(to)).unwrap_or_default();
-                let ordered: Vec<i64> = if from <= to {
-                    range.to_vec()
-                } else {
-                    range.iter().rev().copied().collect()
-                };
-                for p in ordered {
-                    self.set(p, on);
-                }
+            Some((from, to)) => self.set_range(loaded, from, to, on),
+            None => {
+                self.set(id, on);
+                self.anchor = Some(id);
             }
-            None => self.set(id, on),
         }
-        self.anchor = Some(id);
+    }
+
+    /// Picks, or lets go of when `on` is false, every post of `loaded` from
+    /// place `from` to place `to`, either way round, and a Shift-click's
+    /// range goes on from `to`.
+    pub fn set_range(&mut self, loaded: &[i64], from: usize, to: usize, on: bool) {
+        let range = loaded.get(from.min(to)..=from.max(to)).unwrap_or_default();
+        // From `from` outwards, so a full selection keeps the posts next to it.
+        if from <= to {
+            for p in range {
+                self.set(*p, on);
+            }
+        } else {
+            for p in range.iter().rev() {
+                self.set(*p, on);
+            }
+        }
+        if let Some(id) = loaded.get(to) {
+            self.anchor = Some(*id);
+        }
     }
 
     fn set(&mut self, id: i64, on: bool) {

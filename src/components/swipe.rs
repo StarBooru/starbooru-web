@@ -24,6 +24,17 @@ const TRAIL: usize = 8;
 /// with some to spare.
 const BACK_MS: u64 = 320;
 
+thread_local! {
+    /// On while a finger drags across tiles to pick them
+    /// (`pages/drag_select.rs`): it isn't swiping any of them.
+    static PICKING: Cell<bool> = const { Cell::new(false) };
+}
+
+/// Says that a finger is dragging across tiles to pick them, or has stopped.
+pub fn picking(on: bool) {
+    PICKING.set(on);
+}
+
 /// One finger on a tile.
 struct Press {
     pointer: i32,
@@ -159,6 +170,12 @@ pub fn watch(on_swipe: impl Fn(i64, Side) + 'static) -> Vec<Watch> {
             let Some(p) = slot.as_mut().filter(|p| p.pointer == e.pointer_id()) else {
                 return;
             };
+            if PICKING.get() {
+                if let Some(p) = slot.take().filter(|p| p.sideways) {
+                    p.settle();
+                }
+                return;
+            }
             let x = f64::from(e.client_x());
             let (dx, dy) = (x - p.x0, f64::from(e.client_y()) - p.y0);
             p.trail.push((e.time_stamp(), x));

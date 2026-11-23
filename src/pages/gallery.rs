@@ -1,7 +1,8 @@
 //! The gallery at `/`, for the search in `?q=`: pages of results laid out by
 //! `logic::layout`, more of them as the end comes near, and only the tiles
 //! near the screen on the page. It remembers where it was in each search and
-//! goes back there.
+//! goes back there. Tiles are picked for a mass edit one at a time, or by
+//! dragging across them (`drag_select.rs`).
 
 use std::cell::{Cell, RefCell};
 use std::collections::HashSet;
@@ -22,6 +23,7 @@ use starbooru_core::color::{NAMED_COLORS, to_hex};
 use starbooru_core::{Post, TagCorrection, parse_query};
 
 use super::bulk::BulkBar;
+use super::drag_select::DragSelect;
 use super::post_menu::PostPress;
 use super::query_error_text;
 use super::saved::{self, SaveToggle, SavedList};
@@ -405,6 +407,9 @@ pub fn Gallery() -> impl IntoView {
         let loaded: Vec<i64> = posts.with_untracked(|p| p.iter().map(|p| p.id).collect());
         selection.update(|s| s.toggle(&loaded, id, shift));
     });
+    // The tile a drag across the grid started on, kept on the page however
+    // far the drag scrolls (`drag_select.rs`).
+    let pinned = RwSignal::new(None::<usize>);
 
     // The part of the grid near the screen, a quarter of a screen at a time.
     let check_near = move |force: bool| {
@@ -840,7 +845,12 @@ pub fn Gallery() -> impl IntoView {
     let shown = Memo::new(move |_| {
         let Grid { tile, gap, .. } = grid.get();
         let (from, to) = near.get();
-        let indices = tiles.with(|t| t.within(tile, gap, from, to));
+        let mut indices = tiles.with(|t| t.within(tile, gap, from, to));
+        if let Some(index) = pinned.get()
+            && let Err(at) = indices.binary_search(&index)
+        {
+            indices.insert(at, index);
+        }
         posts.with(|p| {
             indices
                 .into_iter()
@@ -1092,6 +1102,15 @@ pub fn Gallery() -> impl IntoView {
         </div>
         <ToTop selecting=selecting />
         <DropToUpload />
+        <DragSelect
+            masonry=masonry
+            posts=posts
+            tiles=tiles
+            grid=grid
+            selecting=selecting
+            selection=selection
+            pinned=pinned
+        />
         <PostPress
             find=find
             on_open=open

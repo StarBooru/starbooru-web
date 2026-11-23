@@ -3,6 +3,7 @@
 pub mod admin;
 pub mod boorus;
 mod bulk;
+mod drag_select;
 pub mod duplicates;
 pub mod explore;
 pub mod gallery;

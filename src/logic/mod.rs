@@ -4,6 +4,7 @@ pub mod address;
 pub mod admin;
 pub mod boorus;
 pub mod bulk;
+pub mod drag_select;
 pub mod duplicates;
 pub mod editor;
 pub mod explore;

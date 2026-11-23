@@ -45,7 +45,7 @@ src/
                   other sites
   logic/        pure Rust with unit tests: server addresses, the gallery's lists and layout, zoom, the viewer's
                   tags, people, details and file names, the word at the caret, the tag editor's text and who may edit,
-                  the gallery's selection and the mass edit it sends, the posts opened lately, the booru browser's sites, addresses and
+                  the gallery's selection, picking by dragging and the mass edit it sends, the posts opened lately, the booru browser's sites, addresses and
                   results, the library import's text, the media editor's crop, turns and trim, share links'
                   lifetimes, the days a picked end date takes, addresses and expiry text, reverse search's copy to
                   send and how each site gets it, Settings' accent, lists and password checks, swipes, and the
@@ -73,7 +73,7 @@ Component CSS uses only the role variables, never a literal colour. The navigati
 ## How it works
 
 - **Media.** `<img>` and `<video>` load signed `/media` URLs directly, so the browser cache does the caching. The server rounds their expiry to 6-hour buckets, so a URL stays the same, and cached, that long.
-- **Long lists.** Only the tiles within a screen and a half of the view are in the DOM. A tile shows its post's main colour until the thumbnail arrives.
+- **Long lists.** Only the tiles within a screen and a half of the view are in the DOM. A tile shows its post's main colour until the thumbnail arrives. A drag across tiles to pick them finds the tile under the pointer from the layout, by its place in the list, so tiles that scroll out of the DOM stay in the range. The tile the drag started on stays in the DOM until it ends, as a finger's events go to it.
 - **Motion.** CSS transitions and the Web Animations API. View Transitions where the browser has them, with a plain fallback. Everything heavy goes quiet under `prefers-reduced-motion` and the battery saver.
 - **Uploads.** `Client::upload_file` sends files in chunks and resends a failed one. The queue lives in a signal at the root, so it keeps going while the user moves between pages.
 - **Explore.** A private booru has no Trending or Popular tags, and every instance counts as private until the server reports a mode, so Explore shows the posts added on this day in earlier years and random picks. It asks for a one-day window, as only the two missing sections read it. While it's open, the top bar's search box narrows it (`?q=`) instead of searching the gallery.
