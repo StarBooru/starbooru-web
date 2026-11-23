@@ -1,6 +1,6 @@
 # Roadmap
 
-_Status as of 2026-11-23: sections 1 to 3 are done: the app does everything the first StarBooru app did. Section 4 (polish) is next. Scope comes from starbooru-server's `docs/checklist.md`, and sections 5 to 9 from the owner's list of 2026-11-23. Items marked (server) wait for starbooru-server, whose `docs/roadmap.md` has its side._
+_Status as of 2026-11-24: sections 1 to 3, 6 and 9 are done, and all of 5 to 7 that the app can do alone. Section 8 (polish) is set aside for now. Next: section 10 (updates), then 4 and 5, each with its server side first. Scope comes from starbooru-server's `docs/checklist.md`, and sections 4 to 10 from the owner's lists of 2026-11-23. Items marked (server) need starbooru-server, whose `docs/roadmap.md` has its side._
 
 ## 1. Foundation
 
@@ -31,12 +31,12 @@ _Status as of 2026-11-23: sections 1 to 3 are done: the app does everything the 
 
 ## 4. Private and public booru
 
-An instance runs in one of two modes: private, as today, or public, open to other people with their own accounts.
+An instance runs in one of two modes: private, as today, or public, open to other people with their own accounts. In public mode, people without an account can browse everything, read-only.
 
 Switching:
 
 - [ ] A switch between the two modes in Administration (server)
-- [ ] Switching is destructive, so it first offers a backup made for the switch, on by default (server)
+- [ ] Switching is destructive, so it first offers a backup made for the switch, on by default (server). A preview shows what the new mode doesn't use; that is deleted
 
 Private mode:
 
@@ -50,10 +50,12 @@ Public mode:
 - [ ] A forum, in Upload's place in the navigation (server)
 - [ ] Votes on tags (server)
 - [ ] No Boorus side in Explore, and no way to turn it on (server)
+- [ ] Trending and Popular tags back in Explore (server)
+- [ ] Browsing without an account, read-only (server)
 
 Both modes:
 
-- [ ] Share links set up to suit each mode (server)
+- [ ] Share links set up to suit each mode: in public mode a post is shared by its own address, in private mode by a share link as today (server)
 - [ ] A tag blacklist in Settings (server)
 - [ ] An optional home page that can be turned on or off and customised. The default, in StarBooru's look, has the logo above a search bar, over a moving background of the most popular posts rated safe (server)
 
@@ -84,6 +86,8 @@ Both modes:
 
 ## 8. Polish
 
+Set aside for now (owner, 2026-11-23).
+
 - [ ] Smooth on a Raspberry Pi 4 in Chromium and Firefox
 - [ ] Effects (automatic, full, reduced) and battery saver
 - [ ] English and Italian, complete
@@ -91,6 +95,12 @@ Both modes:
 ## 9. Install
 
 - [x] Installable as a progressive web app in Chrome, a web app in Firefox and a Safari web app
+
+## 10. Updates
+
+- [ ] Administrators see when a new StarBooru is out, with what's new, as a message in the app (server)
+- [ ] Update from the app: the server updates itself, then the app reloads on the new version (server)
+- [ ] Automatic updates, an option in Administration (server)
 
 ## Ideas
 
