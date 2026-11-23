@@ -114,6 +114,7 @@ settings-server-version = Versione del server
 settings-sign-out = Esci
 settings-library = Raccolta
 settings-trash-note = Ripristina o elimina definitivamente i post
+settings-dup-note = Trova i post simili e tieni la copia migliore
 
 ## Gallery
 
@@ -298,6 +299,55 @@ trash-purged =
 trash-empty = Svuota il cestino
 trash-empty-confirm = Eliminare tutto definitivamente?
 sure = Sicuro?
+
+## Duplicati
+
+dup-matching = Somiglianza
+dup-strict = Rigida
+dup-normal = Normale
+dup-loose = Ampia
+dup-lead = Post che si somigliano, prima i più simili. Tieni la copia migliore e le altre finiscono nel cestino.
+dup-unhashed =
+    { $count ->
+        [one] 1 post non può ancora essere confrontato: non ha una miniatura o la sua impronta è in calcolo.
+       *[other] { $count } post non possono ancora essere confrontati: non hanno una miniatura o la loro impronta è in calcolo.
+    }
+dup-none = Nessun duplicato trovato
+dup-none-try-loose = Prova la somiglianza Ampia per trovare le copie modificate.
+dup-none-loose = Qui niente si somiglia.
+dup-groups =
+    { $count ->
+        [one] 1 gruppo
+       *[other] { $count } gruppi
+    }
+posts-count =
+    { $count ->
+        [one] 1 post
+       *[other] { $count } post
+    }
+dup-some-of = { $shown } di { $count } post
+dup-keep-which = Post da tenere
+dup-merge = Copia i loro tag sul post tenuto
+dup-dismiss = Non sono duplicati
+dup-resolve =
+    { $count ->
+        [one] Tienine uno, cestina l'altro
+       *[other] Tienine uno, cestina gli altri { $count }
+    }
+dup-unknown-size = Dimensioni sconosciute
+dup-keep = Tieni
+dup-identical = Identici
+dup-nearly-identical = Quasi identici
+dup-very-similar = Molto simili
+dup-similar = Simili
+tags-count =
+    { $count ->
+        [one] 1 tag
+       *[other] { $count } tag
+    }
+dup-added = Aggiunto il { $date }
+dup-post = #{ $id }
+dup-unmerge-failed = Non è stato possibile togliere i tag copiati dal post #{ $id }: { $reason }
 
 ## Viewer
 

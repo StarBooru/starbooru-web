@@ -2,6 +2,7 @@
 
 pub mod boorus;
 mod bulk;
+pub mod duplicates;
 pub mod explore;
 pub mod gallery;
 pub mod help;

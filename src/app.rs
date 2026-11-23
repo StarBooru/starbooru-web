@@ -9,6 +9,7 @@ use crate::components::snackbar::Snackbar;
 use crate::i18n;
 use crate::pages::NotFound;
 use crate::pages::boorus::{BooruPost, Boorus};
+use crate::pages::duplicates::Duplicates;
 use crate::pages::explore::Explore;
 use crate::pages::gallery::Gallery;
 use crate::pages::help::Help;
@@ -81,7 +82,7 @@ fn AppRoutes() -> impl IntoView {
                 <Route path=path!("/boorus/post") view=BooruPost />
                 <Route path=path!("/settings") view=SettingsSoon />
                 <Route path=path!("/trash") view=Trash />
-                <Route path=path!("/duplicates") view=|| view! { <Soon title=|| t!("dup-title") /> } />
+                <Route path=path!("/duplicates") view=Duplicates />
                 <Route path=path!("/help") view=Help />
                 <Route path=path!("/admin") view=|| view! { <Soon title=|| t!("admin-title") /> } />
             </ParentRoute>
@@ -301,6 +302,7 @@ mod tests {
             ("post", include_str!("../style/pages/post.css")),
             ("editor", include_str!("../style/pages/editor.css")),
             ("help", include_str!("../style/pages/help.css")),
+            ("duplicates", include_str!("../style/pages/duplicates.css")),
         ] {
             // A colour worked out from the tokens is fine: `oklch(from var(--x) …)`,
             // or the strength meter's `oklch(var(--meter-l) …)`.

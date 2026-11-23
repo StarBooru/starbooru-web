@@ -1,6 +1,6 @@
 # Roadmap
 
-_Status as of 2026-11-23: sections 1 and 2 are done; section 3 is under way (other boorus, people, the editor). Scope comes from starbooru-server's `docs/checklist.md`; the target is everything the reference web app did._
+_Status as of 2026-11-23: sections 1 and 2 are done; section 3 is under way (other boorus, people, the editor, duplicates). Scope comes from starbooru-server's `docs/checklist.md`; the target is everything the reference web app did._
 
 ## 1. Foundation
 
@@ -23,7 +23,7 @@ _Status as of 2026-11-23: sections 1 and 2 are done; section 3 is under way (oth
 - [x] Other boorus and library imports
 - [x] People in a post (figures)
 - [x] Image and video editor
-- [ ] Duplicate finder
+- [x] Duplicate finder
 - [ ] Share links and the public share page (`/s/:token`)
 - [ ] Settings: theme, accent, language, sessions, password, API keys
 - [ ] Administration: overview, accounts, server, AI, backups

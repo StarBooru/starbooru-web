@@ -114,6 +114,7 @@ settings-server-version = Server version
 settings-sign-out = Sign out
 settings-library = Library
 settings-trash-note = Restore or permanently delete posts
+settings-dup-note = Find posts that look alike and keep the best copy
 
 ## Gallery
 
@@ -298,6 +299,55 @@ trash-purged =
 trash-empty = Empty recycle bin
 trash-empty-confirm = Delete everything for good?
 sure = Sure?
+
+## Duplicates
+
+dup-matching = Matching
+dup-strict = Strict
+dup-normal = Normal
+dup-loose = Loose
+dup-lead = Posts that look alike, closest matches first. Keep the best copy and the others go to the recycle bin.
+dup-unhashed =
+    { $count ->
+        [one] 1 post can't be compared yet: it has no thumbnail, or is still being fingerprinted.
+       *[other] { $count } posts can't be compared yet: they have no thumbnail, or are still being fingerprinted.
+    }
+dup-none = No duplicates found
+dup-none-try-loose = Try Loose matching to catch edited copies.
+dup-none-loose = Nothing here looks alike.
+dup-groups =
+    { $count ->
+        [one] 1 group
+       *[other] { $count } groups
+    }
+posts-count =
+    { $count ->
+        [one] 1 post
+       *[other] { $count } posts
+    }
+dup-some-of = { $shown } of { $count } posts
+dup-keep-which = Post to keep
+dup-merge = Copy their tags to the kept post
+dup-dismiss = Not duplicates
+dup-resolve =
+    { $count ->
+        [one] Keep one, bin the other
+       *[other] Keep one, bin { $count } others
+    }
+dup-unknown-size = Unknown size
+dup-keep = Keep
+dup-identical = Look identical
+dup-nearly-identical = Nearly identical
+dup-very-similar = Very similar
+dup-similar = Similar
+tags-count =
+    { $count ->
+        [one] 1 tag
+       *[other] { $count } tags
+    }
+dup-added = Added { $date }
+dup-post = #{ $id }
+dup-unmerge-failed = Couldn't take the copied tags off post #{ $id }: { $reason }
 
 ## Viewer
 

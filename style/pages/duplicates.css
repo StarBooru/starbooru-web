@@ -1,0 +1,41 @@
+/* The duplicate finder (pages/duplicates.rs): the matching levels, and each
+   group as a card of copies, the one to keep picked out with a ring. */
+
+.duplicates .page-head { margin-bottom: 8px; }
+.duplicates .page-head .page-title { margin: 0; }
+.duplicates .lead { margin-bottom: 16px; }
+.dup-count { margin: 0 0 12px; font-size: 14px; }
+.dup-groups { display: grid; gap: 16px; }
+.dup-group .card-title { margin-bottom: 12px; }
+.dup-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
+.dup-head .muted { font-size: 14px; }
+.dup-items { display: grid; grid-template-columns: repeat(auto-fill, minmax(168px, 1fr)); gap: 12px; }
+.dup-item { display: grid; align-content: start; gap: 6px; min-width: 0; }
+.dup-pick { display: block; cursor: pointer; border-radius: var(--radius-m); }
+.dup-pick .thumb { outline: 3px solid transparent; outline-offset: 2px; transition: outline-color var(--fast) var(--ease); }
+.dup-item.on .dup-pick .thumb { outline-color: var(--primary); }
+.dup-pick:has(input:focus-visible) .thumb { outline-color: var(--on-surface); }
+.keep-badge {
+  position: absolute; left: 8px; top: 8px; display: inline-flex; align-items: center; gap: 4px;
+  padding: 2px 8px 2px 6px; border-radius: 999px; font-size: 12px; font-weight: 600;
+  background: var(--primary); color: var(--on-primary);
+  animation: pop-in var(--fast) var(--ease-spring);
+}
+.dup-meta { display: grid; font-size: 13px; line-height: 1.4; min-width: 0; overflow-wrap: anywhere; }
+.dup-dims { font-weight: 600; }
+.dup-open { color: var(--primary); text-decoration: none; justify-self: start; }
+.dup-open:hover { text-decoration: underline; }
+.dup-group .field-error { margin-top: 12px; }
+.dup-actions { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; margin-top: 16px; }
+.dup-buttons { display: flex; flex-wrap: wrap; gap: 8px; margin-left: auto; }
+
+@media (max-width: 520px) {
+  .dup-items { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+  .dup-buttons { width: 100%; }
+  .dup-buttons .btn { flex: 1 1 auto; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .dup-pick .thumb { transition: none; }
+  .keep-badge { animation: none; }
+}

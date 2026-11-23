@@ -50,9 +50,10 @@ fn SoonCard() -> impl IntoView {
 }
 
 /// `/settings` until it's built: the account, with a way to sign out, as the
-/// reference's Settings had at its foot, the way to the recycle bin from its
-/// Library card, and under that the import of a whole library from another
-/// booru, unless the server is set never to reach other sites.
+/// reference's Settings had at its foot, the ways to the recycle bin and the
+/// duplicate finder from its Library card, and under that the import of a
+/// whole library from another booru, unless the server is set never to reach
+/// other sites.
 #[component]
 pub fn SettingsSoon() -> impl IntoView {
     let info = LocalResource::new(api::server_info);
@@ -106,6 +107,11 @@ pub fn SettingsSoon() -> impl IntoView {
                     <Ico icon=Icon::Delete />
                     <span>{move || t!("trash-title")}</span>
                     <span class="muted">{move || t!("settings-trash-note")}</span>
+                </a>
+                <a class="list-link" href=route::DUPLICATES>
+                    <Ico icon=Icon::Copy />
+                    <span>{move || t!("dup-title")}</span>
+                    <span class="muted">{move || t!("settings-dup-note")}</span>
                 </a>
             </section>
             {library_import}

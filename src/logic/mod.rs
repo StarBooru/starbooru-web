@@ -3,6 +3,7 @@
 pub mod address;
 pub mod boorus;
 pub mod bulk;
+pub mod duplicates;
 pub mod editor;
 pub mod explore;
 pub mod gallery;

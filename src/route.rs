@@ -191,6 +191,8 @@ pub const UPLOAD: &str = "/upload";
 pub const HELP: &str = "/help";
 /// The recycle bin.
 pub const TRASH: &str = "/trash";
+/// The duplicate finder.
+pub const DUPLICATES: &str = "/duplicates";
 
 #[cfg(test)]
 mod tests {
