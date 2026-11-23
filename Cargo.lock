@@ -2339,7 +2339,7 @@ dependencies = [
 
 [[package]]
 name = "starbooru-web"
-version = "0.18.1"
+version = "0.23.0"
 dependencies = [
  "bytes",
  "chrono",
