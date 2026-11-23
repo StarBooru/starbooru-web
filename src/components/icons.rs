@@ -66,7 +66,6 @@ pub enum Icon {
     StarOutline,
     ThumbDown,
     ThumbUp,
-    TrendingUp,
     /// Settings.
     Tune,
     Undo,
@@ -234,7 +233,6 @@ impl Icon {
             Icon::ThumbUp => Shape::Fill(
                 "M21 8q.8 0 1.4.6T23 10v2q0 .175-.038.375t-.112.375l-3 7.05q-.225.5-.75.85T18 21h-8q-.825 0-1.412-.587T8 19V8.825q0-.4.163-.762t.437-.638l5.425-5.4q.375-.35.888-.425t.987.175t.688.7t.087.925L15.55 8zM4 21q-.825 0-1.412-.587T2 19v-9q0-.825.588-1.412T4 8t1.413.588T6 10v9q0 .825-.587 1.413T4 21",
             ),
-            Icon::TrendingUp => Shape::Stroke("3", "m3 16l6.5-6.5L14 14l6.5-6.5M17 7h4v4"),
             Icon::Tune => Shape::Fill(
                 "M11.288 20.713Q11 20.425 11 20v-4q0-.425.288-.712T12 15t.713.288T13 16v1h7q.425 0 .713.288T21 18t-.288.713T20 19h-7v1q0 .425-.288.713T12 21t-.712-.288M4 19q-.425 0-.712-.288T3 18t.288-.712T4 17h4q.425 0 .713.288T9 18t-.288.713T8 19zm3.288-4.288Q7 14.425 7 14v-1H4q-.425 0-.712-.288T3 12t.288-.712T4 11h3v-1q0-.425.288-.712T8 9t.713.288T9 10v4q0 .425-.288.713T8 15t-.712-.288M12 13q-.425 0-.712-.288T11 12t.288-.712T12 11h8q.425 0 .713.288T21 12t-.288.713T20 13zm3.288-4.288Q15 8.425 15 8V4q0-.425.288-.712T16 3t.713.288T17 4v1h3q.425 0 .713.288T21 6t-.288.713T20 7h-3v1q0 .425-.288.713T16 9t-.712-.288M4 7q-.425 0-.712-.288T3 6t.288-.712T4 5h8q.425 0 .713.288T13 6t-.288.713T12 7z",
             ),
@@ -291,7 +289,7 @@ pub fn Ico(icon: Icon, #[prop(default = 24)] size: u32) -> impl IntoView {
 mod tests {
     use super::*;
 
-    const ALL: [Icon; 54] = [
+    const ALL: [Icon; 53] = [
         Icon::Add,
         Icon::ArrowBack,
         Icon::Article,
@@ -340,7 +338,6 @@ mod tests {
         Icon::StarOutline,
         Icon::ThumbDown,
         Icon::ThumbUp,
-        Icon::TrendingUp,
         Icon::Tune,
         Icon::Undo,
         Icon::Upload,

@@ -368,29 +368,10 @@ bulk-done-skipped = { $done }; { $skipped }.
 
 ## Esplora
 
-explore-window = Tendenze di
-explore-today = Oggi
-explore-week = Settimana
-explore-month = Mese
-explore-year = Anno
-explore-phrase-today = oggi
-explore-phrase-week = questa settimana
-explore-phrase-month = questo mese
-explore-phrase-year = quest'anno
-explore-phrase-days = { $count ->
-        [one] nell'ultimo giorno
-       *[other] negli ultimi { $count } giorni
-    }
 explore-nothing = Ancora niente da esplorare
-explore-nothing-body = Carica immagini o video e i migliori compariranno qui.
+explore-nothing-body = Carica immagini o video e compariranno qui.
 explore-everything = Esplora tutto
 nothing-matches = Nessun risultato per “{ $query }”.
-explore-trending = Di tendenza
-explore-no-upvotes = Nessun voto positivo { $when }. Vota i post che ti piacciono e compariranno qui.
-explore-popular-tags = Tag popolari
-explore-tags-note = sui post aggiunti { $when }
-explore-no-tags = Nessun post con tag aggiunto { $when }.
-explore-added = Post aggiunti { $when }
 explore-on-this-day = Accadde oggi
 explore-no-memories = Nessun post aggiunto in questa data negli anni passati.
 explore-years-ago = { $count ->

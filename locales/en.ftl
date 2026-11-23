@@ -368,29 +368,10 @@ bulk-done-skipped = { $done }; { $skipped }.
 
 ## Explore
 
-explore-window = Trending over
-explore-today = Today
-explore-week = Week
-explore-month = Month
-explore-year = Year
-explore-phrase-today = today
-explore-phrase-week = this week
-explore-phrase-month = this month
-explore-phrase-year = this year
-explore-phrase-days = { $count ->
-        [one] in the last day
-       *[other] in the last { $count } days
-    }
 explore-nothing = Nothing to explore yet
-explore-nothing-body = Upload images or videos, and the best of them show up here.
+explore-nothing-body = Upload images or videos, and they show up here.
 explore-everything = Explore everything
 nothing-matches = Nothing matches “{ $query }”.
-explore-trending = Trending
-explore-no-upvotes = No upvotes { $when }. Vote on posts you like and they show up here.
-explore-popular-tags = Popular tags
-explore-tags-note = on posts added { $when }
-explore-no-tags = No tagged posts were added { $when }.
-explore-added = Posts added { $when }
 explore-on-this-day = On this day
 explore-no-memories = Nothing was added on this date in earlier years.
 explore-years-ago = { $count ->

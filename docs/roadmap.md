@@ -41,7 +41,7 @@ Switching:
 Private mode:
 
 - [ ] Scores as likes and dislikes by default, or 0 to 5 stars as an option (server)
-- [ ] Explore without Trending and Popular tags
+- [x] Explore without Trending and Popular tags
 
 Public mode:
 

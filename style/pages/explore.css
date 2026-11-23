@@ -1,6 +1,5 @@
-/* Explore (pages/explore.rs): the window and the filter in the header, then
-   one section after another, each a grid of the gallery's tiles or a row of
-   tag chips. */
+/* Explore (pages/explore.rs): the sides and the filter in the header, then
+   one section after another, each a grid of the gallery's tiles. */
 
 .explore .page-head { margin-bottom: 8px; }
 .explore .page-head .page-title { margin: 0; }
@@ -44,7 +43,6 @@
 .section-head { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 12px; }
 .section-head h2 { margin: 0; font-size: 18px; font-weight: 600; }
 .section-head > .icon { color: var(--primary); }
-.section-head > .muted { font-size: 14px; }
 .section-head .btn { margin-left: auto; }
 
 /* The tiles of a section, square, as many to a row as fit. */
@@ -52,9 +50,6 @@
   display: grid; gap: var(--tile-gap);
   grid-template-columns: repeat(auto-fill, minmax(min(168px, 30vw), 1fr));
 }
-.chip.trend { gap: 8px; }
-.trend-count { font-size: 12px; font-weight: 700; color: var(--primary); font-variant-numeric: tabular-nums; }
-.chip.trend:hover .trend-count { color: inherit; }
 /* The year a post on this day was added, on its tile. */
 .memory { position: relative; }
 .memory-year {
@@ -64,6 +59,5 @@
 }
 
 @media (max-width: 760px) {
-  .explore .segmented { flex: 1 1 auto; }
   .explore-filter { flex-basis: 100%; margin-left: 0; }
 }
