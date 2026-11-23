@@ -9,6 +9,8 @@ pub enum Icon {
     ArrowBack,
     Article,
     ArrowUp,
+    /// The posts added on this day.
+    Calendar,
     Check,
     ChevronLeft,
     ChevronRight,
@@ -31,7 +33,7 @@ pub enum Icon {
     Gallery,
     GitHub,
     Help,
-    /// A file that was already uploaded.
+    /// A file that was already uploaded, and the posts opened lately.
     History,
     /// A tag.
     Label,
@@ -95,6 +97,10 @@ impl Icon {
             Icon::ArrowUp => Shape::Stroke("3", "M12 20V5m-6.657 6.657L12 5l6.657 6.657"),
             Icon::Article => Shape::Fill(
                 "M12 8.5a1.5 1.5 0 0 0 1.5 1.5H20v10a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h6zM9 16a1 1 0 1 0 0 2h6a1 1 0 1 0 0-2zm0-4a1 1 0 1 0 0 2h1a1 1 0 1 0 0-2zm5-9.956a2 2 0 0 1 1 .542L19.414 7a2 2 0 0 1 .541 1H14z",
+            ),
+            // MingCute calendar_2_fill.
+            Icon::Calendar => Shape::Fill(
+                "M17 5h2c.641.026 1.229.293 1.614.819.257.351.369.751.386 1.181v12c-.046 1.146-.854 1.954-2 2H5c-.535-.022-1.03-.202-1.414-.586S3.022 19.535 3 19V7c.022-.535.202-1.03.586-1.414S4.465 5.022 5 5h2V4a1.04 1.04 0 0 1 .22-.625c.51-.637 1.568-.401 1.754.396L9 4v1h6V4a1.04 1.04 0 0 1 .22-.625c.51-.637 1.568-.401 1.754.396L17 4Zm-1 11c-1.429.155-1.23 2.004.01 2 1.048-.004 1.383-1.437.44-1.898-.118-.058-.317-.116-.45-.102m-4 0c-1.429.155-1.23 2.004.01 2 1.048-.004 1.383-1.437.44-1.898-.118-.058-.317-.116-.45-.102m-4 0c-1.429.155-1.23 2.004.01 2 1.048-.004 1.383-1.437.44-1.898-.118-.058-.317-.116-.45-.102m8-4c-1.429.155-1.23 2.004.01 2 1.048-.004 1.383-1.437.44-1.898-.118-.058-.317-.116-.45-.102m-4 0c-1.429.155-1.23 2.004.01 2 1.048-.004 1.383-1.437.44-1.898-.118-.058-.317-.116-.45-.102m-4 0c-1.429.155-1.23 2.004.01 2 1.048-.004 1.383-1.437.44-1.898-.118-.058-.317-.116-.45-.102M5 7v2h14V7Z",
             ),
             Icon::Check => Shape::EvenOdd(
                 "M21.546 5.112a1.5 1.5 0 0 1 0 2.121L10.232 18.547a1.5 1.5 0 0 1-2.121 0L2.454 12.89a1.5 1.5 0 1 1 2.121-2.121l4.596 4.596L19.424 5.112a1.5 1.5 0 0 1 2.122 0",
@@ -295,11 +301,12 @@ pub fn Ico(icon: Icon, #[prop(default = 24)] size: u32) -> impl IntoView {
 mod tests {
     use super::*;
 
-    const ALL: [Icon; 54] = [
+    const ALL: [Icon; 55] = [
         Icon::Add,
         Icon::ArrowBack,
         Icon::Article,
         Icon::ArrowUp,
+        Icon::Calendar,
         Icon::Check,
         Icon::ChevronLeft,
         Icon::ChevronRight,

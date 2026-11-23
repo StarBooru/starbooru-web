@@ -8,6 +8,7 @@ pub mod duplicates;
 pub mod editor;
 pub mod explore;
 pub mod gallery;
+pub mod history;
 pub mod jobs;
 pub mod layout;
 pub mod legal;

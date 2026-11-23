@@ -1,9 +1,10 @@
 //! The viewer at `/post/:id?q=…&seed=…`: the post on its stage, the bar of
 //! what can be done with it, and its tags and details beside or below.
-//! Previous and next walk the gallery's results for the same search. The
-//! tags card turns into the tag editor in place, and the people card (shown
-//! while People are on in Settings) into theirs; the media editor opens over
-//! the whole window.
+//! Previous and next walk the gallery's results for the same search. Each
+//! post that loads goes first in the history Explore lists. The tags card
+//! turns into the tag editor in place, and the people card (shown while
+//! People are on in Settings) into theirs; the media editor opens over the
+//! whole window.
 
 mod edit;
 mod editor;
@@ -362,11 +363,22 @@ pub fn PostView() -> impl IntoView {
             }
             match result {
                 Ok(p) => {
+                    // Explore lists what was opened, as long as it's live.
+                    if p.deleted {
+                        store::forget_opened(&[id]);
+                    } else {
+                        store::opened_post(id);
+                    }
                     let p = Arc::new(p);
                     keep(Arc::clone(&p));
                     post.set(Some(p));
                 }
-                Err(failure) => problem.set(Some(failure)),
+                Err(failure) => {
+                    if failure.missing {
+                        store::forget_opened(&[id]);
+                    }
+                    problem.set(Some(failure));
+                }
             }
         });
         ask_neighbours(id);

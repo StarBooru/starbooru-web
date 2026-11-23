@@ -32,7 +32,7 @@ src/
   route.rs      the navigation's tabs, which tab a path is under, search addresses
   api.rs        the shared Client, api::call (a 401 signs out), errors in words
   oidc.rs       sign-in through the identity provider, and linking it to the account, away and back to /oidc
-  store.rs      session and preferences in localStorage
+  store.rs      session, preferences, the gallery's place in each search and the posts opened, in localStorage
   theme.rs      the browser's bar colour (theme-color) from the seed hue, and the hue of a picked accent
   power.rs      the battery saver: data-saver on the root, from the setting, the battery and data saver
   pace.rs       the effects: data-effects on the root, from the setting or from frame times while scrolling
@@ -44,7 +44,7 @@ src/
                   the button that asks "Sure?", the links to the legal pages
   logic/        pure Rust with unit tests: server addresses, the gallery's lists and layout, zoom, the viewer's
                   tags, people, details and file names, the word at the caret, the tag editor's text and who may edit,
-                  the gallery's selection and the mass edit it sends, the booru browser's sites, addresses and
+                  the gallery's selection and the mass edit it sends, the posts opened lately, the booru browser's sites, addresses and
                   results, the library import's text, the media editor's crop, turns and trim, share links'
                   lifetimes, the days a picked end date takes, addresses and expiry text, Settings' accent, lists
                   and password checks, swipes, and the administration's limits, chart, form checks and AI requests
@@ -75,6 +75,7 @@ Component CSS uses only the role variables, never a literal colour. The navigati
 - **Motion.** CSS transitions and the Web Animations API. View Transitions where the browser has them, with a plain fallback. Everything heavy goes quiet under `prefers-reduced-motion` and the battery saver.
 - **Uploads.** `Client::upload_file` sends files in chunks and resends a failed one. The queue lives in a signal at the root, so it keeps going while the user moves between pages.
 - **Explore.** A private booru has no Trending or Popular tags, and every instance counts as private until the server reports a mode, so Explore shows the posts added on this day in earlier years and random picks. It asks for a one-day window, as only the two missing sections read it. While it's open, the top bar's search box narrows it (`?q=`) instead of searching the gallery.
+- **Recently viewed.** Each post the viewer loads, previous and next included, goes first in a list of up to 60 ids kept in the store under the account's owner key; booru posts and share pages don't count, and signing out empties it. Explore shows it first, 12 at a time. The API has no way to fetch several posts by id (the search syntax has no `id:` term), so each tile is a `GET /posts/{id}`, all sent at once. Posts that come back missing or in the recycle bin leave the list quietly. A search can't narrow a list of ids, so the section steps aside while `?q=` is set. Clear empties it, with Undo in the snackbar.
 - **Other boorus.** The server searches them (`/remote/search`), keeps the accounts and relays the pictures a site won't serve to other pages. The browser keeps the last results for a few hours while the tab is open, and saving a post queues an import on the server.
 - **Share link end dates.** The server takes a link's lifetime in whole days from when it makes it. A day picked on the calendar becomes the days from now to the end of that day on the browser's clock, rounded up, so the link ends on the day after, at the time of day it was made.
 

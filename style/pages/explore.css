@@ -1,6 +1,6 @@
 /* Explore (pages/explore.rs): the sides in the header, then one section
-   after another, each a grid of the gallery's tiles. The top bar's search
-   narrows it. */
+   after another, each a grid of the gallery's tiles, the posts opened
+   lately first. The top bar's search narrows it. */
 
 .explore .page-head { margin-bottom: 8px; }
 .explore .page-head .page-title { margin: 0; }
@@ -36,6 +36,21 @@
 .section-head h2 { margin: 0; font-size: 18px; font-weight: 600; }
 .section-head > .icon { color: var(--primary); }
 .section-head .btn { margin-left: auto; }
+
+/* The posts opened lately. Cleared, the section folds up as it fades, and
+   what was under it rises into its place; Undo unfolds it. */
+.recent {
+  display: grid; grid-template-rows: 1fr;
+  transition: grid-template-rows var(--med) var(--ease), opacity var(--med) var(--ease), margin-top var(--med) var(--ease);
+}
+.recent-body { min-height: 0; }
+.recent-body > .banner { margin-bottom: 12px; }
+.recent.leaving { grid-template-rows: 0fr; opacity: 0; margin-top: 0; pointer-events: none; }
+.recent.leaving > .recent-body { overflow: hidden; }
+.app[data-effects="lite"] .recent { transition: none; }
+.recent-more { display: flex; justify-content: center; margin-top: 12px; }
+/* A post still on its way holds its place. */
+.thumb.waiting { animation: pulse 1.6s var(--ease) infinite; }
 
 /* The tiles of a section, square, as many to a row as fit. */
 .grid {

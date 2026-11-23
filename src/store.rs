@@ -5,7 +5,8 @@
 //! ```json
 //! { "session": { "server": "…", "token": "…", "user": { … } } | null,
 //!   "prefs": { "theme": "system", "accent_hue": 285, … },
-//!   "memory": { "owner": "server|user id", "spots": [{ "q": "cat", … }] } }
+//!   "memory": { "owner": "server|user id", "spots": [{ "q": "cat", … }] },
+//!   "history": { "owner": "server|user id", "posts": [12, 7] } }
 //! ```
 //!
 //! Reading never fails: a field this version can't read takes its default, and
@@ -21,7 +22,7 @@ use starbooru_core::color::Rgb;
 use starbooru_core::{AuthResponse, User};
 
 use crate::i18n::Lang;
-use crate::logic::address;
+use crate::logic::{address, history};
 
 /// The signed-in account. Sign-in fills it in.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -389,6 +390,76 @@ impl GalleryMemory {
     }
 }
 
+/// The posts this account opened in the viewer, the latest first
+/// (`logic::history`).
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct History {
+    owner: String,
+    #[serde(deserialize_with = "lenient_ids")]
+    posts: Vec<i64>,
+}
+
+/// What clearing the history took, for its Undo.
+#[derive(Clone, Debug, PartialEq)]
+pub struct Cleared {
+    owner: String,
+    posts: Vec<i64>,
+}
+
+impl History {
+    /// This account's history, or a fresh one for an account it isn't.
+    fn for_owner(&mut self, owner: &str) -> &mut Self {
+        if self.owner != owner {
+            *self = Self {
+                owner: owner.to_owned(),
+                posts: Vec::new(),
+            };
+        }
+        self
+    }
+
+    fn open(&mut self, owner: &str, id: i64) -> bool {
+        history::open(&mut self.for_owner(owner).posts, id)
+    }
+
+    fn posts(&self, owner: &str) -> Vec<i64> {
+        if self.owner == owner {
+            self.posts.clone()
+        } else {
+            Vec::new()
+        }
+    }
+
+    fn forget(&mut self, owner: &str, gone: &[i64]) -> bool {
+        self.owner == owner && history::drop_ids(&mut self.posts, gone)
+    }
+
+    fn clear(&mut self, owner: &str) -> Cleared {
+        let posts = if self.owner == owner {
+            std::mem::take(&mut self.posts)
+        } else {
+            Vec::new()
+        };
+        Cleared {
+            owner: owner.to_owned(),
+            posts,
+        }
+    }
+
+    /// Undoes `cleared` for the account it was cleared for.
+    fn put_back(&mut self, owner: &str, cleared: &Cleared) -> bool {
+        if cleared.owner != owner || cleared.posts.is_empty() {
+            return false;
+        }
+        let history = self.for_owner(owner);
+        let posts = history::put_back(&history.posts, &cleared.posts);
+        let changed = posts != history.posts;
+        history.posts = posts;
+        changed
+    }
+}
+
 /// Everything under the storage key.
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
 #[serde(default)]
@@ -401,6 +472,8 @@ struct Stored {
     prefs: Prefs,
     #[serde(deserialize_with = "lenient")]
     memory: GalleryMemory,
+    #[serde(deserialize_with = "lenient")]
+    history: History,
     /// What else the reference kept here, written back untouched.
     #[serde(flatten)]
     other: Map<String, Value>,
@@ -424,6 +497,16 @@ where
 {
     let value = Value::deserialize(d)?;
     Ok(bool::deserialize(value).unwrap_or(true))
+}
+
+/// The post ids in a list, leaving out what isn't one.
+fn lenient_ids<'de, D>(d: D) -> Result<Vec<i64>, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    let value = Value::deserialize(d)?;
+    let items = value.as_array().map(Vec::as_slice).unwrap_or_default();
+    Ok(history::tidy(items.iter().filter_map(Value::as_i64)))
 }
 
 /// A hue, or the default one when the value is no hue at all.
@@ -453,6 +536,7 @@ thread_local! {
     static SESSION: ArcRwSignal<Option<Session>> = ArcRwSignal::new(None);
     static PREFS: ArcRwSignal<Prefs> = ArcRwSignal::new(Prefs::default());
     static MEMORY: ArcRwSignal<GalleryMemory> = ArcRwSignal::new(GalleryMemory::default());
+    static HISTORY: ArcRwSignal<History> = ArcRwSignal::new(History::default());
     static OTHER: RefCell<Map<String, Value>> = RefCell::new(Map::new());
     static SIGN_IN_NOTE: RefCell<Option<String>> = const { RefCell::new(None) };
     /// The state as this tab and the browser's storage last agreed on it, to
@@ -467,6 +551,7 @@ pub fn load() {
     SESSION.with(|s| s.set(stored.session.clone()));
     PREFS.with(|p| p.set(stored.prefs.clone()));
     MEMORY.with(|m| m.set(stored.memory.clone()));
+    HISTORY.with(|h| h.set(stored.history.clone()));
     OTHER.with_borrow_mut(|o| o.clone_from(&stored.other));
     SYNCED.with_borrow_mut(|s| *s = stored);
     backend::watch(take_in);
@@ -478,6 +563,7 @@ fn current() -> Stored {
         session: SESSION.with(|s| s.get_untracked()),
         prefs: PREFS.with(|p| p.get_untracked()),
         memory: MEMORY.with(|m| m.get_untracked()),
+        history: HISTORY.with(|h| h.get_untracked()),
         other: OTHER.with_borrow(Clone::clone),
     }
 }
@@ -494,6 +580,7 @@ fn merge(synced: &Stored, ours: Stored, theirs: Stored) -> Stored {
         session: pick(&synced.session, ours.session, theirs.session),
         prefs: pick(&synced.prefs, ours.prefs, theirs.prefs),
         memory: pick(&synced.memory, ours.memory, theirs.memory),
+        history: pick(&synced.history, ours.history, theirs.history),
         other: pick(&synced.other, ours.other, theirs.other),
     }
 }
@@ -523,11 +610,17 @@ fn take(stored: Stored) {
         session,
         prefs,
         memory,
+        history,
         other,
     } = stored;
     OTHER.with_borrow_mut(|o| {
         if *o != other {
             *o = other;
+        }
+    });
+    HISTORY.with(|h| {
+        if h.with_untracked(|h| *h != history) {
+            h.set(history);
         }
     });
     PREFS.with(|p| {
@@ -644,8 +737,10 @@ pub fn sign_out() {
             let _ = client.logout().await;
         });
     }
-    // Where the gallery was in each search belongs to this account.
+    // Where the gallery was in each search, and the posts opened, belong to
+    // this account.
     MEMORY.with(|m| m.set(GalleryMemory::default()));
+    HISTORY.with(|h| h.set(History::default()));
     forget_session();
 }
 
@@ -732,6 +827,66 @@ pub fn last_search() -> String {
 pub fn last_search_untracked() -> String {
     let owner = owner();
     MEMORY.with(|m| m.with_untracked(|m| m.last_search(&owner)))
+}
+
+/// Changes the history for the account signed in, and saves it if `change`
+/// says it changed.
+fn update_history(change: impl FnOnce(&mut History, &str) -> bool) {
+    let owner = owner();
+    let mut changed = false;
+    HISTORY.with(|h| {
+        h.maybe_update(|h| {
+            changed = change(h, &owner);
+            changed
+        });
+    });
+    if changed {
+        save();
+    }
+}
+
+/// The viewer opened post `id`: it leads the history.
+pub fn opened_post(id: i64) {
+    update_history(|h, owner| h.open(owner, id));
+}
+
+/// The posts this account opened lately, the latest first.
+pub fn opened_posts() -> Vec<i64> {
+    let owner = owner();
+    HISTORY.with(|h| h.with_untracked(|h| h.posts(&owner)))
+}
+
+/// Takes posts that are gone, or in the recycle bin, out of the history.
+pub fn forget_opened(gone: &[i64]) {
+    if !gone.is_empty() {
+        update_history(|h, owner| h.forget(owner, gone));
+    }
+}
+
+/// Empties the history, giving back what it held for an Undo.
+pub fn clear_opened() -> Cleared {
+    let mut cleared = None;
+    update_history(|h, owner| {
+        let taken = h.clear(owner);
+        let changed = !taken.posts.is_empty();
+        cleared = Some(taken);
+        changed
+    });
+    cleared.unwrap_or_else(|| Cleared {
+        owner: owner(),
+        posts: Vec::new(),
+    })
+}
+
+/// Undoes a clear, unless someone else has signed in since. The history as
+/// it is now, or `None` when it wasn't put back.
+pub fn put_back_opened(cleared: &Cleared) -> Option<Vec<i64>> {
+    let mut back = false;
+    update_history(|h, owner| {
+        back = cleared.owner == owner;
+        h.put_back(owner, cleared)
+    });
+    back.then(opened_posts)
 }
 
 #[cfg(target_arch = "wasm32")]
@@ -865,6 +1020,10 @@ mod tests {
                     count: 120,
                 }],
             },
+            history: History {
+                owner: "https://booru.example|7".into(),
+                posts: vec![12, 7, 3],
+            },
             other: Map::new(),
         };
         let json = to_json(&stored).unwrap();
@@ -879,6 +1038,7 @@ mod tests {
         // The reference's name, so its setting carries over.
         assert_eq!(value["prefs"]["originals"], true);
         assert_eq!(value["memory"]["spots"][0]["post"], 12);
+        assert_eq!(value["history"]["posts"], serde_json::json!([12, 7, 3]));
         // The reference's names, and no empty account written back.
         assert_eq!(value["prefs"]["booru_sites"][1], "e926");
         assert_eq!(value["prefs"]["booru_dedupe"], false);
@@ -1288,6 +1448,109 @@ mod tests {
             parse(r#"{"memory":"odd"}"#).memory,
             GalleryMemory::default()
         );
+    }
+
+    #[test]
+    fn state_without_history_still_loads() {
+        // Stored before there was a history.
+        let stored = parse(
+            r#"{"session":null,"prefs":{"theme":"dark"},
+                "memory":{"owner":"x|1","spots":[{"q":"cat"}]}}"#,
+        );
+        assert_eq!(stored.history, History::default());
+        assert_eq!(stored.prefs.theme, Theme::Dark);
+        assert_eq!(stored.memory.last_search("x|1"), "cat");
+        // Odd values cost only themselves.
+        for odd in [r#""x""#, "[1,2]", "null", r#"{"owner":5}"#] {
+            let stored = parse(&format!(
+                r#"{{"history":{odd},"prefs":{{"theme":"light"}}}}"#
+            ));
+            assert_eq!(stored.history, History::default(), "{odd}");
+            assert_eq!(stored.prefs.theme, Theme::Light);
+        }
+        // A list with odd entries keeps the ids in it, each once.
+        let stored = parse(r#"{"history":{"owner":"x|1","posts":[3,"7",3,-1,2.5,2]}}"#);
+        assert_eq!(stored.history.posts("x|1"), [3, 2]);
+        let stored = parse(r#"{"history":{"owner":"x|1","posts":"3"}}"#);
+        assert_eq!(stored.history.posts("x|1"), Vec::<i64>::new());
+    }
+
+    #[test]
+    fn one_account_never_sees_what_another_opened() {
+        let mut history = History::default();
+        assert!(history.open("a|1", 4));
+        assert!(history.open("a|1", 9));
+        assert_eq!(history.posts("a|1"), [9, 4]);
+        assert_eq!(history.posts("a|2"), Vec::<i64>::new());
+        assert_eq!(history.posts(""), Vec::<i64>::new());
+        // Another account can't drop or clear this one's.
+        assert!(!history.forget("a|2", &[9]));
+        assert_eq!(history.clear("a|2").posts, Vec::<i64>::new());
+        assert_eq!(history.posts("a|1"), [9, 4]);
+        // Another account starts again.
+        assert!(history.open("a|2", 5));
+        assert_eq!(history.posts("a|1"), Vec::<i64>::new());
+        assert_eq!(history.posts("a|2"), [5]);
+    }
+
+    #[test]
+    fn a_cleared_history_comes_back_only_for_its_account() {
+        let mut history = History::default();
+        history.open("a|1", 1);
+        history.open("a|1", 2);
+        let cleared = history.clear("a|1");
+        assert_eq!(history.posts("a|1"), Vec::<i64>::new());
+        // Opened since: it leads.
+        history.open("a|1", 3);
+        assert!(history.put_back("a|1", &cleared));
+        assert_eq!(history.posts("a|1"), [3, 2, 1]);
+        assert!(
+            !history.put_back("a|1", &cleared),
+            "nothing more to put back"
+        );
+        // Someone else signed in meanwhile.
+        let cleared = history.clear("a|1");
+        assert!(!history.put_back("a|2", &cleared));
+        assert_eq!(history.posts("a|1"), Vec::<i64>::new());
+        assert_eq!(history.posts("a|2"), Vec::<i64>::new());
+    }
+
+    #[test]
+    fn gone_posts_leave_the_history() {
+        let mut history = History::default();
+        for id in [1, 2, 3] {
+            history.open("a|1", id);
+        }
+        assert!(history.forget("a|1", &[2]));
+        assert_eq!(history.posts("a|1"), [3, 1]);
+        assert!(!history.forget("a|1", &[2]));
+    }
+
+    #[test]
+    fn signing_out_forgets_the_posts_opened() {
+        // An address no client is made for, so signing out has no server
+        // to tell.
+        SESSION.with(|s| {
+            s.set(Some(Session {
+                server: "not an address".into(),
+                ..session("t1")
+            }));
+        });
+        opened_post(5);
+        opened_post(8);
+        opened_post(5);
+        assert_eq!(opened_posts(), [5, 8]);
+        let cleared = clear_opened();
+        assert_eq!(opened_posts(), Vec::<i64>::new());
+        assert_eq!(put_back_opened(&cleared), Some(vec![5, 8]));
+        forget_opened(&[8]);
+        assert_eq!(opened_posts(), [5]);
+        sign_out();
+        assert_eq!(HISTORY.with(|h| h.get_untracked()), History::default());
+        assert_eq!(opened_posts(), Vec::<i64>::new());
+        // An Undo that comes after signing out puts nothing back.
+        assert_eq!(put_back_opened(&cleared), None);
+        assert_eq!(HISTORY.with(|h| h.get_untracked()), History::default());
     }
 
     #[test]

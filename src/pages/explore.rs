@@ -1,12 +1,17 @@
-//! Explore at `/explore?q=…`: posts added on this day in earlier years and
-//! random picks, both narrowed by `q`, which the top bar's search box sets
-//! while Explore is open (`shell.rs`). A private booru has no Trending or
-//! Popular tags, and until the server reports a mode every instance is
-//! private, so neither shows. An older link's `days` is ignored.
+//! Explore at `/explore?q=…`: the posts opened lately, posts added on this
+//! day in earlier years and random picks. The last two are narrowed by `q`,
+//! which the top bar's search box sets while Explore is open (`shell.rs`);
+//! the server can't narrow a list of posts by id, so the history steps aside
+//! while a search is on. A private booru has no Trending or Popular tags,
+//! and until the server reports a mode every instance is private, so neither
+//! shows. An older link's `days` is ignored.
 
+use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
+use std::time::Duration;
 
 use chrono::Utc;
+use futures_util::future::join_all;
 use leptos::prelude::*;
 use leptos::task::spawn_local;
 use leptos_router::hooks::use_query_map;
@@ -14,13 +19,17 @@ use starbooru_core::{Explore as Found, Post, TagCorrection};
 
 use super::post_menu::PostPress;
 use super::{boorus, post};
-use crate::api;
 use crate::components::banner::{CorrectionBanner, ErrorBanner, Spinner};
 use crate::components::icons::{Ico, Icon};
+use crate::components::snackbar::notify_undo;
 use crate::components::thumb::Thumb;
 use crate::logic::explore::{DAYS, RANDOM_COUNT, random_query, tidy, year_added, years_ago};
+use crate::logic::history::{SHOWN, to_fetch};
 use crate::logic::layout::Place;
-use crate::route;
+use crate::{api, dom, power, route, store};
+
+/// How long the history takes to fold away once cleared: `--med`.
+const LEAVE_MS: u64 = 250;
 
 thread_local! {
     // Where Explore was last, and whether on its boorus side, for the
@@ -85,6 +94,33 @@ impl From<Found> for Sections {
             on_this_day: arcs(f.on_this_day),
             random: arcs(f.random),
             corrected: f.corrected,
+        }
+    }
+}
+
+/// The posts opened lately, as far as they have come.
+#[derive(Clone, Default)]
+struct Recent {
+    /// The history as it was when the page opened, less the posts found
+    /// gone or in the recycle bin.
+    ids: Vec<i64>,
+    /// How many of them the section shows.
+    wanted: usize,
+    posts: HashMap<i64, Arc<Post>>,
+}
+
+/// A place in the history's grid: a post, or one still on its way.
+#[derive(Clone)]
+enum Spot {
+    Post(Arc<Post>),
+    Waiting(i64),
+}
+
+impl Spot {
+    fn key(&self) -> (i64, bool) {
+        match self {
+            Spot::Post(p) => (p.id, true),
+            Spot::Waiting(id) => (*id, false),
         }
     }
 }
@@ -167,11 +203,126 @@ pub fn Explore() -> impl IntoView {
         });
     };
 
-    // The post a right-clicked tile stands for, in either section.
+    // The posts opened lately. They stay while the page does, so a search
+    // that hides them and is cleared again asks for none of them twice.
+    let recent = RwSignal::new(Recent {
+        ids: store::opened_posts(),
+        wanted: SHOWN,
+        posts: HashMap::new(),
+    });
+    let recent_busy = RwSignal::new(false);
+    let recent_error = RwSignal::new(None::<String>);
+    // Cleared, and folding away.
+    let leaving = RwSignal::new(false);
+
+    // Asks for the shown posts that haven't come, one request each, all at
+    // once. Posts gone or in the bin leave the history quietly, and the next
+    // ones take their places.
+    let fetch_recent = move || {
+        if recent_busy.try_get_untracked() != Some(false) {
+            return;
+        }
+        recent_busy.try_set(true);
+        recent_error.try_set(None);
+        spawn_local(async move {
+            let mut failed = HashSet::new();
+            let mut problem = None;
+            loop {
+                let Some(asking) = recent.try_with_untracked(|r| {
+                    to_fetch(&r.ids, r.wanted, |id| {
+                        r.posts.contains_key(&id) || failed.contains(&id)
+                    })
+                }) else {
+                    return;
+                };
+                if asking.is_empty() {
+                    break;
+                }
+                let answers = join_all(
+                    asking
+                        .iter()
+                        .map(|&id| api::fetch(move |c| async move { c.post(id).await })),
+                )
+                .await;
+                let mut gone = Vec::new();
+                let mut came = Vec::new();
+                for (id, answer) in asking.into_iter().zip(answers) {
+                    match answer {
+                        Ok(p) if !p.deleted => came.push(Arc::new(p)),
+                        Ok(_) => gone.push(id),
+                        Err(f) if f.missing => gone.push(id),
+                        Err(f) => {
+                            failed.insert(id);
+                            problem.get_or_insert(f.message);
+                        }
+                    }
+                }
+                store::forget_opened(&gone);
+                let here = recent.try_update(|r| {
+                    r.ids.retain(|id| !gone.contains(id));
+                    r.posts.extend(came.into_iter().map(|p| (p.id, p)));
+                });
+                if here.is_none() {
+                    return;
+                }
+            }
+            recent_busy.try_set(false);
+            recent_error.try_set(problem);
+        });
+    };
+    // Only while no search hides them.
+    Effect::watch(
+        move || q.with(String::is_empty),
+        move |plain, _, _| {
+            if *plain {
+                fetch_recent();
+            }
+        },
+        true,
+    );
+    // The section folds away and the notice can bring it back. Without the
+    // page, Undo still puts the history back for next time.
+    let clear = move |_| {
+        if leaving.get_untracked() {
+            return;
+        }
+        let cleared = store::clear_opened();
+        leaving.set(true);
+        let ms = if dom::reduced_motion() || power::active_untracked() {
+            0
+        } else {
+            LEAVE_MS
+        };
+        set_timeout(
+            move || {
+                if leaving.try_get_untracked() == Some(true) {
+                    recent.try_update(|r| r.ids.clear());
+                    leaving.try_set(false);
+                }
+            },
+            Duration::from_millis(ms),
+        );
+        notify_undo(t!("explore-recent-cleared"), t!("press-undo"), move || {
+            let Some(ids) = store::put_back_opened(&cleared) else {
+                return;
+            };
+            leaving.try_set(false);
+            if recent.try_update(|r| r.ids = ids).is_some() {
+                fetch_recent();
+            }
+        });
+    };
+    let more = move |_| {
+        recent.update(|r| r.wanted += SHOWN);
+        fetch_recent();
+    };
+
+    // The post a right-clicked tile stands for, in any section.
     let find = Callback::new(move |id: i64| {
+        let opened = recent.with_untracked(|r| r.posts.get(&id).cloned());
         let shuffled =
-            shuffled.with_untracked(|s| s.iter().flatten().find(|p| p.id == id).cloned());
-        shuffled.or_else(|| {
+            || shuffled.with_untracked(|s| s.iter().flatten().find(|p| p.id == id).cloned());
+        opened.or_else(shuffled).or_else(|| {
             found.with_untracked(|f| {
                 let s = f.as_ref()?.as_ref().ok()?;
                 s.on_this_day
@@ -184,6 +335,92 @@ pub fn Explore() -> impl IntoView {
     });
     // The viewer shows the tile's post at once, and its Back comes here.
     let open = Callback::new(move |p: Arc<Post>| post::opening(p, String::new()));
+
+    // The shown posts in the history's order, with a place held for each
+    // one on its way.
+    let spots = move || {
+        let busy = recent_busy.get();
+        recent.with(|r| {
+            r.ids
+                .iter()
+                .take(r.wanted)
+                .filter_map(|id| match r.posts.get(id) {
+                    Some(p) => Some(Spot::Post(Arc::clone(p))),
+                    None => busy.then_some(Spot::Waiting(*id)),
+                })
+                .enumerate()
+                .collect::<Vec<_>>()
+        })
+    };
+    let history = move || {
+        view! {
+            <section
+                class="explore-section recent"
+                class:leaving=move || leaving.get()
+                aria-labelledby="recently-viewed"
+            >
+                <div class="recent-body">
+                    <div class="section-head">
+                        <Ico icon=Icon::History />
+                        <h2 id="recently-viewed">{move || t!("explore-recent")}</h2>
+                        <button
+                            type="button"
+                            class="btn text small"
+                            aria-label=move || t!("explore-recent-clear-label")
+                            disabled=move || leaving.get()
+                            on:click=clear
+                        >
+                            {move || t!("explore-recent-clear")}
+                        </button>
+                    </div>
+                    {move || {
+                        recent_error
+                            .get()
+                            .map(|message| {
+                                let retry = Callback::new(move |()| fetch_recent());
+                                view! { <ErrorBanner message=message on_retry=retry /> }
+                            })
+                    }}
+                    <div class="grid" data-press="post">
+                        <For
+                            each=spots
+                            key=|(_, spot)| spot.key()
+                            children=move |(index, spot)| match spot {
+                                Spot::Post(p) => {
+                                    let href = route::post(p.id, "", None);
+                                    let place: Option<Place> = None;
+                                    view! {
+                                        <Thumb
+                                            post=p
+                                            index=index
+                                            href=href
+                                            place=place
+                                            still=false
+                                            on_open=open
+                                        />
+                                    }
+                                        .into_any()
+                                }
+                                Spot::Waiting(_) => {
+                                    view! { <div class="thumb waiting" aria-hidden="true"></div> }
+                                        .into_any()
+                                }
+                            }
+                        />
+                    </div>
+                    <Show when=move || {
+                        !recent_busy.get() && recent.with(|r| r.ids.len() > r.wanted)
+                    }>
+                        <div class="recent-more">
+                            <button type="button" class="btn tonal" on:click=more>
+                                {move || t!("load-more")}
+                            </button>
+                        </div>
+                    </Show>
+                </div>
+            </section>
+        }
+    };
 
     let body = move || {
         let result = found.get()?;
@@ -265,7 +502,7 @@ pub fn Explore() -> impl IntoView {
         let memories = view! {
             <section class="explore-section" aria-labelledby="on-this-day">
                 <div class="section-head">
-                    <Ico icon=Icon::History />
+                    <Ico icon=Icon::Calendar />
                     <h2 id="on-this-day">{move || t!("explore-on-this-day")}</h2>
                 </div>
                 {memories}
@@ -331,6 +568,10 @@ pub fn Explore() -> impl IntoView {
                 </h1>
                 <Sides boorus=false />
             </div>
+            // First, as a post looked for again is most often one just seen.
+            <Show when=move || q.with(String::is_empty) && recent.with(|r| !r.ids.is_empty())>
+                {history}
+            </Show>
             {move || {
                 if found.with(Option::is_none) {
                     Some(
