@@ -15,6 +15,7 @@ use crate::pages::gallery::Gallery;
 use crate::pages::help::Help;
 use crate::pages::login::OidcReturn;
 use crate::pages::post::PostView;
+use crate::pages::share::SharedPage;
 use crate::pages::shell::Shell;
 use crate::pages::soon::{SettingsSoon, Soon, SoonAlone};
 use crate::pages::tags::{TagPage, Tags};
@@ -68,7 +69,7 @@ fn AppRoutes() -> impl IntoView {
         <Routes fallback=NotFound>
             // The sign-in pages, shared posts and the legal pages stand alone.
             <Route path=path!("/oidc") view=OidcReturn />
-            <Route path=path!("/s/:token") view=|| view! { <SoonAlone title=|| t!("shared-title") /> } />
+            <Route path=path!("/s/:token") view=SharedPage />
             <Route path=path!("/privacy") view=|| view! { <SoonAlone title=|| t!("privacy-title") /> } />
             <Route path=path!("/terms") view=|| view! { <SoonAlone title=|| t!("terms-title") /> } />
             <ParentRoute path=path!("") view=Shell>
@@ -286,6 +287,7 @@ mod tests {
             include_str!("../style/pages/post.css"),
             include_str!("../style/pages/editor.css"),
             include_str!("../style/pages/help.css"),
+            include_str!("../style/pages/share.css"),
         ] {
             assert!(!css.contains("-webkit-backdrop-filter"));
         }
@@ -303,6 +305,8 @@ mod tests {
             ("editor", include_str!("../style/pages/editor.css")),
             ("help", include_str!("../style/pages/help.css")),
             ("duplicates", include_str!("../style/pages/duplicates.css")),
+            ("settings", include_str!("../style/pages/settings.css")),
+            ("share", include_str!("../style/pages/share.css")),
         ] {
             // A colour worked out from the tokens is fine: `oklch(from var(--x) …)`,
             // or the strength meter's `oklch(var(--meter-l) …)`.

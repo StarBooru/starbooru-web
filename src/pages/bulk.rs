@@ -1,7 +1,8 @@
 //! Mass edits in the gallery: the bar a selection brings up at the foot of
 //! the window, with the count, select all, and what can be done to every
-//! post picked: tags and a rating from a sheet, or the recycle bin with
-//! Undo. A report follows in the snackbar, and the gallery loads again.
+//! post picked: tags and a rating from a sheet, a link to share them all, or
+//! the recycle bin with Undo. A report follows in the snackbar, and the
+//! gallery loads again.
 
 use std::sync::Arc;
 
@@ -12,6 +13,7 @@ use leptos::task::spawn_local;
 use starbooru_core::{BulkEdit, Post, Rating};
 use wasm_bindgen::JsCast;
 
+use super::share::ShareSheet;
 use super::{bad_tag_text, gallery, post, trash};
 use crate::api;
 use crate::components::icons::{Ico, Icon};
@@ -74,6 +76,8 @@ pub fn BulkBar(
     let busy = RwSignal::new(false);
     let error = RwSignal::new(None::<String>);
     let sheet = RwSignal::new(false);
+    // The posts the share sheet is open for, in the gallery's order.
+    let sharing = RwSignal::new(None::<Vec<i64>>);
     // What the sheet holds, kept while it's closed and opened again.
     let add = RwSignal::new(String::new());
     let remove = RwSignal::new(String::new());
@@ -96,6 +100,7 @@ pub fn BulkBar(
                 && !e.default_prevented()
                 && !dom::typing(e.target())
                 && sheet.try_get_untracked() == Some(false)
+                && sharing.try_with_untracked(Option::is_none) == Some(true)
             {
                 on_close.try_run(());
             }
@@ -178,6 +183,17 @@ pub fn BulkBar(
         });
         send(bulk_delete(ids), undo);
     };
+    // A link shows only live posts: any picked from the bin stay out of it.
+    let share = move || {
+        let ids = picked();
+        let live = posts.with_untracked(|p| {
+            live_ones(&ids, |id| {
+                p.iter().any(|post| post.id == id && post.deleted)
+            })
+        });
+        error.set(None);
+        sharing.set(Some(live));
+    };
 
     let idle = move || busy.get() || count.get() == 0;
     view! {
@@ -229,6 +245,18 @@ pub fn BulkBar(
             </button>
             <button
                 type="button"
+                class="btn tonal bulk-share"
+                aria-haspopup="dialog"
+                disabled=idle
+                title=move || t!("share-button")
+                aria-label=move || t!("share-button")
+                on:click=move |_| share()
+            >
+                <Ico icon=Icon::Share />
+                <span class="bulk-label">{move || t!("share-button")}</span>
+            </button>
+            <button
+                type="button"
                 class="btn tonal bulk-delete"
                 disabled=idle
                 title=move || t!("post-delete-title")
@@ -257,6 +285,15 @@ pub fn BulkBar(
                 on_close=Callback::new(move |()| sheet.set(false))
             />
         </Show>
+        {move || {
+            sharing
+                .get()
+                .map(|ids| {
+                    view! {
+                        <ShareSheet post_ids=ids on_close=Callback::new(move |()| sharing.set(None)) />
+                    }
+                })
+        }}
     }
 }
 

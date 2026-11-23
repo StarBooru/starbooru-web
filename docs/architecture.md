@@ -6,7 +6,7 @@
 
 A single-page app compiled to WebAssembly. Leptos renders it into the DOM with fine-grained signals, so a change updates only the nodes that read it, with no virtual DOM to diff. There is no server-side rendering. starbooru-server serves the built files from `STARBOORU_WEB_DIR`, at the same address as the API.
 
-The same address matters twice. The app calls the API at its own origin by default, and provider sign-in only returns to a page under `STARBOORU_PUBLIC_URL`. The API allows any origin (bearer tokens, no cookies), so `trunk serve` on another port works in development.
+The same address matters three times. The app calls the API at its own origin by default, provider sign-in only returns to a page under `STARBOORU_PUBLIC_URL`, and a share link (`/s/:token`) is opened by someone with no session at all, so that page asks the origin it was served from, with a client that has no token. The API allows any origin (bearer tokens, no cookies), so `trunk serve` on another port works in development.
 
 ## Crates
 
@@ -36,12 +36,13 @@ src/
   theme.rs      the browser's bar colour (theme-color) from the seed hue
   i18n.rs       t!() over the Fluent catalogues
   pages/        one module per page; shell.rs is the frame, soon.rs the placeholder, post/ the viewer and
-                  its media editor
+                  its media editor, share/ the share sheet, the list of links and the public /s/ page
   components/   icons, brand, snackbar, tiles, downloads, the tag box and its grip, a tag's menu
   logic/        pure Rust with unit tests: server addresses, the gallery's lists and layout, zoom, the viewer's
                   tags, details and file names, the word at the caret, the tag editor's text and who may edit,
                   the gallery's selection and the mass edit it sends, the booru browser's sites, addresses and
-                  results, the library import's text, and the media editor's crop, turns and trim
+                  results, the library import's text, the media editor's crop, turns and trim, and share links'
+                  lifetimes, addresses and expiry text
 locales/        en.ftl, it.ftl
 style/          tokens.css, base.css, shell.css, pages/<page>.css
 index.html      Trunk's entry, with the loading screen

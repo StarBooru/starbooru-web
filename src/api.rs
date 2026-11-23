@@ -134,7 +134,7 @@ where
 
 /// The server answered that there's no such thing. A 404 without its JSON
 /// is some other site at that address (`Trouble::NotAServer`).
-fn is_missing(e: &ClientError) -> bool {
+pub fn is_missing(e: &ClientError) -> bool {
     matches!(e, ClientError::Api { status: 404, error } if error.code != "http_error")
 }
 

@@ -12,6 +12,7 @@ pub mod post;
 mod post_menu;
 mod saved;
 mod search_demo;
+pub mod share;
 pub mod shell;
 pub mod soon;
 pub mod tags;

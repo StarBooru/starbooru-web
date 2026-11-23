@@ -106,8 +106,8 @@ html.sb-scrolling .thumb img { filter: none; transition: opacity var(--med) var(
   .bulk-count { flex-basis: 100%; }
   .bulk-count .btn { flex: none; margin-left: auto; }
   .bulk-bar .bulk-edit { flex: 1 1 0; }
-  .bulk-bar .bulk-delete { flex: none; width: 48px; padding: 0; }
-  .bulk-bar .bulk-delete .bulk-label { display: none; }
+  .bulk-bar :is(.bulk-share, .bulk-delete) { flex: none; width: 48px; padding: 0; }
+  .bulk-bar :is(.bulk-share, .bulk-delete) .bulk-label { display: none; }
 }
 
 /* ---------- the end of the list ---------- */

@@ -14,6 +14,7 @@ pub mod people;
 pub mod queue;
 pub mod saved;
 pub mod search;
+pub mod share;
 pub mod tags;
 pub mod upload;
 pub mod viewer;

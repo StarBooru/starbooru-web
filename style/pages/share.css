@@ -1,0 +1,92 @@
+/* Share links (src/pages/share/): the sheet that makes one, the list in
+   Settings, and the public page a link opens, with its lightbox. */
+
+/* ---------- the sheet ---------- */
+
+.share-sheet .sheet-head { margin-bottom: 4px; }
+.share-sheet .key-created { margin: 12px 0; }
+.share-sheet .key-created .field-error { margin: 0; }
+.share-sheet .select.boxed { display: block; }
+/* The lifetimes open upwards, over the title, so the sheet doesn't scroll
+   to show them. */
+.share-sheet .select-list { top: auto; bottom: calc(100% + 6px); transform-origin: bottom right; }
+
+/* ---------- the list in Settings ---------- */
+
+.session.share { align-items: flex-start; }
+.share-cover {
+  flex: none; display: grid; place-items: center; width: 56px; height: 56px; overflow: hidden;
+  border-radius: var(--radius-s); background: var(--surface-2); color: var(--on-surface-2);
+}
+.share-cover img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.session.share .key-token { flex-basis: 100%; margin-top: 4px; }
+.session.share .key-token input { padding: 6px 10px; font-size: 13px; }
+.session.share .field-error { flex-basis: 100%; }
+@media (max-width: 600px) {
+  .session.share .copy-label { display: none; }
+  .session.share .key-token .btn { width: 40px; padding: 0; justify-content: center; }
+}
+
+/* ---------- the public page ---------- */
+
+/* No bars around it: the brand at the top, the heading, then the posts. */
+.shared-page { min-height: 100vh; min-height: 100dvh; max-width: 1600px; margin: 0 auto; padding: 24px 16px 48px; }
+.shared-brand { display: flex; align-items: center; gap: 8px; margin-bottom: 20px; color: var(--primary); }
+.shared-head { margin-bottom: 16px; }
+.shared-head .page-title { margin: 0 0 4px; overflow-wrap: anywhere; }
+.shared-head p { margin: 0; overflow-wrap: anywhere; }
+.shared-until { white-space: nowrap; }
+.shared-missing { animation: fade-up var(--med) var(--ease); }
+
+/* One post: the viewer's stage (style/pages/post.css), as tall as the window
+   leaves under the heading, in a column as wide as the viewer's, so its
+   tools stay by the picture. */
+.shared-page:has(.shared-one) { max-width: 1040px; }
+.shared-one { --stage-h: max(280px, calc(100dvh - 210px)); }
+.shared-one.full-open::before { content: ""; display: block; height: var(--stage-h); }
+
+/* Several: square tiles in the link's order (style/pages/gallery.css). */
+.shared-grid {
+  display: grid; gap: var(--tile-gap);
+  grid-template-columns: repeat(auto-fill, minmax(min(168px, 30vw), 1fr));
+}
+.shared-grid .thumb { width: 100%; padding: 0; border: 0; font: inherit; cursor: zoom-in; }
+
+/* One of them over the whole window. Dark in both themes, as media looks
+   best on it; its buttons sit on the scrim, not on glass. */
+.lightbox {
+  position: fixed; inset: 0; z-index: 50; display: grid; place-items: center;
+  background: var(--stage); outline: none; animation: fade-in var(--med) var(--ease);
+}
+html:has(.lightbox) { overflow-y: hidden; }
+.lightbox-media { display: contents; }
+.lightbox img, .lightbox video {
+  max-width: 100vw; max-height: 100vh; max-height: 100dvh; object-fit: contain;
+  animation: zoom-in var(--med) var(--ease);
+}
+.lightbox-btn {
+  position: absolute; display: inline-grid; place-items: center; width: 44px; height: 44px; padding: 0; border: 0; border-radius: 999px;
+  background: var(--scrim); color: var(--on-scrim); cursor: pointer;
+  transition: transform var(--fast) var(--ease-spring);
+}
+.lightbox-btn:active { transform: scale(0.9); }
+.lightbox-btn:focus-visible { outline: 3px solid var(--primary); outline-offset: 2px; }
+.lightbox-btn.close { top: max(12px, env(safe-area-inset-top)); right: 12px; }
+.lightbox-btn.prev, .lightbox-btn.next { top: calc(50% - 22px); }
+.lightbox-btn.prev { left: 12px; }
+.lightbox-btn.next { right: 12px; }
+.lightbox-count {
+  position: absolute; bottom: max(12px, env(safe-area-inset-bottom)); left: 50%; transform: translateX(-50%);
+  padding: 4px 12px; border-radius: 999px; background: var(--scrim); color: var(--on-scrim);
+  font-size: 13px; font-weight: 600; font-variant-numeric: tabular-nums;
+}
+
+@media (max-width: 760px) {
+  .shared-page { padding: 16px 8px 32px; }
+  .shared-one { --stage-h: clamp(240px, 58dvh, 760px); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .lightbox, .lightbox img, .lightbox video, .shared-missing { animation: none; }
+  .lightbox-btn { transition: none; }
+}

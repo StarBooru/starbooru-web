@@ -1,8 +1,24 @@
-/* Settings (src/pages/soon.rs until the page is built) and its import of a
-   whole library from another booru (src/pages/library.rs). */
+/* Settings (src/pages/soon.rs until the page is built), its lists of
+   sessions, keys and links, and its import of a whole library from another
+   booru (src/pages/library.rs). */
 
 .sessions { list-style: none; margin: 0 0 12px; padding: 0; }
+.session { display: flex; align-items: center; gap: 12px; padding: 12px 0; }
+.session + .session { border-top: 1px solid oklch(from var(--outline) l c h / 0.4); }
+.session-main { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; flex: 1; min-width: 0; }
+.session-main .muted { flex-basis: 100%; font-size: 14px; }
+.session-main .pill { background: var(--primary-container); color: var(--on-primary-container); }
+.session-main .pill.bad { background: var(--danger-container); color: var(--on-danger-container); }
 .key-form { margin-top: 4px; padding-top: 16px; border-top: 1px solid oklch(from var(--outline) l c h / 0.4); }
+/* A new key or link, in a field to select, with its copy button. */
+.key-created { display: grid; justify-content: stretch; gap: 10px; margin-bottom: 12px; }
+.key-token { display: flex; gap: 8px; align-items: center; min-width: 0; }
+.key-token input {
+  flex: 1; width: 0; min-width: 0; padding: 10px 12px; border: 1px solid var(--outline); border-radius: var(--radius-s);
+  background: var(--surface); color: var(--on-surface); font: 14px ui-monospace, "Cascadia Code", "Roboto Mono", monospace;
+}
+.key-token input:focus { outline: none; border-color: var(--primary); box-shadow: 0 0 0 3px oklch(from var(--primary) l c h / 0.25); }
+.key-token .btn { flex: none; }
 
 .library-form { display: grid; gap: 12px; margin-top: 16px; }
 .library-form .hint { margin: 0; }

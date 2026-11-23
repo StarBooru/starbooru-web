@@ -159,7 +159,9 @@ pub fn Stage(
     #[prop(into)]
     editing: Signal<bool>,
     on_step: Callback<bool>,
-    on_back: Callback<()>,
+    /// Where Back and Escape lead. A shared post has nowhere to go back to.
+    #[prop(optional)]
+    on_back: Option<Callback<()>>,
     /// `E` opens the tag editor.
     on_edit: Callback<()>,
 ) -> impl IntoView {
@@ -362,7 +364,10 @@ pub fn Stage(
                     "e" | "E" if !full.get_untracked() => on_edit.run(()),
                     "f" | "F" => set_full(!full.get_untracked()),
                     "Escape" if full.get_untracked() => set_full(false),
-                    "Escape" => on_back.run(()),
+                    "Escape" => match on_back {
+                        Some(back) => back.run(()),
+                        None => return,
+                    },
                     _ => return,
                 }
                 e.prevent_default();
@@ -635,15 +640,20 @@ pub fn Stage(
         >
             <canvas class="stage-glow" aria-hidden="true"></canvas>
             {media}
-            <button
-                type="button"
-                class="stage-btn stage-back glass float"
-                title=move || t!("post-back")
-                aria-label=move || t!("post-back")
-                on:click=move |_| on_back.run(())
-            >
-                <Ico icon=Icon::ArrowBack />
-            </button>
+            {on_back
+                .map(|back| {
+                    view! {
+                        <button
+                            type="button"
+                            class="stage-btn stage-back glass float"
+                            title=move || t!("post-back")
+                            aria-label=move || t!("post-back")
+                            on:click=move |_| back.run(())
+                        >
+                            <Ico icon=Icon::ArrowBack />
+                        </button>
+                    }
+                })}
             <Show when=move || !first.get()>
                 <button
                     type="button"

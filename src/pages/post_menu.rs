@@ -1,9 +1,9 @@
 //! The menu a right-clicked tile opens, on any page that lists posts as
 //! `Thumb`s under `data-press="post"`: open the post here or in a new tab,
-//! like it, download it and, in the gallery, select it for a mass edit or
-//! move it to the recycle bin. A long press on a phone opens it too where the
-//! browser reports one as a right click, and so do Shift+F10 and the menu key
-//! on a focused tile.
+//! like it, share it, download it and, in the gallery, select it for a mass
+//! edit or move it to the recycle bin. A long press on a phone opens it too
+//! where the browser reports one as a right click, and so do Shift+F10 and
+//! the menu key on a focused tile.
 
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -17,6 +17,7 @@ use starbooru_core::Post;
 use wasm_bindgen::JsCast;
 use web_sys::MouseEvent;
 
+use super::share::ShareSheet;
 use super::{gallery, trash};
 use crate::api;
 use crate::components::download;
@@ -61,6 +62,8 @@ pub fn PostPress(
     #[prop(optional)] on_voted: Option<Callback<Arc<Post>>>,
 ) -> impl IntoView {
     let open = RwSignal::new(None::<Open>);
+    // The post the share sheet is open for.
+    let sharing = RwSignal::new(None::<i64>);
     // Votes cast from here. The lists the tiles come from aren't asked for
     // again, and the menu should still say which way the next press goes.
     let votes = StoredValue::new(HashMap::<i64, i16>::new());
@@ -134,7 +137,7 @@ pub fn PostPress(
         });
     });
 
-    move || {
+    let menu = move || {
         let Open { post, href, at } = open.get()?;
         let liked = post.my_vote > 0;
         let (here, there) = (Arc::clone(&post), href.clone());
@@ -164,6 +167,19 @@ pub fn PostPress(
                 />
             }
         });
+        // The server shares nothing from the recycle bin.
+        let share = (!post.deleted).then(|| {
+            view! {
+                <MenuItem
+                    icon=Icon::Share
+                    label=move || t!("share-button")
+                    on_click=Callback::new(move |()| {
+                        open.set(None);
+                        sharing.set(Some(id));
+                    })
+                />
+            }
+        });
         Some(view! {
             <ActionMenu at=at title=t!("post-alt", id = id) on_close=close>
                 <MenuItem
@@ -185,6 +201,7 @@ pub fn PostPress(
                     on_click=Callback::new(move |()| like.run(Arc::clone(&voted)))
                 />
                 {select}
+                {share}
                 <MenuItem
                     icon=Icon::Download
                     label=move || t!("post-download")
@@ -196,6 +213,17 @@ pub fn PostPress(
                 {delete}
             </ActionMenu>
         })
+    };
+    let sheet = move || {
+        sharing.get().map(|id| {
+            view! {
+                <ShareSheet post_ids=vec![id] on_close=Callback::new(move |()| sharing.set(None)) />
+            }
+        })
+    };
+    view! {
+        {menu}
+        {sheet}
     }
 }
 

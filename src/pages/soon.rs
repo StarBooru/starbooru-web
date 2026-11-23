@@ -4,6 +4,7 @@
 use leptos::prelude::*;
 
 use super::library::LibraryImportCard;
+use super::share::SharesCard;
 use crate::api;
 use crate::components::brand::Mark;
 use crate::components::icons::{Ico, Icon};
@@ -53,7 +54,7 @@ fn SoonCard() -> impl IntoView {
 /// reference's Settings had at its foot, the ways to the recycle bin and the
 /// duplicate finder from its Library card, and under that the import of a
 /// whole library from another booru, unless the server is set never to reach
-/// other sites.
+/// other sites. The shared links come after the account.
 #[component]
 pub fn SettingsSoon() -> impl IntoView {
     let info = LocalResource::new(api::server_info);
@@ -98,6 +99,8 @@ pub fn SettingsSoon() -> impl IntoView {
             }
         })
     };
+    // Where the reference's Settings had them, after the account.
+    let shares = move || store::signed_in().then(|| view! { <SharesCard /> });
     view! {
         <div class="page narrow">
             <h1 class="page-title break">{move || t!("nav-settings")}</h1>
@@ -116,6 +119,7 @@ pub fn SettingsSoon() -> impl IntoView {
             </section>
             {library_import}
             {account}
+            {shares}
             <SoonCard />
         </div>
     }

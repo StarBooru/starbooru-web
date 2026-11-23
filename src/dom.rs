@@ -3,8 +3,8 @@
 //! watcher comes back as a [`Watch`] to stop when its page goes.
 
 use send_wrapper::SendWrapper;
-use wasm_bindgen::JsCast;
 use wasm_bindgen::closure::Closure;
+use wasm_bindgen::{JsCast, JsValue};
 use web_sys::{Element, IntersectionObserverEntry, ScrollBehavior, ScrollToOptions};
 
 /// A watcher to stop. It can go into `on_cleanup`, which wants `Send`, as the
@@ -328,6 +328,83 @@ pub fn root_class(name: &str, on: bool) {
     {
         let _ = root.class_list().toggle_with_force(name, on);
     }
+}
+
+/// Puts `text` on the clipboard. A page on plain http, other than on this
+/// computer, has no clipboard API, and the old way still works there.
+pub async fn copy_text(text: &str) -> bool {
+    let Some(window) = web_sys::window() else {
+        return false;
+    };
+    let navigator = window.navigator();
+    let api = js_sys::Reflect::get(&navigator, &JsValue::from_str("clipboard"))
+        .is_ok_and(|c| !c.is_undefined() && !c.is_null());
+    if api {
+        let promise = navigator.clipboard().write_text(text);
+        if wasm_bindgen_futures::JsFuture::from(promise).await.is_ok() {
+            return true;
+        }
+    }
+    copy_by_selection(text).unwrap_or(false)
+}
+
+fn copy_by_selection(text: &str) -> Option<bool> {
+    let doc = web_sys::window()?.document()?;
+    let field = doc
+        .create_element("textarea")
+        .ok()?
+        .dyn_into::<web_sys::HtmlTextAreaElement>()
+        .ok()?;
+    field.set_value(text);
+    let _ = field.set_attribute("style", "position: fixed; opacity: 0");
+    doc.body()?.append_child(&field).ok()?;
+    field.select();
+    let done = doc
+        .dyn_ref::<web_sys::HtmlDocument>()
+        .and_then(|d| d.exec_command("copy").ok());
+    field.remove();
+    done
+}
+
+/// The browser's own share sheet (`navigator.share`), where it has one: on
+/// phones and some desktops, and only on https.
+fn share_api() -> Option<(web_sys::Navigator, js_sys::Function)> {
+    let navigator = web_sys::window()?.navigator();
+    let share = js_sys::Reflect::get(&navigator, &JsValue::from_str("share")).ok()?;
+    let share = share.dyn_into::<js_sys::Function>().ok()?;
+    Some((navigator, share))
+}
+
+/// Whether the browser has a share sheet of its own.
+pub fn can_share() -> bool {
+    share_api().is_some()
+}
+
+/// Opens the browser's share sheet for `url`. Closing it without sharing
+/// rejects the promise, which is ignored like any other refusal.
+pub async fn share(title: &str, url: &str) {
+    let Some((navigator, share)) = share_api() else {
+        return;
+    };
+    let data = js_sys::Object::new();
+    let _ = js_sys::Reflect::set(&data, &JsValue::from_str("url"), &JsValue::from_str(url));
+    if !title.is_empty() {
+        let _ = js_sys::Reflect::set(
+            &data,
+            &JsValue::from_str("title"),
+            &JsValue::from_str(title),
+        );
+    }
+    if let Ok(answer) = share.call1(&navigator, &data)
+        && let Ok(promise) = answer.dyn_into::<js_sys::Promise>()
+    {
+        let _ = wasm_bindgen_futures::JsFuture::from(promise).await;
+    }
+}
+
+/// The page's own origin, `https://host[:port]`.
+pub fn origin() -> Option<String> {
+    web_sys::window()?.location().origin().ok()
 }
 
 /// The browser puts a page back where it was on Back by itself, which would

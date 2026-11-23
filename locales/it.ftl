@@ -59,7 +59,6 @@ trash-title = Cestino
 dup-title = Trova duplicati
 help-title = Guida alla ricerca
 admin-title = Amministrazione
-shared-title = Post condivisi
 privacy-title = Informativa sulla privacy
 terms-title = Termini di servizio
 
@@ -877,3 +876,84 @@ ago-hours =
     }
 ago-yesterday = ieri
 ago-days = { $count } giorni fa
+
+## Share links
+
+share-title =
+    { $count ->
+        [one] Condividi questo post
+       *[other] Condividi { $count } post
+    }
+share-lead =
+    { $count ->
+        [one] Chi ha il link può vedere questo post senza un account. Tag, voti e i tuoi dati restano nascosti.
+       *[other] Chi ha il link può vedere questi post senza un account. Tag, voti e i tuoi dati restano nascosti.
+    }
+share-name = Titolo (facoltativo)
+share-name-placeholder = es. Foto delle vacanze
+share-lifetime = Il link funziona per
+share-until-removed = Finché non lo rimuovi
+share-days =
+    { $count ->
+        [one] 1 giorno
+       *[other] { $count } giorni
+    }
+share-create = Crea link
+share-ready = Link pronto. Chiunque lo abbia può aprirlo.
+share-link = Link di condivisione
+share-copy = Copia link
+share-copied = Copiato
+share-copy-failed = Non è stato possibile copiare il link. È selezionato: copialo dalla tastiera o dal menu.
+share-native = Condividi con…
+share-done = Fatto
+share-close = Chiudi
+share-posts =
+    { $count ->
+        [one] 1 post
+       *[other] { $count } post
+    }
+share-error-none = Scegli almeno un post da condividere.
+share-error-many = Un link può contenere al massimo { $max } post.
+share-error-title-long = Il titolo può avere al massimo { $max } caratteri.
+share-error-title-control = Il titolo non può contenere tabulazioni o a capo.
+share-error-days = Un link funziona da 1 a { $max } giorni, o finché non lo rimuovi.
+shares-title = Link condivisi
+shares-lead = I link creati con Condividi. Rimuoverne uno lo disattiva; un file già aperto da qualcuno può continuare a caricarsi per qualche ora.
+shares-none = Ancora nessun link. Usa Condividi su un post, o seleziona dei post nella galleria.
+shares-untitled = Link senza titolo
+shares-made = Creato { $when }
+shares-views =
+    { $count ->
+        [0] Mai aperto
+        [one] Aperto una volta
+       *[other] Aperto { $count } volte
+    }
+shares-expired = Scaduto
+shares-no-expiry = Non scade
+shares-expired-on = Scaduto il { $date }
+shares-expires-on = Scade il { $date }
+shares-expires-minutes =
+    { $count ->
+        [one] Scade tra 1 minuto
+       *[other] Scade tra { $count } minuti
+    }
+shares-expires-hours =
+    { $count ->
+        [one] Scade tra 1 ora
+       *[other] Scade tra { $count } ore
+    }
+shares-expires-days =
+    { $count ->
+        [one] Scade tra 1 giorno
+       *[other] Scade tra { $count } giorni
+    }
+shares-delete = Rimuovi link
+shares-delete-named = Rimuovi il link { $name }
+shared-missing-title = Questo link non funziona
+shared-missing-body = Potrebbe essere scaduto, o chi l'ha condiviso l'ha rimosso.
+shared-from = Condiviso da { $server }
+shared-until = disponibile fino al { $date }
+shared-empty = Qui non c'è più niente.
+shared-open = Elemento { $n }
+shared-previous = Precedente
+shared-next = Successivo

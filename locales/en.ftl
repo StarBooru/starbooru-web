@@ -59,7 +59,6 @@ trash-title = Recycle bin
 dup-title = Duplicate finder
 help-title = Search cheat sheet
 admin-title = Administration
-shared-title = Shared posts
 privacy-title = Privacy Policy
 terms-title = Terms of Service
 
@@ -868,3 +867,84 @@ ago-hours =
     }
 ago-yesterday = yesterday
 ago-days = { $count } days ago
+
+## Share links
+
+share-title =
+    { $count ->
+        [one] Share this post
+       *[other] Share { $count } posts
+    }
+share-lead =
+    { $count ->
+        [one] Anyone with the link can see this post without an account. Its tags, votes and details about you stay hidden.
+       *[other] Anyone with the link can see these posts without an account. Their tags, votes and details about you stay hidden.
+    }
+share-name = Title (optional)
+share-name-placeholder = e.g. Holiday photos
+share-lifetime = Link works for
+share-until-removed = Until removed
+share-days =
+    { $count ->
+        [one] 1 day
+       *[other] { $count } days
+    }
+share-create = Create link
+share-ready = Link ready. Anyone who has it can open it.
+share-link = Share link
+share-copy = Copy link
+share-copied = Copied
+share-copy-failed = Couldn't copy the link. It's selected, so copy it from your keyboard or menu.
+share-native = Share via…
+share-done = Done
+share-close = Close
+share-posts =
+    { $count ->
+        [one] 1 post
+       *[other] { $count } posts
+    }
+share-error-none = Pick at least one post to share.
+share-error-many = A link can hold at most { $max } posts.
+share-error-title-long = The title can be at most { $max } characters.
+share-error-title-control = The title can't contain tabs or line breaks.
+share-error-days = A link works for 1 to { $max } days, or until removed.
+shares-title = Shared links
+shares-lead = Links you made with Share. Removing one stops it working; a file someone already opened can keep loading for a few hours.
+shares-none = No links yet. Use Share on a post, or select posts in the gallery.
+shares-untitled = Untitled link
+shares-made = Made { $when }
+shares-views =
+    { $count ->
+        [0] Never opened
+        [one] Opened once
+       *[other] Opened { $count } times
+    }
+shares-expired = Expired
+shares-no-expiry = Never expires
+shares-expired-on = Expired { $date }
+shares-expires-on = Expires { $date }
+shares-expires-minutes =
+    { $count ->
+        [one] Expires in 1 minute
+       *[other] Expires in { $count } minutes
+    }
+shares-expires-hours =
+    { $count ->
+        [one] Expires in 1 hour
+       *[other] Expires in { $count } hours
+    }
+shares-expires-days =
+    { $count ->
+        [one] Expires in 1 day
+       *[other] Expires in { $count } days
+    }
+shares-delete = Remove link
+shares-delete-named = Remove the link { $name }
+shared-missing-title = This link doesn't work
+shared-missing-body = It may have expired, or the person who shared it removed it.
+shared-from = Shared from { $server }
+shared-until = available until { $date }
+shared-empty = Nothing here any more.
+shared-open = Item { $n }
+shared-previous = Previous
+shared-next = Next

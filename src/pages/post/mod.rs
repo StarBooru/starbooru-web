@@ -30,6 +30,7 @@ use self::people::PeopleCard;
 use self::related::Related;
 use self::side::{DetailsCard, TagsCard};
 use self::stage::{Shown, Stage};
+use super::share::ShareSheet;
 use super::{gallery, trash};
 use crate::api::{self, Failure};
 use crate::components::banner::{ErrorBanner, Spinner};
@@ -182,6 +183,8 @@ pub fn PostView() -> impl IntoView {
     // under it takes keys again.
     let media_editing = RwSignal::new(false);
     let editor_leaving = RwSignal::new(false);
+    // The share sheet is open, for this post.
+    let sharing = RwSignal::new(None::<i64>);
     // Trimming needs ffmpeg on the server.
     let info = LocalResource::new(api::server_info);
     let video_editing =
@@ -270,6 +273,7 @@ pub fn PostView() -> impl IntoView {
         editing.set(false);
         people_editing.set(false);
         media_editing.set(false);
+        sharing.set(None);
         gallery::viewed(&q.get_untracked(), id);
         if post.with_untracked(|p| p.as_ref().map(|p| p.id)) != Some(id)
             && let Some(quick) = kept(id)
@@ -562,6 +566,14 @@ pub fn PostView() -> impl IntoView {
         }
     });
 
+    // Not while the page still shows the post before, nor one in the bin.
+    let share = Callback::new(move |()| {
+        let shown = post.with_untracked(|p| p.as_ref().filter(|p| !p.deleted).map(|p| p.id));
+        if shown.is_some() && shown == id.get_untracked() {
+            sharing.set(shown);
+        }
+    });
+
     let open_editor = Callback::new(move |()| {
         let here = post.with_untracked(|p| p.as_ref().map(|p| p.id)) == id.get_untracked();
         let offered = post.with_untracked(|p| {
@@ -659,6 +671,7 @@ pub fn PostView() -> impl IntoView {
                         editing=Signal::derive(move || {
                             editing.get() || people_editing.get()
                                 || media_editing.get() && !editor_leaving.get()
+                                || sharing.with(Option::is_some)
                         })
                         on_step=press
                         on_back=Callback::new(move |()| back())
@@ -671,6 +684,7 @@ pub fn PostView() -> impl IntoView {
                         on_vote=vote
                         on_delete=Callback::new(move |()| delete())
                         on_edit_media=open_editor
+                        on_share=share
                     />
                     {move || {
                         problem
@@ -765,6 +779,18 @@ pub fn PostView() -> impl IntoView {
                         },
                     )
                 }}
+                {move || {
+                    sharing
+                        .get()
+                        .map(|id| {
+                            view! {
+                                <ShareSheet
+                                    post_ids=vec![id]
+                                    on_close=Callback::new(move |()| sharing.set(None))
+                                />
+                            }
+                        })
+                }}
             </div>
         }
     };
@@ -786,8 +812,8 @@ pub fn PostView() -> impl IntoView {
 }
 
 /// What can be done with the post, apart from looking at it: an opinion, what
-/// leaves with the file, and, away from the rest, the one that removes it.
-/// Sharing comes later; its button holds its place.
+/// leaves with the file or a link to it, and, away from the rest, the one
+/// that removes it.
 #[component]
 fn PostBar(
     post: Signal<Option<Arc<Post>>>,
@@ -796,6 +822,7 @@ fn PostBar(
     on_vote: Callback<i16>,
     on_delete: Callback<()>,
     on_edit_media: Callback<()>,
+    on_share: Callback<()>,
 ) -> impl IntoView {
     let bar = move || {
         let p = post.get()?;
@@ -828,9 +855,10 @@ fn PostBar(
                 <button
                     type="button"
                     class="icon-btn"
-                    disabled=true
                     title=move || t!("share-button")
                     aria-label=move || t!("share-button")
+                    aria-haspopup="dialog"
+                    on:click=move |_| on_share.run(())
                 >
                     <Ico icon=Icon::Share />
                     <span class="bar-label">{move || t!("share-button")}</span>

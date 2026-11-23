@@ -10,7 +10,7 @@ use leptos_router::NavigateOptions;
 use leptos_router::hooks::use_navigate;
 use send_wrapper::SendWrapper;
 use starbooru_core::normalize_tag;
-use wasm_bindgen::{JsCast, JsValue};
+use wasm_bindgen::JsCast;
 use web_sys::MouseEvent;
 
 use super::icons::Icon;
@@ -106,49 +106,13 @@ pub fn TagPress(#[prop(into)] q: Signal<String>) -> impl IntoView {
 /// Copies `name` and says so.
 fn copy_name(name: String) {
     spawn_local(async move {
-        let done = copy_text(&name).await;
+        let done = dom::copy_text(&name).await;
         notify(if done {
             t!("tag-copied")
         } else {
             t!("tag-copy-failed")
         });
     });
-}
-
-/// Puts `text` on the clipboard. A page on plain http, other than on this
-/// computer, has no clipboard API, and the old way still works there.
-async fn copy_text(text: &str) -> bool {
-    let Some(window) = web_sys::window() else {
-        return false;
-    };
-    let navigator = window.navigator();
-    let api = js_sys::Reflect::get(&navigator, &JsValue::from_str("clipboard"))
-        .is_ok_and(|c| !c.is_undefined() && !c.is_null());
-    if api {
-        let promise = navigator.clipboard().write_text(text);
-        if wasm_bindgen_futures::JsFuture::from(promise).await.is_ok() {
-            return true;
-        }
-    }
-    copy_by_selection(text).unwrap_or(false)
-}
-
-fn copy_by_selection(text: &str) -> Option<bool> {
-    let doc = web_sys::window()?.document()?;
-    let field = doc
-        .create_element("textarea")
-        .ok()?
-        .dyn_into::<web_sys::HtmlTextAreaElement>()
-        .ok()?;
-    field.set_value(text);
-    let _ = field.set_attribute("style", "position: fixed; opacity: 0");
-    doc.body()?.append_child(&field).ok()?;
-    field.select();
-    let done = doc
-        .dyn_ref::<web_sys::HtmlDocument>()
-        .and_then(|d| d.exec_command("copy").ok());
-    field.remove();
-    done
 }
 
 #[cfg(test)]
