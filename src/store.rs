@@ -220,11 +220,15 @@ pub struct SavedBooru {
 pub struct Prefs {
     #[serde(deserialize_with = "lenient")]
     pub theme: Theme,
+    /// A black background whenever the app is dark (`data-oled` on `.app`).
+    #[serde(deserialize_with = "lenient")]
+    pub oled: bool,
     /// OKLCH hue (0–360) the whole palette is derived from.
     #[serde(deserialize_with = "lenient_hue")]
     pub accent_hue: u16,
-    /// The exact colour `accent_hue` was taken from, to show it again in the
-    /// picker; `None` for a preset.
+    /// The exact colour picked, `None` for a preset: the picker shows it
+    /// again, and its chroma and lightness go into the palette. `accent_hue`
+    /// is its hue, or for a grey the hue it was picked over.
     #[serde(deserialize_with = "lenient")]
     pub accent_color: Option<Rgb>,
     /// `None` follows the browser's languages.
@@ -293,6 +297,7 @@ impl Default for Prefs {
     fn default() -> Self {
         Self {
             theme: Theme::System,
+            oled: false,
             accent_hue: DEFAULT_HUE,
             accent_color: None,
             language: None,
@@ -985,6 +990,7 @@ mod tests {
             }),
             prefs: Prefs {
                 theme: Theme::Dark,
+                oled: true,
                 accent_hue: 120,
                 accent_color: Some([1, 2, 3]),
                 language: Some(Lang::Italian),
@@ -1031,7 +1037,9 @@ mod tests {
         // The shape the reference wrote, and index.html's loading screen reads.
         let value: Value = serde_json::from_str(&json).unwrap();
         assert_eq!(value["prefs"]["theme"], "dark");
+        assert_eq!(value["prefs"]["oled"], true);
         assert_eq!(value["prefs"]["accent_hue"], 120);
+        assert_eq!(value["prefs"]["accent_color"], serde_json::json!([1, 2, 3]));
         assert_eq!(value["prefs"]["language"], "it");
         assert_eq!(value["session"]["user"]["username"], "ada");
         assert_eq!(value["prefs"]["gallery_view"], "staggered-all");
@@ -1094,6 +1102,31 @@ mod tests {
         // Not JSON at all: the first start's state.
         assert_eq!(parse("not json"), Stored::default());
         assert_eq!(parse(""), Stored::default());
+    }
+
+    #[test]
+    fn oled_is_off_until_chosen() {
+        // Stored before there was a black background.
+        let stored = parse(r#"{"prefs":{"theme":"dark","accent_hue":120,"people":false}}"#);
+        assert!(!stored.prefs.oled);
+        assert_eq!(stored.prefs.theme, Theme::Dark);
+        assert!(!stored.prefs.people);
+        assert!(parse(r#"{"prefs":{"oled":true}}"#).prefs.oled);
+        // Odd values cost only themselves.
+        for odd in [r#""yes""#, "1", "null", "[]"] {
+            let json = format!(r#"{{"prefs":{{"oled":{odd},"theme":"light"}}}}"#);
+            let prefs = parse(&json).prefs;
+            assert!(!prefs.oled, "{odd}");
+            assert_eq!(prefs.theme, Theme::Light);
+        }
+    }
+
+    #[test]
+    fn a_grey_accent_round_trips() {
+        let stored = parse(r#"{"prefs":{"accent_hue":140,"accent_color":[128,128,128]}}"#);
+        assert_eq!(stored.prefs.accent_hue, 140);
+        assert_eq!(stored.prefs.accent_color, Some([128, 128, 128]));
+        assert_eq!(parse(&to_json(&stored).unwrap()), stored);
     }
 
     #[test]

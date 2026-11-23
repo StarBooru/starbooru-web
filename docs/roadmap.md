@@ -77,8 +77,8 @@ Both modes:
 
 ## 7. Design
 
-- [ ] Any accent colour, greys and white included
-- [ ] OLED mode, with a black background
+- [x] Any accent colour, greys and white included
+- [x] OLED mode, with a black background
 - [ ] A video player of our own design
 - [ ] Redesign Settings, the Tags page, the tag editor in the viewer and saved searches
 

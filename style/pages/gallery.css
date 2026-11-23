@@ -224,7 +224,8 @@ html.sb-scrolling .thumb img { filter: none; transition: opacity var(--med) var(
 .swatches { display: grid; grid-template-columns: repeat(6, 32px); gap: 6px; }
 .swatch {
   display: block; width: 32px; height: 32px; padding: 0; border-radius: 50%; cursor: pointer;
-  border: 1px solid oklch(from var(--outline) l c h / 0.6);
+  /* Full strength, so black shows on a dark card and white on a light one. */
+  border: 1px solid var(--outline);
   transition: box-shadow var(--fast) var(--ease);
 }
 .swatch:hover { box-shadow: 0 0 0 2px var(--surface), 0 0 0 4px var(--outline); }

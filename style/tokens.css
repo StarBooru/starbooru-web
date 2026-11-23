@@ -1,25 +1,40 @@
 /* StarBooru web: the design tokens. Material You-inspired, every colour a role
-   generated from one seed hue (--seed-hue, set on .app from the user's accent).
+   generated from the user's accent (the --seed-* that app.rs sets on .app).
    Components never hard-code a colour: they use these roles. */
 
 .app {
+  /* The accent: its hue, and for a colour picked rather than a preset, its
+     own chroma and lightness (theme::Accent). A preset sets neither, so the
+     palette below is used as it stands. */
   --h: var(--seed-hue, 285);
+  --c: var(--seed-chroma, 1);
+  --l: var(--seed-lightness, 0.5);
+  /* How colourful the accent is, from 0 for a grey to 1 for one as colourful
+     as a preset's swatch. The tint of the neutral roles scales with it. */
+  --k: min(1, var(--c) / 0.16);
+  /* A colour with little chroma is told apart by its lightness, so the
+     primary moves that much towards the picked colour's own lightness. */
+  --pull: calc(1 - var(--k));
 
-  /* light role mapping */
+  /* light role mapping. The neutral roles' chroma scales with --k; the
+     accent's roles take the picked colour's chroma where it has less. */
   color-scheme: light;
-  --canvas: oklch(0.985 0.006 var(--h));
-  --surface: oklch(0.965 0.014 var(--h));
-  --surface-2: oklch(0.94 0.02 var(--h));
-  --surface-3: oklch(0.905 0.028 var(--h));
-  --on-surface: oklch(0.23 0.02 var(--h));
-  --on-surface-2: oklch(0.43 0.025 var(--h));
-  --outline: oklch(0.8 0.025 var(--h));
-  --primary: oklch(0.5 0.17 var(--h));
-  --on-primary: oklch(0.99 0.01 var(--h));
-  --primary-container: oklch(0.9 0.06 var(--h));
-  --on-primary-container: oklch(0.28 0.1 var(--h));
-  --tertiary: oklch(0.62 0.15 calc(var(--h) + 70));
-  /* tag categories: text and edge of their chips */
+  --canvas: oklch(0.985 calc(0.006 * var(--k)) var(--h));
+  --surface: oklch(0.965 calc(0.014 * var(--k)) var(--h));
+  --surface-2: oklch(0.94 calc(0.02 * var(--k)) var(--h));
+  --surface-3: oklch(0.905 calc(0.028 * var(--k)) var(--h));
+  --on-surface: oklch(0.23 calc(0.02 * var(--k)) var(--h));
+  --on-surface-2: oklch(0.43 calc(0.025 * var(--k)) var(--h));
+  --outline: oklch(0.8 calc(0.025 * var(--k)) var(--h));
+  /* Between 0.2 and 0.5 the primary reads on the canvas and white reads on
+     it: a grey goes there by its own lightness, black darkest, white at 0.5. */
+  --primary: oklch(calc(0.5 + var(--pull) * (0.2 + 0.3 * var(--l) - 0.5)) min(0.17, var(--c)) var(--h));
+  --on-primary: oklch(0.99 min(0.01, var(--c)) var(--h));
+  --primary-container: oklch(0.9 min(0.06, var(--c)) var(--h));
+  --on-primary-container: oklch(0.28 min(0.1, var(--c)) var(--h));
+  --tertiary: oklch(0.62 min(0.15, var(--c)) calc(var(--h) + 70));
+  /* tag categories: text and edge of their chips. Their chroma stays with any
+     accent, a grey too, as it's what tells the categories apart. */
   --cat-artist: oklch(0.5 0.16 calc(var(--h) + 110));
   --cat-character: oklch(0.5 0.14 calc(var(--h) + 215));
   --cat-copyright: oklch(0.5 0.16 calc(var(--h) + 40));
@@ -33,27 +48,27 @@
   /* password strength: lightness and chroma; the hue comes from the score */
   --meter-l: 0.6;
   --meter-c: 0.17;
-  --glass: oklch(0.975 0.012 var(--h) / 0.78);
+  --glass: oklch(0.975 calc(0.012 * var(--k)) var(--h) / 0.78);
   /* a floating capsule's lit top edge, and the hairline around it */
   --glass-edge: oklch(1 0 0 / 0.6);
-  --glass-line: oklch(0.2 0.04 var(--h) / 0.1);
-  --stage: oklch(0.2 0.015 var(--h));
+  --glass-line: oklch(0.2 calc(0.04 * var(--k)) var(--h) / 0.1);
+  --stage: oklch(0.2 calc(0.015 * var(--k)) var(--h));
   --glow-a: 0.42;
   /* the third light of the sign-in screen's aurora, after --primary and
      --tertiary: the same in both themes */
-  --aurora: oklch(0.75 0.14 calc(var(--h) - 60) / 0.35);
+  --aurora: oklch(0.75 min(0.14, var(--c)) calc(var(--h) - 60) / 0.35);
   /* the viewer in fullscreen: dark in both themes, whatever the picture */
-  --stage-glass: oklch(0.2 0.015 var(--h) / 0.62);
+  --stage-glass: oklch(0.2 calc(0.015 * var(--k)) var(--h) / 0.62);
   --stage-glass-edge: oklch(1 0 0 / 0.14);
   --stage-glass-line: oklch(1 0 0 / 0.08);
-  --on-stage: oklch(0.96 0.01 var(--h));
-  --on-stage-2: oklch(0.86 0.015 var(--h));
+  --on-stage: oklch(0.96 calc(0.01 * var(--k)) var(--h));
+  --on-stage-2: oklch(0.86 calc(0.015 * var(--k)) var(--h));
   /* controls over media: the stage is dark in both themes */
-  --scrim: oklch(0.12 0.01 var(--h) / 0.55);
-  --on-scrim: oklch(0.97 0.01 var(--h));
+  --scrim: oklch(0.12 calc(0.01 * var(--k)) var(--h) / 0.55);
+  --on-scrim: oklch(0.97 calc(0.01 * var(--k)) var(--h));
   /* translated text over panels: light like speech balloons in both themes */
-  --paper: oklch(0.985 0.006 var(--h));
-  --on-paper: oklch(0.2 0.02 var(--h));
+  --paper: oklch(0.985 calc(0.006 * var(--k)) var(--h));
+  --on-paper: oklch(0.2 calc(0.02 * var(--k)) var(--h));
   /* the colour search's wheel shows the colours it picks, the same in both
      themes: hues clockwise from red at the top, white in the middle, as
      starbooru_core::color::wheel_color reads it */
@@ -64,10 +79,13 @@
   --swatch-l: 0.6;
   --swatch-c: 0.16;
   --on-swatch: oklch(0.99 0 0);
-  --shadow-1: 0 1px 2px oklch(0.2 0.04 var(--h) / 0.08), 0 2px 8px oklch(0.2 0.04 var(--h) / 0.06);
+  /* the icon on a colour too pale for a white one: the custom accent's
+     button on white or another pale pick (theme::dark_ink) */
+  --on-pale-swatch: oklch(0.2 0 0);
+  --shadow-1: 0 1px 2px oklch(0.2 calc(0.04 * var(--k)) var(--h) / 0.08), 0 2px 8px oklch(0.2 calc(0.04 * var(--k)) var(--h) / 0.06);
   /* --shadow-1 as a filter, for a shape a box shadow doesn't follow. */
-  --drop-1: drop-shadow(0 1px 2px oklch(0.2 0.04 var(--h) / 0.08)) drop-shadow(0 2px 8px oklch(0.2 0.04 var(--h) / 0.06));
-  --shadow-2: 0 2px 4px oklch(0.2 0.04 var(--h) / 0.08), 0 12px 32px oklch(0.2 0.04 var(--h) / 0.14);
+  --drop-1: drop-shadow(0 1px 2px oklch(0.2 calc(0.04 * var(--k)) var(--h) / 0.08)) drop-shadow(0 2px 8px oklch(0.2 calc(0.04 * var(--k)) var(--h) / 0.06));
+  --shadow-2: 0 2px 4px oklch(0.2 calc(0.04 * var(--k)) var(--h) / 0.08), 0 12px 32px oklch(0.2 calc(0.04 * var(--k)) var(--h) / 0.14);
 
   --radius-s: 12px;
   --radius-m: 16px;
@@ -92,18 +110,20 @@
 
 .app[data-theme="dark"] {
   color-scheme: dark;
-  --canvas: oklch(0.165 0.012 var(--h));
-  --surface: oklch(0.205 0.016 var(--h));
-  --surface-2: oklch(0.245 0.02 var(--h));
-  --surface-3: oklch(0.29 0.024 var(--h));
-  --on-surface: oklch(0.93 0.012 var(--h));
-  --on-surface-2: oklch(0.77 0.02 var(--h));
-  --outline: oklch(0.42 0.025 var(--h));
-  --primary: oklch(0.8 0.11 var(--h));
-  --on-primary: oklch(0.25 0.09 var(--h));
-  --primary-container: oklch(0.37 0.1 var(--h));
-  --on-primary-container: oklch(0.92 0.05 var(--h));
-  --tertiary: oklch(0.75 0.12 calc(var(--h) + 70));
+  --canvas: oklch(0.165 calc(0.012 * var(--k)) var(--h));
+  --surface: oklch(0.205 calc(0.016 * var(--k)) var(--h));
+  --surface-2: oklch(0.245 calc(0.02 * var(--k)) var(--h));
+  --surface-3: oklch(0.29 calc(0.024 * var(--k)) var(--h));
+  --on-surface: oklch(0.93 calc(0.012 * var(--k)) var(--h));
+  --on-surface-2: oklch(0.77 calc(0.02 * var(--k)) var(--h));
+  --outline: oklch(0.42 calc(0.025 * var(--k)) var(--h));
+  /* In dark the primary reads between 0.68 and 0.96, with dark text on it:
+     black goes to 0.68, white to 0.96. */
+  --primary: oklch(calc(0.8 + var(--pull) * (0.68 + 0.28 * var(--l) - 0.8)) min(0.11, var(--c)) var(--h));
+  --on-primary: oklch(0.25 min(0.09, var(--c)) var(--h));
+  --primary-container: oklch(0.37 min(0.1, var(--c)) var(--h));
+  --on-primary-container: oklch(0.92 min(0.05, var(--c)) var(--h));
+  --tertiary: oklch(0.75 min(0.12, var(--c)) calc(var(--h) + 70));
   --cat-artist: oklch(0.8 0.12 calc(var(--h) + 110));
   --cat-character: oklch(0.8 0.11 calc(var(--h) + 215));
   --cat-copyright: oklch(0.8 0.12 calc(var(--h) + 40));
@@ -116,10 +136,10 @@
   --ok: oklch(0.78 0.13 150);
   --meter-l: 0.74;
   --meter-c: 0.15;
-  --glass: oklch(0.205 0.016 var(--h) / 0.82);
+  --glass: oklch(0.205 calc(0.016 * var(--k)) var(--h) / 0.82);
   --glass-edge: oklch(1 0 0 / 0.14);
   --glass-line: oklch(1 0 0 / 0.08);
-  --stage: oklch(0.12 0.01 var(--h));
+  --stage: oklch(0.12 calc(0.01 * var(--k)) var(--h));
   --glow-a: 0.34;
   --shadow-1: 0 1px 2px oklch(0 0 0 / 0.3), 0 2px 8px oklch(0 0 0 / 0.2);
   --drop-1: drop-shadow(0 1px 2px oklch(0 0 0 / 0.3)) drop-shadow(0 2px 8px oklch(0 0 0 / 0.2));
@@ -130,18 +150,18 @@
 @media (prefers-color-scheme: dark) {
   .app[data-theme="system"] {
     color-scheme: dark;
-    --canvas: oklch(0.165 0.012 var(--h));
-    --surface: oklch(0.205 0.016 var(--h));
-    --surface-2: oklch(0.245 0.02 var(--h));
-    --surface-3: oklch(0.29 0.024 var(--h));
-    --on-surface: oklch(0.93 0.012 var(--h));
-    --on-surface-2: oklch(0.77 0.02 var(--h));
-    --outline: oklch(0.42 0.025 var(--h));
-    --primary: oklch(0.8 0.11 var(--h));
-    --on-primary: oklch(0.25 0.09 var(--h));
-    --primary-container: oklch(0.37 0.1 var(--h));
-    --on-primary-container: oklch(0.92 0.05 var(--h));
-    --tertiary: oklch(0.75 0.12 calc(var(--h) + 70));
+    --canvas: oklch(0.165 calc(0.012 * var(--k)) var(--h));
+    --surface: oklch(0.205 calc(0.016 * var(--k)) var(--h));
+    --surface-2: oklch(0.245 calc(0.02 * var(--k)) var(--h));
+    --surface-3: oklch(0.29 calc(0.024 * var(--k)) var(--h));
+    --on-surface: oklch(0.93 calc(0.012 * var(--k)) var(--h));
+    --on-surface-2: oklch(0.77 calc(0.02 * var(--k)) var(--h));
+    --outline: oklch(0.42 calc(0.025 * var(--k)) var(--h));
+    --primary: oklch(calc(0.8 + var(--pull) * (0.68 + 0.28 * var(--l) - 0.8)) min(0.11, var(--c)) var(--h));
+    --on-primary: oklch(0.25 min(0.09, var(--c)) var(--h));
+    --primary-container: oklch(0.37 min(0.1, var(--c)) var(--h));
+    --on-primary-container: oklch(0.92 min(0.05, var(--c)) var(--h));
+    --tertiary: oklch(0.75 min(0.12, var(--c)) calc(var(--h) + 70));
     --cat-artist: oklch(0.8 0.12 calc(var(--h) + 110));
     --cat-character: oklch(0.8 0.11 calc(var(--h) + 215));
     --cat-copyright: oklch(0.8 0.12 calc(var(--h) + 40));
@@ -154,14 +174,36 @@
     --ok: oklch(0.78 0.13 150);
     --meter-l: 0.74;
     --meter-c: 0.15;
-    --glass: oklch(0.205 0.016 var(--h) / 0.82);
+    --glass: oklch(0.205 calc(0.016 * var(--k)) var(--h) / 0.82);
     --glass-edge: oklch(1 0 0 / 0.14);
     --glass-line: oklch(1 0 0 / 0.08);
-    --stage: oklch(0.12 0.01 var(--h));
+    --stage: oklch(0.12 calc(0.01 * var(--k)) var(--h));
     --glow-a: 0.34;
     --shadow-1: 0 1px 2px oklch(0 0 0 / 0.3), 0 2px 8px oklch(0 0 0 / 0.2);
     --drop-1: drop-shadow(0 1px 2px oklch(0 0 0 / 0.3)) drop-shadow(0 2px 8px oklch(0 0 0 / 0.2));
     --shadow-2: 0 2px 4px oklch(0 0 0 / 0.3), 0 12px 32px oklch(0 0 0 / 0.4);
+  }
+}
+
+/* OLED: black behind everything while the app is dark. The surfaces rise
+   just enough to tell cards and sheets apart, and the glass is dark enough
+   that the bars melt into the black. The rest is the dark theme's. */
+.app[data-theme="dark"][data-oled] {
+  --canvas: oklch(0 0 0);
+  --surface: oklch(0.17 calc(0.014 * var(--k)) var(--h));
+  --surface-2: oklch(0.21 calc(0.018 * var(--k)) var(--h));
+  --surface-3: oklch(0.26 calc(0.022 * var(--k)) var(--h));
+  --glass: oklch(0.1 calc(0.01 * var(--k)) var(--h) / 0.8);
+  --stage: oklch(0 0 0);
+}
+@media (prefers-color-scheme: dark) {
+  .app[data-theme="system"][data-oled] {
+    --canvas: oklch(0 0 0);
+    --surface: oklch(0.17 calc(0.014 * var(--k)) var(--h));
+    --surface-2: oklch(0.21 calc(0.018 * var(--k)) var(--h));
+    --surface-3: oklch(0.26 calc(0.022 * var(--k)) var(--h));
+    --glass: oklch(0.1 calc(0.01 * var(--k)) var(--h) / 0.8);
+    --stage: oklch(0 0 0);
   }
 }
 

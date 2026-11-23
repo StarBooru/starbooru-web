@@ -28,7 +28,8 @@ use crate::{pace, power, store, theme};
 #[component]
 pub fn App() -> impl IntoView {
     let theme = Memo::new(|_| store::prefs().theme);
-    let hue = Memo::new(|_| store::prefs().accent_hue);
+    let oled = Memo::new(|_| store::prefs().oled);
+    let accent = Memo::new(|_| theme::Accent::of(&store::prefs()));
     let picked = Memo::new(|_| store::prefs().language);
     let flush = Memo::new(|_| store::prefs().flush_tiles);
     let hand = Memo::new(|_| store::prefs().hand);
@@ -43,7 +44,7 @@ pub fn App() -> impl IntoView {
     // The page itself says its language too, for screen readers and hyphens.
     Effect::new(|_| set_document_lang(i18n::lang().code()));
     Effect::new(move |_| {
-        let (light, dark) = theme::bar_colors(theme.get(), hue.get());
+        let (light, dark) = theme::bar_colors(theme.get(), accent.get(), oled.get());
         set_meta("theme-color-light", &light);
         set_meta("theme-color-dark", &dark);
     });
@@ -52,6 +53,8 @@ pub fn App() -> impl IntoView {
             class="app"
             lang=move || i18n::lang().code()
             data-theme=move || theme.get().as_str()
+            // Black for the dark theme (style/tokens.css).
+            data-oled=move || oled.get().then_some("on")
             // Thumbnails edge to edge (style/pages/gallery.css).
             data-tiles=move || flush.get().then_some("flush")
             // The side the rail and the editor's tools stand on.
@@ -59,7 +62,7 @@ pub fn App() -> impl IntoView {
             // The battery saver (power.rs) and the effects (pace.rs).
             data-saver=move || if saver.get() { "on" } else { "off" }
             data-effects=move || if lite.get() { "lite" } else { "full" }
-            style=move || format!("--seed-hue: {}", hue.get())
+            style=move || accent.get().style()
         >
             <Router>
                 <AppRoutes />
@@ -215,6 +218,14 @@ mod tests {
         // It can't use the tokens, as it paints before the stylesheets come.
         let css = include_str!("../style/tokens.css");
         let page = include_str!("../index.html");
+        // How a picked colour's chroma and lightness come in.
+        for name in ["--k", "--pull"] {
+            assert_eq!(token(page, "#boot {", name), token(css, "\n.app {", name));
+        }
+        assert_eq!(token(page, "#boot {", "--c"), "1");
+        assert_eq!(token(css, "\n.app {", "--c"), "var(--seed-chroma, 1)");
+        assert_eq!(token(page, "#boot {", "--l"), "0.5");
+        assert_eq!(token(css, "\n.app {", "--l"), "var(--seed-lightness, 0.5)");
         for name in ["--canvas", "--primary-container", "--primary"] {
             assert_eq!(
                 token(page, "#boot {", name),
@@ -240,6 +251,35 @@ mod tests {
         }
         assert_eq!(token(page, "#boot {", "--h"), "285");
         assert!(css.contains("--h: var(--seed-hue, 285);"));
+        // Black in OLED, whether dark was picked or comes from the system.
+        let black = token(css, r#".app[data-theme="dark"][data-oled] {"#, "--canvas");
+        assert_eq!(black, "oklch(0 0 0)");
+        assert_eq!(
+            token(css, r#".app[data-theme="system"][data-oled] {"#, "--canvas"),
+            black
+        );
+        assert_eq!(
+            token(page, r#"#boot[data-theme="dark"][data-oled] {"#, "--canvas"),
+            black
+        );
+        assert_eq!(
+            token(
+                page,
+                r#"#boot[data-oled]:not([data-theme="light"]) {"#,
+                "--canvas"
+            ),
+            black
+        );
+        // The script reads the colour as theme.rs does, and sets the bars.
+        for number in [
+            "0.4122214708",
+            "0.808675766",
+            "0.2104542553",
+            "c < 0.02",
+            "#000000",
+        ] {
+            assert!(page.contains(number), "{number}");
+        }
     }
 
     #[test]
@@ -272,7 +312,11 @@ mod tests {
     #[test]
     fn the_browser_bars_start_in_the_default_canvas() {
         let page = include_str!("../index.html");
-        let (light, dark) = crate::theme::bar_colors(crate::store::Theme::System, 285);
+        let (light, dark) = crate::theme::bar_colors(
+            crate::store::Theme::System,
+            crate::theme::Accent::preset(285),
+            false,
+        );
         assert!(page.contains(&format!(
             r#"<meta id="theme-color-light" name="theme-color" content="{light}""#
         )));

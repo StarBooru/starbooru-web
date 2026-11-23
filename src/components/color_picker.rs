@@ -23,11 +23,19 @@ fn at_wheel(x: f64, y: f64) -> Rgb {
 }
 
 /// Calls `on_pick` for a click on the wheel or a hex colour entered; `value`
-/// fills the field.
+/// fills the field, and fills it again whenever it changes, so a picker that
+/// stays open shows what was just picked.
 #[component]
-pub fn ColorPicker(value: Option<Rgb>, on_pick: Callback<Rgb>) -> impl IntoView {
-    let typed = RwSignal::new(hex_text(value));
+pub fn ColorPicker(
+    #[prop(into)] value: Signal<Option<Rgb>>,
+    on_pick: Callback<Rgb>,
+) -> impl IntoView {
+    let typed = RwSignal::new(hex_text(value.get_untracked()));
     let invalid = RwSignal::new(false);
+    Effect::new(move |_| {
+        typed.set(hex_text(value.get()));
+        invalid.set(false);
+    });
     let preview = move || {
         parse_hex_color(&typed.get()).map(|rgb| format!("background-color: #{}", to_hex(rgb)))
     };

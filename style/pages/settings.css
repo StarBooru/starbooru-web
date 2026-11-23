@@ -15,10 +15,40 @@
 .accent:hover { box-shadow: 0 0 0 2px var(--surface), 0 0 0 4px var(--outline); }
 .accent.on { box-shadow: 0 0 0 2px var(--surface), 0 0 0 4px var(--on-surface); }
 .accent:focus-visible { outline: 3px solid var(--primary); outline-offset: 4px; }
-/* The picker has no colour of its own until its colour is the one in use. */
+/* The picker has no colour of its own until its colour is the one in use.
+   Then it's that colour, with a hairline so white shows on the card, and a
+   dark icon on a pale one. */
 .accent.custom:not(.on) { background: var(--surface-3); color: var(--on-surface); }
+.accent.custom.on {
+  box-shadow: inset 0 0 0 1px oklch(from var(--outline) l c h / 0.6), 0 0 0 2px var(--surface), 0 0 0 4px var(--on-surface);
+}
+.accent.custom.pale { color: var(--on-pale-swatch); }
 /* It opens under its button; AccentMenu keeps it inside the window. */
 .accents .color-menu { left: 0; right: auto; }
+/* The greys the wheel can't make, under it. */
+.accent-menu .swatches { grid-template-columns: repeat(3, 32px); gap: 12px; }
+/* It scrolls into view as it opens, clear of the bars. */
+.accent-menu { scroll-margin: calc(var(--bar-end) + 8px) 0 16px; }
+@media (max-width: 760px) {
+  .accent-menu { scroll-margin-bottom: calc(96px + env(safe-area-inset-bottom)); }
+}
+
+/* The black background, under the theme: a sub-choice of the dark theme, so
+   it greys out while Light is picked. */
+.oled-switch {
+  display: flex; align-items: center; justify-content: space-between; gap: 16px;
+  width: min(calc(100% + 24px), 384px); margin: 4px -12px 0; padding: 8px 12px;
+  border: 0; border-radius: var(--radius-m); background: none;
+  color: var(--on-surface); font: inherit; font-size: 14px; text-align: start; cursor: pointer;
+  transition: opacity var(--med) var(--ease), background-color var(--fast) var(--ease);
+}
+.oled-switch-text { display: grid; }
+.oled-switch-text > span:first-child { font-weight: 600; }
+.oled-switch-text .muted { font-size: 13px; }
+.oled-switch:hover:not(:disabled) { background: var(--surface-2); }
+.oled-switch:hover:not(:disabled) .switch-knob { scale: 1.08; }
+.oled-switch:active:not(:disabled) .switch-knob { scale: 0.92; }
+.oled-switch:disabled { opacity: 0.45; cursor: not-allowed; }
 
 /* ---------- library ---------- */
 

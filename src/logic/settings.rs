@@ -1,5 +1,6 @@
-//! Settings without a browser: the accent's presets and what a picked colour
-//! comes to, what the lists of devices, sign-ins and API keys say of each,
+//! Settings without a browser: the accent's presets and greys, what a picked
+//! colour comes to, when the black background has anything to black out,
+//! what the lists of devices, sign-ins and API keys say of each,
 //! when the password form can be sent, which cards an account sees, and the
 //! app's version.
 
@@ -12,7 +13,7 @@ use starbooru_core::{
 
 use super::library::ago;
 use super::upload::human_size;
-use crate::store::Prefs;
+use crate::store::{Prefs, Theme};
 use crate::theme;
 
 // ---------- the accent ----------
@@ -37,16 +38,14 @@ pub fn pick(prefs: &mut Prefs, hue: u16) {
     prefs.accent_color = None;
 }
 
-/// Makes `rgb` the accent, keeping the colour to show in the picker again.
-/// The palette is built from a hue, so a grey can't be one: that leaves the
-/// accent as it was and answers false.
-pub fn pick_color(prefs: &mut Prefs, rgb: Rgb) -> bool {
-    let Some(hue) = theme::hue_of(rgb) else {
-        return false;
-    };
-    prefs.accent_hue = hue;
+/// Makes `rgb` the accent, keeping the colour to show in the picker again and
+/// to build the palette from (`theme::Accent`). A grey has no hue, so it
+/// keeps the one in use, which the tag categories go on showing.
+pub fn pick_color(prefs: &mut Prefs, rgb: Rgb) {
+    if let Some(hue) = theme::hue_of(rgb) {
+        prefs.accent_hue = hue;
+    }
     prefs.accent_color = Some(rgb);
-    true
 }
 
 /// The colour the picker opens on: the one picked, else the preset's.
@@ -54,6 +53,24 @@ pub fn accent_rgb(prefs: &Prefs) -> Rgb {
     prefs
         .accent_color
         .unwrap_or_else(|| theme::swatch_rgb(prefs.accent_hue))
+}
+
+/// The greys offered beside the wheel, which has none but white in its
+/// middle: white, mid grey and black, with their names.
+pub const NEUTRALS: [Rgb; 3] = [[0xff, 0xff, 0xff], [0x80, 0x80, 0x80], [0, 0, 0]];
+
+pub fn neutral_name(rgb: Rgb) -> String {
+    match rgb {
+        [0xff, 0xff, 0xff] => t!("color-white"),
+        [0, 0, 0] => t!("color-black"),
+        _ => t!("color-gray"),
+    }
+}
+
+/// Whether the OLED mode can do anything under `theme`: it blacks out the
+/// dark theme, which Light never shows.
+pub fn oled_applies(theme: Theme) -> bool {
+    theme != Theme::Light
 }
 
 /// A preset's name, for a screen reader and the tooltip.
@@ -334,7 +351,7 @@ mod tests {
     #[test]
     fn the_accent_keeps_the_exact_colour_it_came_from() {
         let mut prefs = Prefs::default();
-        assert!(pick_color(&mut prefs, [0xff, 0x00, 0x00]));
+        pick_color(&mut prefs, [0xff, 0x00, 0x00]);
         assert_eq!(prefs.accent_hue, 29);
         assert_eq!(prefs.accent_color, Some([0xff, 0x00, 0x00]));
         assert_eq!(accent_rgb(&prefs), [0xff, 0x00, 0x00]);
@@ -342,15 +359,69 @@ mod tests {
         pick(&mut prefs, 140);
         assert_eq!((prefs.accent_hue, prefs.accent_color), (140, None));
         assert_eq!(accent_rgb(&prefs), theme::swatch_rgb(140));
+        assert_eq!(theme::Accent::of(&prefs), theme::Accent::preset(140));
     }
 
     #[test]
-    fn a_grey_cant_be_the_accent() {
+    fn any_grey_can_be_the_accent() {
         let mut prefs = Prefs::default();
-        for grey in [[0x80, 0x80, 0x80], [0, 0, 0], [0xff, 0xff, 0xff]] {
-            assert!(!pick_color(&mut prefs, grey));
+        pick(&mut prefs, 140);
+        for grey in NEUTRALS.into_iter().chain([[0x7f, 0x80, 0x81]]) {
+            pick_color(&mut prefs, grey);
+            assert_eq!(prefs.accent_color, Some(grey));
+            assert_eq!(accent_rgb(&prefs), grey);
+            assert!(custom_in_use(&prefs));
+            // No hue of its own: the one before stays, and the palette has
+            // no colour at all.
+            assert_eq!(prefs.accent_hue, 140);
+            let accent = theme::Accent::of(&prefs);
+            assert_eq!(accent.picked.map(|p| p.chroma), Some(0.0));
+            assert_eq!(accent.colourful(), 0.0);
         }
-        assert_eq!(prefs, Prefs::default());
+        // Every grey offered has a name of its own.
+        let names: std::collections::BTreeSet<String> =
+            NEUTRALS.into_iter().map(neutral_name).collect();
+        assert_eq!(names.len(), NEUTRALS.len());
+        assert_eq!(neutral_name([0xff, 0xff, 0xff]), "White");
+    }
+
+    #[test]
+    fn a_muted_colour_makes_a_calmer_palette() {
+        let mut prefs = Prefs::default();
+        pick_color(&mut prefs, [0x7a, 0x8a, 0x6e]);
+        let muted = theme::Accent::of(&prefs).colourful();
+        pick_color(&mut prefs, [0x20, 0xb0, 0x20]);
+        let vivid = theme::Accent::of(&prefs).colourful();
+        assert!(muted < vivid && vivid == 1.0, "{muted} {vivid}");
+    }
+
+    #[test]
+    fn an_accent_stored_before_greys_were_allowed_loads_as_it_was() {
+        // A preset, a colour from the picker, and a hue from the slider of
+        // older versions, as they were stored.
+        for (json, hue, color) in [
+            (r#"{"accent_hue":140}"#, 140, None),
+            (
+                r#"{"accent_hue":29,"accent_color":[255,0,0]}"#,
+                29,
+                Some([0xff, 0, 0]),
+            ),
+            (r#"{"accent_hue":100}"#, 100, None),
+        ] {
+            let prefs: Prefs = serde_json::from_str(json).unwrap();
+            assert_eq!((prefs.accent_hue, prefs.accent_color), (hue, color));
+            let accent = theme::Accent::of(&prefs);
+            assert_eq!(accent.hue, hue);
+            // Saturated or preset, the palette is the one it always was.
+            assert_eq!(accent.colourful(), 1.0);
+        }
+    }
+
+    #[test]
+    fn oled_has_something_to_black_out_unless_the_theme_is_light() {
+        assert!(oled_applies(Theme::Dark));
+        assert!(oled_applies(Theme::System));
+        assert!(!oled_applies(Theme::Light));
     }
 
     #[test]

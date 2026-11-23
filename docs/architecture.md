@@ -28,12 +28,12 @@ starbooru-client = { git = "https://github.com/StarBooru/starbooru-server", tag 
 ```text
 src/
   main.rs       loads the store, picks the language, mounts the app
-  app.rs        theme and language on the root, and the routes
+  app.rs        theme, OLED, accent and language on the root, and the routes
   route.rs      the navigation's tabs, which tab a path is under, search addresses
   api.rs        the shared Client, api::call (a 401 signs out), errors in words
   oidc.rs       sign-in through the identity provider, and linking it to the account, away and back to /oidc
   store.rs      session, preferences, the gallery's place in each search and the posts opened, in localStorage
-  theme.rs      the browser's bar colour (theme-color) from the seed hue, and the hue of a picked accent
+  theme.rs      the accent as hue, chroma and lightness (--seed-*), the browser's bar colour (theme-color)
   power.rs      the battery saver: data-saver on the root, from the setting, the battery and data saver
   pace.rs       the effects: data-effects on the root, from the setting or from frame times while scrolling
   i18n.rs       t!() over the Fluent catalogues
@@ -63,7 +63,7 @@ Plain CSS, split by role. `index.html` links each file with `<link data-trunk re
 
 | File | Holds |
 |---|---|
-| `style/tokens.css` | Colour roles for light, dark and the system's dark, all from `--seed-hue` in OKLCH; radii, easing, durations, shadows; `.glass` |
+| `style/tokens.css` | Colour roles for light, dark and the system's dark, all in OKLCH from the accent's hue (`--seed-hue`) and, for a picked colour, its chroma and lightness (`--seed-chroma`, `--seed-lightness`): a grey makes a palette without a tint. `[data-oled]` blacks out the dark roles. Radii, easing, durations, shadows; `.glass` |
 | `style/base.css` | Base elements and the shared components: buttons, switches, fields and the tag box, segmented choices, chips, cards, banners, spinners, the snackbar, the tag menu, keyframes and the reduced-motion fallback |
 | `style/shell.css` | The top bar, the brand and search capsules, the navigation slider in its three places, the content area |
 | `style/pages/<page>.css` | One per page, linked after the three above when the page lands |

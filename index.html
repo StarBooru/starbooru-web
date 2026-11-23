@@ -22,23 +22,32 @@
       html, body { margin: 0; }
       #boot {
         --h: 285;
-        --canvas: oklch(0.985 0.006 var(--h));
-        --primary-container: oklch(0.9 0.06 var(--h));
-        --primary: oklch(0.5 0.17 var(--h));
+        --c: 1;
+        --l: 0.5;
+        --k: min(1, var(--c) / 0.16);
+        --pull: calc(1 - var(--k));
+        --canvas: oklch(0.985 calc(0.006 * var(--k)) var(--h));
+        --primary-container: oklch(0.9 min(0.06, var(--c)) var(--h));
+        --primary: oklch(calc(0.5 + var(--pull) * (0.2 + 0.3 * var(--l) - 0.5)) min(0.17, var(--c)) var(--h));
         position: fixed; inset: 0; z-index: 100; display: grid; place-items: center;
         background: var(--canvas);
       }
       #boot[data-theme="dark"] {
-        --canvas: oklch(0.165 0.012 var(--h));
-        --primary-container: oklch(0.37 0.1 var(--h));
-        --primary: oklch(0.8 0.11 var(--h));
+        --canvas: oklch(0.165 calc(0.012 * var(--k)) var(--h));
+        --primary-container: oklch(0.37 min(0.1, var(--c)) var(--h));
+        --primary: oklch(calc(0.8 + var(--pull) * (0.68 + 0.28 * var(--l) - 0.8)) min(0.11, var(--c)) var(--h));
       }
       @media (prefers-color-scheme: dark) {
         #boot:not([data-theme="light"]) {
-          --canvas: oklch(0.165 0.012 var(--h));
-          --primary-container: oklch(0.37 0.1 var(--h));
-          --primary: oklch(0.8 0.11 var(--h));
+          --canvas: oklch(0.165 calc(0.012 * var(--k)) var(--h));
+          --primary-container: oklch(0.37 min(0.1, var(--c)) var(--h));
+          --primary: oklch(calc(0.8 + var(--pull) * (0.68 + 0.28 * var(--l) - 0.8)) min(0.11, var(--c)) var(--h));
         }
+      }
+      /* The OLED mode's black. */
+      #boot[data-theme="dark"][data-oled] { --canvas: oklch(0 0 0); }
+      @media (prefers-color-scheme: dark) {
+        #boot[data-oled]:not([data-theme="light"]) { --canvas: oklch(0 0 0); }
       }
       /* The ring waits a moment. A start that takes less shows the plain
          colour and then the app, without a ring flashing in between. */
@@ -86,6 +95,25 @@
         const boot = document.getElementById("boot");
         if (prefs.theme === "dark" || prefs.theme === "light") boot.dataset.theme = prefs.theme;
         if (Number.isFinite(prefs.accent_hue)) boot.style.setProperty("--h", prefs.accent_hue);
+        // A picked colour's chroma and lightness in OKLCH, as theme.rs reads
+        // them; under 0.02 it's a grey.
+        const rgb = prefs.accent_color;
+        if (Array.isArray(rgb) && rgb.length === 3 && rgb.every((v) => Number.isInteger(v) && v >= 0 && v <= 255)) {
+          const [r, g, b] = rgb.map((v) => v / 255).map((v) => v <= 0.04045 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4);
+          const l = Math.cbrt(0.4122214708 * r + 0.5363325363 * g + 0.0514459929 * b);
+          const m = Math.cbrt(0.2119034982 * r + 0.6806995451 * g + 0.1073969566 * b);
+          const s = Math.cbrt(0.0883024619 * r + 0.2817188376 * g + 0.6299787005 * b);
+          const c = Math.hypot(1.9779984951 * l - 2.428592205 * m + 0.4505937099 * s,
+            0.0259040371 * l + 0.7827717662 * m - 0.808675766 * s);
+          boot.style.setProperty("--c", c < 0.02 ? 0 : c.toFixed(3));
+          boot.style.setProperty("--l", (0.2104542553 * l + 0.793617785 * m - 0.0040720468 * s).toFixed(3));
+        }
+        // OLED: black while dark, the browser's bars too.
+        if (prefs.oled === true) {
+          boot.dataset.oled = "on";
+          const bars = prefs.theme === "dark" ? ["light", "dark"] : prefs.theme === "light" ? [] : ["dark"];
+          for (const bar of bars) document.getElementById(`theme-color-${bar}`)?.setAttribute("content", "#000000");
+        }
       } catch {}
     </script>
   </body>
