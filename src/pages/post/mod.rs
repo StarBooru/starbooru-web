@@ -2,9 +2,10 @@
 //! what can be done with it, and its tags and details beside or below.
 //! Previous and next walk the gallery's results for the same search. The
 //! tags card turns into the tag editor in place, and the people card into
-//! theirs.
+//! theirs; the media editor opens over the whole window.
 
 mod edit;
+mod editor;
 pub(crate) mod glow;
 mod people;
 mod related;
@@ -20,9 +21,10 @@ use leptos::task::spawn_local;
 use leptos_router::NavigateOptions;
 use leptos_router::hooks::{use_navigate, use_params_map, use_query_map};
 use send_wrapper::SendWrapper;
-use starbooru_core::{EditKind, MediaKind, Neighbors, Post, edit_kind};
+use starbooru_core::{EditKind, MediaKind, Neighbors, Post};
 
 use self::edit::EditCard;
+use self::editor::{EditorSheet, Saved, pause_stage_video};
 use self::glow::PostGlow;
 use self::people::PeopleCard;
 use self::related::Related;
@@ -33,8 +35,9 @@ use crate::api::{self, Failure};
 use crate::components::banner::{ErrorBanner, Spinner};
 use crate::components::download::DownloadLink;
 use crate::components::icons::{Ico, Icon};
-use crate::components::snackbar::notify_undo;
+use crate::components::snackbar::{notify, notify_undo};
 use crate::components::tag_menu::TagPress;
+use crate::logic::editor::offer;
 use crate::logic::tags::may_edit_post;
 use crate::logic::viewer::{
     back_through_history, download_name, needs_original, neighbour_href, queued, shown_url,
@@ -175,6 +178,14 @@ pub fn PostView() -> impl IntoView {
     // The tags card is the tag editor, and the people card theirs.
     let editing = RwSignal::new(false);
     let people_editing = RwSignal::new(false);
+    // The media editor is open, and whether it's fading out, when the stage
+    // under it takes keys again.
+    let media_editing = RwSignal::new(false);
+    let editor_leaving = RwSignal::new(false);
+    // Trimming needs ffmpeg on the server.
+    let info = LocalResource::new(api::server_info);
+    let video_editing =
+        Signal::derive(move || info.get().flatten().is_some_and(|i| i.video_editing));
     let steps = StoredValue::new(0_i32);
     let generation = StoredValue::new(0_u64);
     // Votes show at once and go to the server one at a time, the latest
@@ -185,6 +196,8 @@ pub fn PostView() -> impl IntoView {
     let vote_before = StoredValue::new(None::<(i64, i32, i16)>);
 
     let navigate = SendWrapper::new(use_navigate());
+    // For the notice's Undo, which outlives the page.
+    let navigate_later = SendWrapper::new(use_navigate());
     let go = Callback::new(move |(to, replace): (String, bool)| {
         let options = NavigateOptions {
             replace,
@@ -256,6 +269,7 @@ pub fn PostView() -> impl IntoView {
         action_error.set(None);
         editing.set(false);
         people_editing.set(false);
+        media_editing.set(false);
         gallery::viewed(&q.get_untracked(), id);
         if post.with_untracked(|p| p.as_ref().map(|p| p.id)) != Some(id)
             && let Some(quick) = kept(id)
@@ -548,6 +562,40 @@ pub fn PostView() -> impl IntoView {
         }
     });
 
+    let open_editor = Callback::new(move |()| {
+        let here = post.with_untracked(|p| p.as_ref().map(|p| p.id)) == id.get_untracked();
+        let offered = post.with_untracked(|p| {
+            p.as_ref()
+                .and_then(|p| offer(p, video_editing.get_untracked()))
+        });
+        if here && offered.is_some() && !media_editing.get_untracked() {
+            pause_stage_video();
+            editor_leaving.set(false);
+            media_editing.set(true);
+        }
+    });
+    // The edit is a new post: the page goes to it, and the notice can take it
+    // back.
+    let media_saved = Callback::new(move |saved: Saved| {
+        media_editing.set(false);
+        if saved.binned {
+            forget(saved.original);
+            gallery::forget_post(saved.original);
+        }
+        gallery::forget_lists();
+        let q = q.get_untracked();
+        go.run((route::post(saved.id, &q, None), false));
+        let message = if saved.binned {
+            t!("editor-saved-binned")
+        } else {
+            t!("editor-saved")
+        };
+        let navigate = (*navigate_later).clone();
+        notify_undo(message, t!("editor-undo-save"), move || {
+            undo_edit(saved, q.clone(), navigate.clone());
+        });
+    });
+
     let failed = move || {
         let failure = problem.get().unwrap_or(Failure {
             message: String::new(),
@@ -608,7 +656,10 @@ pub fn PostView() -> impl IntoView {
                         first=first
                         last=last
                         enter=enter
-                        editing=Signal::derive(move || editing.get() || people_editing.get())
+                        editing=Signal::derive(move || {
+                            editing.get() || people_editing.get()
+                                || media_editing.get() && !editor_leaving.get()
+                        })
                         on_step=press
                         on_back=Callback::new(move |()| back())
                         on_edit=start_edit
@@ -616,8 +667,10 @@ pub fn PostView() -> impl IntoView {
                     <PostBar
                         post=post
                         busy=busy
+                        video_editing=video_editing
                         on_vote=vote
                         on_delete=Callback::new(move |()| delete())
+                        on_edit_media=open_editor
                     />
                     {move || {
                         problem
@@ -688,6 +741,30 @@ pub fn PostView() -> impl IntoView {
                         on_original=Callback::new(move |()| original.set(true))
                     />
                 </aside>
+                {move || {
+                    if !media_editing.get() {
+                        return None;
+                    }
+                    let p = post.get_untracked()?;
+                    let kind = offer(&p, video_editing.get_untracked())?;
+                    // The picture the stage already has; a video's own file.
+                    let src = match kind {
+                        EditKind::Image => src.get_untracked(),
+                        EditKind::Video => absolute(&p.file_url),
+                    };
+                    Some(
+                        view! {
+                            <EditorSheet
+                                post=p
+                                kind=kind
+                                src=src
+                                on_leave=Callback::new(move |()| editor_leaving.set(true))
+                                on_close=Callback::new(move |()| media_editing.set(false))
+                                on_saved=media_saved
+                            />
+                        },
+                    )
+                }}
             </div>
         }
     };
@@ -710,42 +787,42 @@ pub fn PostView() -> impl IntoView {
 
 /// What can be done with the post, apart from looking at it: an opinion, what
 /// leaves with the file, and, away from the rest, the one that removes it.
-/// Sharing and the editor come later; their buttons hold their places.
+/// Sharing comes later; its button holds its place.
 #[component]
 fn PostBar(
     post: Signal<Option<Arc<Post>>>,
     busy: RwSignal<bool>,
+    video_editing: Signal<bool>,
     on_vote: Callback<i16>,
     on_delete: Callback<()>,
+    on_edit_media: Callback<()>,
 ) -> impl IntoView {
     let bar = move || {
         let p = post.get()?;
         let deleted = p.deleted;
-        let edit = edit_kind(p.kind, &p.mime)
-            .filter(|k| *k == EditKind::Video || p.width.is_some() && p.height.is_some())
-            .filter(|_| !deleted)
-            .map(|kind| {
-                let icon = match kind {
-                    EditKind::Video => Icon::Cut,
-                    EditKind::Image => Icon::Crop,
-                };
-                let label = move || match kind {
-                    EditKind::Video => t!("editor-video-short"),
-                    EditKind::Image => t!("editor-image-short"),
-                };
-                view! {
-                    <button
-                        type="button"
-                        class="icon-btn"
-                        disabled=true
-                        title=move || t!("editor-open")
-                        aria-label=move || t!("editor-open")
-                    >
-                        <Ico icon=icon />
-                        <span class="bar-label">{label}</span>
-                    </button>
-                }
-            });
+        let edit = offer(&p, video_editing.get()).map(|kind| {
+            let icon = match kind {
+                EditKind::Video => Icon::Cut,
+                EditKind::Image => Icon::Crop,
+            };
+            let label = move || match kind {
+                EditKind::Video => t!("editor-video-short"),
+                EditKind::Image => t!("editor-image-short"),
+            };
+            view! {
+                <button
+                    type="button"
+                    class="icon-btn"
+                    title=move || t!("editor-open")
+                    aria-label=move || t!("editor-open")
+                    aria-haspopup="dialog"
+                    on:click=move |_| on_edit_media.run(())
+                >
+                    <Ico icon=icon />
+                    <span class="bar-label">{label}</span>
+                </button>
+            }
+        });
         let share = (!deleted).then(|| {
             view! {
                 <button
@@ -821,4 +898,41 @@ fn PostBar(
             {bar}
         </div>
     }
+}
+
+/// Takes an edit back from the notice after saving: the original comes out of
+/// the recycle bin, the edited copy is deleted for good, and the original
+/// shows again if the copy is still on the screen.
+fn undo_edit(saved: Saved, q: String, navigate: impl Fn(&str, NavigateOptions) + 'static) {
+    spawn_local(async move {
+        if saved.binned {
+            let trash::Restored { failed, .. } = trash::restore_posts(vec![saved.original]).await;
+            if let Some(refused) = failed.into_iter().next() {
+                notify(refused.message);
+                return;
+            }
+        }
+        // For good: left in the bin, the same edit would be a duplicate the
+        // next time. If the purge fails, it just stays in the bin.
+        let copy = saved.id;
+        match api::call(move |c| async move { c.delete_post(copy).await }).await {
+            Ok(()) => {
+                let _ = api::call(move |c| async move { c.purge_post(copy).await }).await;
+            }
+            Err(message) => notify(message),
+        }
+        forget(copy);
+        gallery::forget_post(copy);
+        gallery::forget_lists();
+        let on_copy = web_sys::window()
+            .and_then(|w| w.location().pathname().ok())
+            .is_some_and(|path| path == format!("/post/{copy}"));
+        if on_copy {
+            let options = NavigateOptions {
+                replace: true,
+                ..NavigateOptions::default()
+            };
+            navigate(&route::post(saved.original, &q, None), options);
+        }
+    });
 }

@@ -77,6 +77,35 @@ pub fn listen(
     })
 }
 
+/// [`listen`] in the capture phase, so `cb` sees the event before the
+/// element it is for, and can stop it.
+pub fn listen_capture(
+    target: &web_sys::EventTarget,
+    event: &'static str,
+    cb: impl FnMut(web_sys::Event) + 'static,
+) -> Watch {
+    let closure = Closure::<dyn FnMut(web_sys::Event)>::new(cb);
+    let options = web_sys::AddEventListenerOptions::new();
+    options.set_capture(true);
+    let added = target.add_event_listener_with_callback_and_add_event_listener_options(
+        event,
+        closure.as_ref().unchecked_ref(),
+        &options,
+    );
+    if added.is_err() {
+        return Watch::none();
+    }
+    let target = target.clone();
+    Watch::new(move || {
+        let _ = target.remove_event_listener_with_callback_and_bool(
+            event,
+            closure.as_ref().unchecked_ref(),
+            true,
+        );
+        drop(closure);
+    })
+}
+
 /// Waits `ms` milliseconds.
 pub async fn sleep(ms: i32) {
     let promise = js_sys::Promise::new(&mut |done, _| {
@@ -113,6 +142,39 @@ pub fn on_width(el: &Element, mut cb: impl FnMut(f64) + 'static) -> Watch {
         observer.disconnect();
         drop(closure);
     })
+}
+
+/// Calls `cb` with the width and height of `el`'s content box now and
+/// whenever they change.
+pub fn on_size(el: &web_sys::HtmlElement, mut cb: impl FnMut(f64, f64) + 'static) -> Watch {
+    let target = el.clone();
+    let closure = Closure::<dyn FnMut()>::new(move || {
+        if target.is_connected() {
+            cb(
+                f64::from(target.client_width()),
+                f64::from(target.client_height()),
+            );
+        }
+    });
+    let Ok(observer) = web_sys::ResizeObserver::new(closure.as_ref().unchecked_ref()) else {
+        return Watch::none();
+    };
+    observer.observe(el);
+    Watch::new(move || {
+        observer.disconnect();
+        drop(closure);
+    })
+}
+
+/// The window's inner width and height, in CSS pixels.
+pub fn window_size() -> (f64, f64) {
+    let Some(window) = web_sys::window() else {
+        return (0.0, 0.0);
+    };
+    let size = |v: Result<wasm_bindgen::JsValue, wasm_bindgen::JsValue>| {
+        v.ok().and_then(|v| v.as_f64()).unwrap_or(0.0)
+    };
+    (size(window.inner_width()), size(window.inner_height()))
 }
 
 /// Calls `cb` when `el` comes within `margin` (CSS lengths, as for

@@ -24,6 +24,8 @@ pub enum Icon {
     Download,
     Edit,
     Explore,
+    /// Mirroring a picture; turned a quarter, top to bottom.
+    Flip,
     Folder,
     Fullscreen,
     FullscreenExit,
@@ -39,12 +41,20 @@ pub enum Icon {
     Logout,
     /// Opening in a tab of its own.
     OpenInNew,
+    /// Proportions wider or taller.
+    Orientation,
     /// A colour search.
     Palette,
     Play,
+    /// A crop of any proportions, and of proportions typed in.
+    RatioCustom,
+    RatioFree,
+    Redo,
     /// Leaving something out.
     Remove,
     Restore,
+    RotateLeft,
+    RotateRight,
     Search,
     Share,
     /// Signing in through an identity provider.
@@ -59,6 +69,7 @@ pub enum Icon {
     TrendingUp,
     /// Settings.
     Tune,
+    Undo,
     Upload,
     ZoomIn,
     ZoomOut,
@@ -114,6 +125,9 @@ impl Icon {
             Icon::Explore => Shape::Fill(
                 "M12 2C6.477 2 2 6.477 2 12s4.477 10 10 10s10-4.477 10-10S17.523 2 12 2M9.879 9.879c1.414-1.414 6.01-2.475 6.364-2.121c.352.357-.708 4.95-2.122 6.363s-6.01 2.475-6.363 2.121s.707-4.949 2.12-6.363M12 11a1 1 0 1 0 0 2a1 1 0 0 0 0-2",
             ),
+            Icon::Flip => Shape::Fill(
+                "M12 2a1 1 0 0 1 1 1v18a1 1 0 1 1-2 0v-1H5a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h6V3a1 1 0 0 1 1-1m4 16a1 1 0 1 1 0 2h-1a1 1 0 1 1 0-2zm4-1a1 1 0 0 1 1 1a2 2 0 0 1-2 2a1 1 0 1 1 0-2a1 1 0 0 1 1-1m0-4a1 1 0 0 1 1 1v1a1 1 0 1 1-2 0v-1a1 1 0 0 1 1-1m0-5a1 1 0 0 1 1 1v1a1 1 0 1 1-2 0V9a1 1 0 0 1 1-1m-1-4a2 2 0 0 1 2 2a1 1 0 1 1-2 0a1 1 0 1 1 0-2m-3 0a1 1 0 1 1 0 2h-1a1 1 0 1 1 0-2z",
+            ),
             Icon::Folder => Shape::Fill(
                 "M2 5a2 2 0 0 1 2-2h5.52a2 2 0 0 1 1.561.75l1.4 1.75H20a2 2 0 0 1 2 2V19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2z",
             ),
@@ -151,15 +165,40 @@ impl Icon {
                 "3",
                 "M14 4h6v6m0-6l-8.5 8.5M18 14.5V18a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h3.5",
             ),
+            // MingCute rotate_to_vertical_fill.
+            Icon::Orientation => Shape::Fill(
+                "M3 5a2 2 0 0 1 2-2h6a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2zm11 15a1 1 0 0 1 1-1h4v-6h-4a1 1 0 1 1 0-2h4a2 2 0 0 1 2 2v6a2 2 0 0 1-2 2h-4a1 1 0 0 1-1-1m4-16a1 1 0 0 1 .705 1.709c.684.438 1.383.965 2.002 1.584a1 1 0 0 1-1.414 1.414c-1.084-1.084-2.526-1.863-3.523-2.317l-.398-.174a6.62 6.62 0 0 0-.174-.072c-.618-.251-.737-.867-.667-1.237.07-.372.41-.907 1.085-.907z",
+            ),
             Icon::Palette => Shape::Fill(
                 "M12 2c5.523 0 10 4.477 10 10q-.002.975-.18 1.9c-.386 2.003-2.398 2.85-4.083 2.57l-1.739-.29a1.29 1.29 0 0 0-1.124.36l-.089.089c-.34.34-.423.858-.209 1.287c.423.846.428 1.812.055 2.604a2.53 2.53 0 0 1-2.222 1.472q-.204.009-.409.008C6.477 22 2 17.523 2 12S6.477 2 12 2m-4.5 9a1.5 1.5 0 1 0 0 3a1.5 1.5 0 0 0 0-3m2-4a1.5 1.5 0 1 0 0 3a1.5 1.5 0 0 0 0-3m5 0a1.5 1.5 0 1 0 0 3a1.5 1.5 0 0 0 0-3",
             ),
             Icon::Play => Shape::EvenOdd(
                 "M5.669 4.76a1.47 1.47 0 0 1 2.04-1.177c1.062.453 3.442 1.532 6.462 3.276c3.021 1.744 5.146 3.266 6.069 3.958c.788.59.79 1.763.001 2.355c-.914.687-3.013 2.191-6.07 3.956c-3.06 1.766-5.412 2.832-6.464 3.28a1.467 1.467 0 0 1-2.038-1.177c-.138-1.141-.396-3.734-.396-7.236c0-3.5.257-6.092.396-7.235",
             ),
+            // Drawn for StarBooru in the pack's 2-unit line: a square with
+            // rounded corners, cut into dashes for a free crop and into dots
+            // on a 4-unit grid for a custom one.
+            Icon::RatioCustom => Shape::Stroke(
+                "2",
+                "M4 4h0m4 0h0m4 0h0m4 0h0m4 0h0m0 4h0m0 4h0m0 4h0m0 4h0m-4 0h0m-4 0h0m-4 0h0m-4 0h0m0-4h0m0-4h0m0-4h0",
+            ),
+            Icon::RatioFree => Shape::Stroke(
+                "2",
+                "M4 7v-.5A2.5 2.5 0 0 1 6.5 4H7m10 0h.5A2.5 2.5 0 0 1 20 6.5V7m0 10v.5a2.5 2.5 0 0 1-2.5 2.5H17M7 20h-.5A2.5 2.5 0 0 1 4 17.5V17M11 4h2m7 7v2m-7 7h-2m-7-7v-2",
+            ),
+            // MingCute back_2_fill and forward_2_fill.
+            Icon::Redo => Shape::Fill(
+                "M16.84 10.972A7 7 0 0 0 4.5 15.5a1.5 1.5 0 0 1-3 0c0-5.523 4.477-10 10-10a9.972 9.972 0 0 1 7.418 3.295l.347-1.964a1.5 1.5 0 1 1 2.954.52l-1.042 5.91a1.5 1.5 0 0 1-.617.968 1.607 1.607 0 0 1-1.385.202l-5.644-.996a1.5 1.5 0 1 1 .52-2.954l2.788.491z",
+            ),
             Icon::Remove => Shape::EvenOdd("M5 10.5h14a1.5 1.5 0 0 1 0 3H5a1.5 1.5 0 0 1 0-3"),
             Icon::Restore => Shape::EvenOdd(
                 "M13.941 19.244a7.5 7.5 0 0 1-7.534-2.245A1.5 1.5 0 1 0 4.172 19a10.5 10.5 0 0 0 10.545 3.142c5.602-1.501 8.926-7.259 7.425-12.86c-1.5-5.602-7.258-8.926-12.86-7.425a10.5 10.5 0 0 0-7.784 10.06c-.01 1.314 1.449 2.04 2.492 1.337l2.674-1.801c1.466-.988.483-3.274-1.243-2.889l-.1.022a7.5 7.5 0 1 1 8.62 10.658",
+            ),
+            Icon::RotateLeft => Shape::Fill(
+                "M14 8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2v-9a2 2 0 0 1 2-2zm4-5a1 1 0 1 1 0 2h-.996q.331.2.664.426c1.693 1.15 3.4 2.835 4.272 5.232a1 1 0 1 1-1.88.684c-.682-1.879-2.042-3.26-3.516-4.262s-3.009-1.584-3.936-1.875c-.734-.23-.8-.948-.76-1.233c.04-.284.309-.972 1.096-.972z",
+            ),
+            Icon::RotateRight => Shape::Fill(
+                "M20 8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H10a2 2 0 0 1-2-2v-9a2 2 0 0 1 2-2zm-8.945-5c.788 0 1.057.688 1.097.972s-.026 1.002-.76 1.233c-.928.291-2.462.873-3.936 1.875c-1.474 1.001-2.834 2.384-3.517 4.262a1 1 0 1 1-1.879-.684c.872-2.397 2.578-4.082 4.272-5.232Q6.663 5.2 6.996 5H6a1 1 0 0 1 0-2z",
             ),
             Icon::Search => Shape::Fill(
                 "M10.5 2a8.5 8.5 0 0 1 8.5 8.5a8.46 8.46 0 0 1-1.826 5.26l3.654 3.654a1.001 1.001 0 0 1-1.414 1.415l-3.654-3.655A8.46 8.46 0 0 1 10.5 19a8.5 8.5 0 0 1 0-17m0 2a6.5 6.5 0 1 0 0 13a6.5 6.5 0 0 0 0-13zM5.75 10.5A4.75 4.75 0 0 1 10.5 5.75a.75.75 0 0 1 0 1.5A3.25 3.25 0 0 0 7.25 10.5a.75.75 0 0 1-1.5 0z",
@@ -192,6 +231,9 @@ impl Icon {
             Icon::TrendingUp => Shape::Stroke("3", "m3 16l6.5-6.5L14 14l6.5-6.5M17 7h4v4"),
             Icon::Tune => Shape::Fill(
                 "M11.288 20.713Q11 20.425 11 20v-4q0-.425.288-.712T12 15t.713.288T13 16v1h7q.425 0 .713.288T21 18t-.288.713T20 19h-7v1q0 .425-.288.713T12 21t-.712-.288M4 19q-.425 0-.712-.288T3 18t.288-.712T4 17h4q.425 0 .713.288T9 18t-.288.713T8 19zm3.288-4.288Q7 14.425 7 14v-1H4q-.425 0-.712-.288T3 12t.288-.712T4 11h3v-1q0-.425.288-.712T8 9t.713.288T9 10v4q0 .425-.288.713T8 15t-.712-.288M12 13q-.425 0-.712-.288T11 12t.288-.712T12 11h8q.425 0 .713.288T21 12t-.288.713T20 13zm3.288-4.288Q15 8.425 15 8V4q0-.425.288-.712T16 3t.713.288T17 4v1h3q.425 0 .713.288T21 6t-.288.713T20 7h-3v1q0 .425-.288.713T16 9t-.712-.288M4 7q-.425 0-.712-.288T3 6t.288-.712T4 5h8q.425 0 .713.288T13 6t-.288.713T12 7z",
+            ),
+            Icon::Undo => Shape::Fill(
+                "M7.16 10.972A7 7 0 0 1 19.5 15.5a1.5 1.5 0 1 0 3 0c0-5.523-4.477-10-10-10a9.973 9.973 0 0 0-7.418 3.295L4.735 6.83a1.5 1.5 0 1 0-2.954.52l1.042 5.91c.069.391.29.74.617.968.403.282.934.345 1.385.202l5.644-.996a1.5 1.5 0 1 0-.52-2.954l-2.788.491z",
             ),
             Icon::Upload => {
                 Shape::Stroke("3", "M5 3.5h14M12 20.5V9.5M7.757 13.743 12 9.5l4.243 4.243")
@@ -243,7 +285,7 @@ pub fn Ico(icon: Icon, #[prop(default = 24)] size: u32) -> impl IntoView {
 mod tests {
     use super::*;
 
-    const ALL: [Icon; 44] = [
+    const ALL: [Icon; 52] = [
         Icon::Add,
         Icon::ArrowBack,
         Icon::ArrowUp,
@@ -259,6 +301,7 @@ mod tests {
         Icon::Download,
         Icon::Edit,
         Icon::Explore,
+        Icon::Flip,
         Icon::Folder,
         Icon::Fullscreen,
         Icon::FullscreenExit,
@@ -270,10 +313,16 @@ mod tests {
         Icon::Link,
         Icon::Logout,
         Icon::OpenInNew,
+        Icon::Orientation,
         Icon::Palette,
         Icon::Play,
+        Icon::RatioCustom,
+        Icon::RatioFree,
+        Icon::Redo,
         Icon::Remove,
         Icon::Restore,
+        Icon::RotateLeft,
+        Icon::RotateRight,
         Icon::Search,
         Icon::Share,
         Icon::Shield,
@@ -285,6 +334,7 @@ mod tests {
         Icon::ThumbUp,
         Icon::TrendingUp,
         Icon::Tune,
+        Icon::Undo,
         Icon::Upload,
         Icon::ZoomIn,
         Icon::ZoomOut,

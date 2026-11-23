@@ -28,6 +28,7 @@ pub fn App() -> impl IntoView {
     let hue = Memo::new(|_| store::prefs().accent_hue);
     let picked = Memo::new(|_| store::prefs().language);
     let flush = Memo::new(|_| store::prefs().flush_tiles);
+    let hand = Memo::new(|_| store::prefs().hand);
     // A language picked in Settings, else the browser's.
     Effect::new(move |_| {
         i18n::set_lang(i18n::resolve(picked.get(), &i18n::browser_languages()));
@@ -46,6 +47,8 @@ pub fn App() -> impl IntoView {
             data-theme=move || theme.get().as_str()
             // Thumbnails edge to edge (style/pages/gallery.css).
             data-tiles=move || flush.get().then_some("flush")
+            // The side the rail and the editor's tools stand on.
+            data-hand=move || hand.get().as_str()
             style=move || format!("--seed-hue: {}", hue.get())
         >
             <Router>
@@ -142,6 +145,28 @@ mod tests {
         ] {
             assert!(full.contains(token), "{token}");
         }
+    }
+
+    #[test]
+    fn the_media_editor_keeps_glass_to_its_floating_controls_and_fades_out_of_the_way() {
+        let css = include_str!("../style/pages/editor.css");
+        assert!(!css.contains("backdrop-filter"));
+        let editor = include_str!("pages/post/editor.rs");
+        for class in [
+            "editor-pill glass float icon-only",
+            "editor-pill glass float editor-history",
+            "editor-panel glass float",
+        ] {
+            assert!(editor.contains(class), "{class}");
+        }
+        // For its fade the editor still covers the window: it mustn't take
+        // the touches meant for the viewer under it.
+        assert!(rule(css, ".editor.closing").contains("pointer-events: none"));
+        assert!(css.contains("html:has(.editor:not(.closing)) { overflow-y: hidden; }"));
+        // Where the tools stand comes from `logic::editor::Layout`.
+        assert!(editor.contains("data-layout=move || layout.get().as_str()"));
+        assert!(css.contains(r#".editor[data-layout="beside"] { grid-template:"#));
+        assert!(css.contains("@media (prefers-reduced-motion: reduce)"));
     }
 
     #[test]
@@ -258,6 +283,7 @@ mod tests {
             include_str!("../style/pages/login.css"),
             include_str!("../style/pages/gallery.css"),
             include_str!("../style/pages/post.css"),
+            include_str!("../style/pages/editor.css"),
             include_str!("../style/pages/help.css"),
         ] {
             assert!(!css.contains("-webkit-backdrop-filter"));
@@ -273,6 +299,7 @@ mod tests {
             ("login", include_str!("../style/pages/login.css")),
             ("gallery", include_str!("../style/pages/gallery.css")),
             ("post", include_str!("../style/pages/post.css")),
+            ("editor", include_str!("../style/pages/editor.css")),
             ("help", include_str!("../style/pages/help.css")),
         ] {
             // A colour worked out from the tokens is fine: `oklch(from var(--x) …)`,

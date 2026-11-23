@@ -54,6 +54,31 @@ impl Theme {
     }
 }
 
+/// The hand the one-handed controls are for: the tablet navigation rail and
+/// the editor's tools go on its side.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum Hand {
+    Left,
+    Right,
+    /// The usual layout: the rail on the left, the tools on the right. Also
+    /// what an unknown value (from a newer version) reads as.
+    #[default]
+    #[serde(other)]
+    Either,
+}
+
+impl Hand {
+    /// The value of `data-hand` on `.app`, which the styles read.
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Hand::Either => "either",
+            Hand::Left => "left",
+            Hand::Right => "right",
+        }
+    }
+}
+
 /// The shape of the gallery's tiles. Staggered tiles keep the picture's own
 /// proportions, within the limits in `logic/layout.rs`: portrait ones are at
 /// least square, landscape ones at most square, and `StaggeredAll` takes both.
@@ -147,6 +172,12 @@ pub struct Prefs {
     /// showed.
     #[serde(deserialize_with = "lenient_yes")]
     pub booru_dedupe: bool,
+    #[serde(deserialize_with = "lenient")]
+    pub hand: Hand,
+    /// The editor keeps the original post; otherwise it goes to the recycle
+    /// bin once the edited copy is saved.
+    #[serde(deserialize_with = "lenient")]
+    pub keep_original: bool,
     /// Settings this version doesn't have yet (the reference's, or a newer
     /// version's), written back untouched.
     #[serde(flatten)]
@@ -171,6 +202,8 @@ impl Default for Prefs {
             boorus: Vec::new(),
             booru_sites: Vec::new(),
             booru_dedupe: true,
+            hand: Hand::Either,
+            keep_original: false,
             other: Map::new(),
         }
     }
@@ -561,6 +594,8 @@ mod tests {
                 }],
                 booru_sites: vec!["danbooru".into(), "e926".into()],
                 booru_dedupe: false,
+                hand: Hand::Left,
+                keep_original: true,
                 other: Map::new(),
             },
             memory: GalleryMemory {
@@ -590,6 +625,8 @@ mod tests {
         // The reference's names, and no empty account written back.
         assert_eq!(value["prefs"]["booru_sites"][1], "e926");
         assert_eq!(value["prefs"]["booru_dedupe"], false);
+        assert_eq!(value["prefs"]["hand"], "left");
+        assert_eq!(value["prefs"]["keep_original"], true);
         assert_eq!(
             value["prefs"]["boorus"][0],
             serde_json::json!({"api": "danbooru", "base": "http://nas:8000"})
@@ -789,6 +826,31 @@ mod tests {
     }
 
     #[test]
+    fn the_hand_and_the_editors_original_default_and_fall_back() {
+        let prefs = parse(r#"{"prefs":{"theme":"dark"}}"#).prefs;
+        assert_eq!(prefs.hand, Hand::Either);
+        assert!(
+            !prefs.keep_original,
+            "the original goes to the bin unless kept"
+        );
+        let prefs = parse(r#"{"prefs":{"hand":"right","keep_original":true}}"#).prefs;
+        assert_eq!(prefs.hand, Hand::Right);
+        assert!(prefs.keep_original);
+        // An unknown hand from a newer version, or odd values, cost only themselves.
+        let prefs =
+            parse(r#"{"prefs":{"hand":"both","keep_original":"yes","theme":"light"}}"#).prefs;
+        assert_eq!(prefs.hand, Hand::Either);
+        assert!(!prefs.keep_original);
+        assert_eq!(prefs.theme, Theme::Light);
+        let prefs = parse(r#"{"prefs":{"hand":7}}"#).prefs;
+        assert_eq!(prefs.hand, Hand::Either);
+        for hand in [Hand::Either, Hand::Left, Hand::Right] {
+            let json = format!(r#"{{"prefs":{{"hand":"{}"}}}}"#, hand.as_str());
+            assert_eq!(parse(&json).prefs.hand, hand);
+        }
+    }
+
+    #[test]
     fn state_without_memory_still_loads() {
         assert_eq!(
             parse(r#"{"prefs":{"theme":"dark"}}"#).memory,
@@ -810,7 +872,8 @@ mod tests {
             "memory":{"owner":"x|1","spots":[{"q":"cat"}]}}"#;
         let stored = parse(json);
         assert_eq!(stored.prefs.theme, Theme::Dark);
-        assert_eq!(stored.prefs.other["hand"], "left");
+        assert_eq!(stored.prefs.hand, Hand::Left);
+        assert_eq!(stored.prefs.other["effects"], "lite");
         let again: Value = serde_json::from_str(&to_json(&stored).unwrap()).unwrap();
         let before: Value = serde_json::from_str(json).unwrap();
         assert_eq!(again["prefs"]["hand"], before["prefs"]["hand"]);
