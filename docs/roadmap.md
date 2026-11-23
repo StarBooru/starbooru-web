@@ -29,13 +29,7 @@ _Status as of 2026-11-23: sections 1 to 3 are done: the app does everything the 
 - [x] Administration: overview, accounts, server, AI, backups
 - [x] Privacy and terms pages
 
-## 4. Polish
-
-- [ ] Smooth on a Raspberry Pi 4 in Chromium and Firefox
-- [ ] Effects (automatic, full, reduced) and battery saver
-- [ ] English and Italian, complete
-
-## 5. Private and public booru
+## 4. Private and public booru
 
 An instance runs in one of two modes: private, as today, or public, open to other people with their own accounts.
 
@@ -63,7 +57,7 @@ Both modes:
 - [ ] A tag blacklist in Settings (server)
 - [ ] An optional home page that can be turned on or off and customised. The default, in StarBooru's look, has the logo above a search bar, over a moving background of the most popular posts rated safe (server)
 
-## 6. People
+## 5. People
 
 - [ ] A setting to turn People on and off
 - [ ] AI that finds faces on upload, anime ones included: it keeps a crop of each face and fills in the name, the franchise, whether it's a cosplay, and the clothing and looks (server)
@@ -71,7 +65,7 @@ Both modes:
 - [ ] People in Explore (server)
 - [ ] Popular characters in Explore, in public mode (server)
 
-## 7. Browsing and sharing
+## 6. Browsing and sharing
 
 - [ ] Explore has no search field of its own: the top bar's search narrows Explore while it's open
 - [ ] The last posts opened (history) in Explore
@@ -79,13 +73,20 @@ Both modes:
 - [ ] Click and drag across tiles to select several
 - [ ] A saved search reopens where it was left. Today the gallery remembers only the last 30 searches, so a saved one can drop out
 - [ ] Share links: a custom expiry date besides 1, 7 and 30 days
+- [ ] Reverse search an image from a post on google images, iqdb, saucenao, trace.moe 
 
-## 8. Design
+## 7. Design
 
 - [ ] Any accent colour, greys and white included
 - [ ] OLED mode, with a black background
 - [ ] A video player of our own design
 - [ ] Redesign Settings, the Tags page, the tag editor in the viewer and saved searches
+
+## 8. Polish
+
+- [ ] Smooth on a Raspberry Pi 4 in Chromium and Firefox
+- [ ] Effects (automatic, full, reduced) and battery saver
+- [ ] English and Italian, complete
 
 ## 9. Install
 
