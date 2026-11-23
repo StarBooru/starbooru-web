@@ -1,6 +1,29 @@
-//! What a page shows while it waits, and when a request failed.
+//! What a page shows while it waits, when a request failed, and when the
+//! server corrected a search.
 
 use leptos::prelude::*;
+use starbooru_core::TagCorrection;
+
+use crate::logic::search::corrections;
+
+/// Which unknown tags a search was corrected to, with a link to the same
+/// search as typed (`exact`, from `route::exact`).
+#[component]
+pub fn CorrectionBanner(
+    #[prop(into)] corrected: Signal<Vec<TagCorrection>>,
+    #[prop(into)] exact: Signal<String>,
+) -> impl IntoView {
+    view! {
+        <div class="banner info" role="status">
+            <span class="break">
+                {move || corrected.with(|c| t!("search-corrected", tags = corrections(c)))}
+            </span>
+            <a class="btn text" href=move || exact.get()>
+                {move || t!("search-exact")}
+            </a>
+        </div>
+    }
+}
 
 /// A failed request, in words the user can act on, with a way to try again.
 #[component]

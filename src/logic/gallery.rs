@@ -8,7 +8,7 @@ use std::sync::Arc;
 
 use chrono::{DateTime, Utc};
 use starbooru_core::color::ColorTerm;
-use starbooru_core::{Order, Post, SortKey, parse_query, with_color, with_order};
+use starbooru_core::{Order, Post, SortKey, TagCorrection, parse_query, with_color, with_order};
 
 /// Results come in pages of this many.
 pub const PAGE_SIZE: u32 = 60;
@@ -155,6 +155,8 @@ pub struct List {
     pub posts: Vec<Arc<Post>>,
     pub next_page: u32,
     pub has_more: bool,
+    /// Unknown tags the server corrected in the search.
+    pub corrected: Vec<TagCorrection>,
     pub loaded_at: DateTime<Utc>,
     /// What `order:random` was shuffled with, so the list stays as it was.
     pub seed: Option<i64>,
@@ -484,6 +486,7 @@ mod tests {
             posts: vec![Arc::new(post(1))],
             next_page: 2,
             has_more: true,
+            corrected: Vec::new(),
             loaded_at: at,
             seed: None,
         }

@@ -79,6 +79,12 @@ pub fn gallery(q: &str) -> String {
     }
 }
 
+/// The gallery for search `q` as typed, with no unknown tag corrected: the
+/// correction banner's way back.
+pub fn exact(q: &str) -> String {
+    gallery(&starbooru_core::with_exact(q))
+}
+
 /// Post `id`, opened from the gallery for search `q`, so the viewer can step
 /// through the same results. `seed` is the shuffle of an `order:random` search.
 pub fn post(id: i64, q: &str, seed: Option<i64>) -> String {
@@ -196,5 +202,17 @@ mod tests {
         // The signs that would end the value or change it are escaped.
         assert_eq!(query_value("a&b=c#d+e%f?"), "a%26b%3Dc%23d%2Be%25f%3F");
         assert_eq!(query_value("猫"), "%E7%8C%AB");
+    }
+
+    #[test]
+    fn the_exact_search_is_the_same_search_uncorrected() {
+        assert_eq!(exact("fractl"), "/?q=exact:true+fractl");
+        assert_eq!(exact(" fractl  -blu "), "/?q=exact:true+fractl++-blu");
+        // Once is enough, wherever it was typed.
+        assert_eq!(exact("fractl exact:true"), "/?q=fractl+exact:true");
+        // It goes first, so an open group can't take it in.
+        assert_eq!(exact("{girl boo"), "/?q=exact:true+%7Bgirl+boo");
+        let q = starbooru_core::with_exact("{girl boo");
+        assert!(starbooru_core::parse_query(&q).is_ok_and(|p| p.exact));
     }
 }

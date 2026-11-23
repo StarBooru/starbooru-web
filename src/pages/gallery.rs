@@ -19,10 +19,10 @@ use leptos_router::NavigateOptions;
 use leptos_router::hooks::{use_navigate, use_query_map};
 use send_wrapper::SendWrapper;
 use starbooru_core::color::{NAMED_COLORS, to_hex};
-use starbooru_core::{Post, parse_query};
+use starbooru_core::{Post, TagCorrection, parse_query};
 
 use crate::api;
-use crate::components::banner::{ErrorBanner, Spinner};
+use crate::components::banner::{CorrectionBanner, ErrorBanner, Spinner};
 use crate::components::color_picker::ColorPicker;
 use crate::components::icons::{Ico, Icon};
 use crate::components::select::{Choice, Select};
@@ -322,6 +322,19 @@ pub fn Gallery() -> impl IntoView {
     let has_more = RwSignal::new(cached.as_ref().is_none_or(|l| l.has_more));
     let loading = RwSignal::new(false);
     let error = RwSignal::new(None::<String>);
+    // Unknown tags the server corrected in this search.
+    let corrected = RwSignal::new(
+        cached
+            .as_ref()
+            .map(|l| l.corrected.clone())
+            .unwrap_or_default(),
+    );
+    // Only when they change, so the banner isn't drawn again with every page.
+    let set_corrected = move |now: Vec<TagCorrection>| {
+        if corrected.with_untracked(|c| *c != now) {
+            corrected.set(now);
+        }
+    };
     // Bumped on every new search, so a late answer for an old one is dropped.
     let generation = StoredValue::new(0_u64);
     let started = RwSignal::new(false);
@@ -386,6 +399,7 @@ pub fn Gallery() -> impl IntoView {
             posts: posts.get_untracked(),
             next_page: next_page.get_untracked(),
             has_more: has_more.get_untracked(),
+            corrected: corrected.get_untracked(),
             loaded_at: loaded_at.get_value(),
         });
     };
@@ -427,6 +441,7 @@ pub fn Gallery() -> impl IntoView {
                         list.extend(new.map(Arc::new));
                     });
                     has_more.set(found.has_more);
+                    set_corrected(found.corrected);
                     next_page.set(page.saturating_add(1));
                     keep();
                 }
@@ -445,6 +460,7 @@ pub fn Gallery() -> impl IntoView {
             let mut seen = HashSet::new();
             let mut done = 0_u32;
             let mut more = true;
+            let mut fixed = Vec::new();
             let mut failure = None;
             while more && found.len() < wanted {
                 let (page, size) = restore_request(done);
@@ -460,6 +476,7 @@ pub fn Gallery() -> impl IntoView {
                         let new = results.posts.into_iter().filter(|p| seen.insert(p.id));
                         found.extend(new.map(Arc::new));
                         more = results.has_more;
+                        fixed = results.corrected;
                         done = done.saturating_add(1);
                     }
                     Err(message) => {
@@ -474,6 +491,7 @@ pub fn Gallery() -> impl IntoView {
                 near.set(near_spot(grid.get_untracked(), &found, Some(&spot)));
             }
             posts.set(found);
+            set_corrected(fixed);
             next_page.set(page_after_restore(done));
             has_more.set(more);
             if failure.is_none() {
@@ -501,6 +519,9 @@ pub fn Gallery() -> impl IntoView {
             if generation.try_get_value() != Some(at_start) {
                 return;
             }
+            // A tag added since can make a correction go, or another come.
+            set_corrected(found.corrected);
+            keep();
             let (head, more) = (found.posts.len(), found.has_more);
             let Some(merged) = posts.with_untracked(|p| merge_head(p, found.posts, more)) else {
                 return;
@@ -537,6 +558,7 @@ pub fn Gallery() -> impl IntoView {
                 store::spot(&q).as_ref(),
             ));
             posts.set(list.posts);
+            set_corrected(list.corrected);
             next_page.set(list.next_page);
             has_more.set(list.has_more);
             loaded_at.set_value(list.loaded_at);
@@ -545,6 +567,7 @@ pub fn Gallery() -> impl IntoView {
             return;
         }
         posts.set(Vec::new());
+        set_corrected(Vec::new());
         settled.set(0);
         next_page.set(1);
         has_more.set(true);
@@ -834,6 +857,12 @@ pub fn Gallery() -> impl IntoView {
                     <ViewMenu grid=grid />
                 </div>
             </div>
+            <Show when=move || corrected.with(|c| !c.is_empty())>
+                <CorrectionBanner
+                    corrected=corrected
+                    exact=Signal::derive(move || route::exact(&shown_q.get()))
+                />
+            </Show>
             {move || {
                 error
                     .get()

@@ -5,23 +5,15 @@ use std::sync::Arc;
 
 use chrono::Local;
 use leptos::prelude::*;
-use starbooru_core::{MediaKind, Post, Rating, TagCategory};
+use starbooru_core::{MediaKind, Post, TagCategory};
 
 use crate::components::icons::{Ico, Icon};
 use crate::logic::viewer::{
     Group, category_class, color_href, dimensions, file_date, format_duration, group_tags, headed,
     human_size, source_link, when,
 };
+use crate::pages::rating_label;
 use crate::route;
-
-fn rating_label(rating: Rating) -> String {
-    match rating {
-        Rating::Safe => t!("rating-safe"),
-        Rating::Sensitive => t!("rating-sensitive"),
-        Rating::Questionable => t!("rating-questionable"),
-        Rating::Explicit => t!("rating-explicit"),
-    }
-}
 
 fn category_label(category: TagCategory) -> String {
     match category {

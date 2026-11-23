@@ -9,6 +9,7 @@ use crate::components::snackbar::Snackbar;
 use crate::i18n;
 use crate::pages::NotFound;
 use crate::pages::gallery::Gallery;
+use crate::pages::help::Help;
 use crate::pages::login::OidcReturn;
 use crate::pages::post::PostView;
 use crate::pages::shell::Shell;
@@ -73,7 +74,7 @@ fn AppRoutes() -> impl IntoView {
                 <Route path=path!("/settings") view=SettingsSoon />
                 <Route path=path!("/trash") view=|| view! { <Soon title=|| t!("trash-title") /> } />
                 <Route path=path!("/duplicates") view=|| view! { <Soon title=|| t!("dup-title") /> } />
-                <Route path=path!("/help") view=|| view! { <Soon title=|| t!("help-title") /> } />
+                <Route path=path!("/help") view=Help />
                 <Route path=path!("/admin") view=|| view! { <Soon title=|| t!("admin-title") /> } />
             </ParentRoute>
         </Routes>
@@ -212,8 +213,14 @@ mod tests {
         let login = at(r#"<link data-trunk rel="css" href="style/pages/login.css">"#);
         let gallery = at(r#"<link data-trunk rel="css" href="style/pages/gallery.css">"#);
         let post = at(r#"<link data-trunk rel="css" href="style/pages/post.css">"#);
+        let help = at(r#"<link data-trunk rel="css" href="style/pages/help.css">"#);
         assert!(
-            tokens < base && base < shell && shell < login && login < gallery && gallery < post
+            tokens < base
+                && base < shell
+                && shell < login
+                && login < gallery
+                && gallery < post
+                && post < help
         );
         // Empty, with not even a space in it, or `:empty` never matches.
         assert!(page.contains(r#"<div id="main"></div>"#));
@@ -246,6 +253,7 @@ mod tests {
             include_str!("../style/pages/login.css"),
             include_str!("../style/pages/gallery.css"),
             include_str!("../style/pages/post.css"),
+            include_str!("../style/pages/help.css"),
         ] {
             assert!(!css.contains("-webkit-backdrop-filter"));
         }
@@ -260,6 +268,7 @@ mod tests {
             ("login", include_str!("../style/pages/login.css")),
             ("gallery", include_str!("../style/pages/gallery.css")),
             ("post", include_str!("../style/pages/post.css")),
+            ("help", include_str!("../style/pages/help.css")),
         ] {
             // A colour worked out from the tokens is fine: `oklch(from var(--x) …)`,
             // or the strength meter's `oklch(var(--meter-l) …)`.

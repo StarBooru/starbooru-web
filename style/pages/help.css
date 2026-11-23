@@ -1,0 +1,28 @@
+/* The search cheat sheet (pages/help.rs): the box that explains a query, the
+   examples as chips that run their search, the tips and the viewer's keys. */
+
+.try-query { display: flex; gap: 8px; margin-bottom: 12px; }
+.try-query input {
+  flex: 1; min-width: 0; padding: 10px 14px; border: 1px solid var(--outline); border-radius: var(--radius-s);
+  background: var(--surface); color: var(--on-surface);
+  font: 14px ui-monospace, "Cascadia Code", "Roboto Mono", monospace;
+}
+.try-query input:focus { outline: none; border-color: var(--primary); box-shadow: 0 0 0 3px oklch(from var(--primary) l c h / 0.25); }
+.explain { margin: 0; padding-left: 20px; display: grid; gap: 4px; font-size: 14px; }
+.try-query + .field-error { margin: 0; }
+.syntax { display: grid; grid-template-columns: minmax(0, 15rem) 1fr; gap: 10px 16px; align-items: baseline; margin: 0; }
+.syntax dt { min-width: 0; }
+.syntax dd { margin: 0; font-size: 14px; color: var(--on-surface-2); }
+.code-chip, kbd {
+  display: inline-block; max-width: 100%; padding: 3px 8px; border-radius: 6px; overflow-wrap: anywhere;
+  border: 1px solid var(--outline); background: var(--surface-2); color: var(--on-surface);
+  font: 13px ui-monospace, "Cascadia Code", "Roboto Mono", monospace; text-decoration: none;
+}
+.code-chip { transition: background-color var(--fast) var(--ease), color var(--fast) var(--ease); }
+.code-chip:hover { background: var(--primary-container); color: var(--on-primary-container); border-color: var(--primary); }
+kbd { box-shadow: inset 0 -1px 0 var(--outline); white-space: nowrap; }
+.tips { margin: 0; padding-left: 20px; display: grid; gap: 6px; font-size: 14px; }
+@media (max-width: 520px) {
+  .syntax { grid-template-columns: 1fr; gap: 4px; }
+  .syntax dd { margin-bottom: 10px; }
+}
