@@ -73,7 +73,8 @@ pub fn browser_languages() -> Vec<String> {
 }
 
 thread_local! {
-    static LANG: RwSignal<Lang> = RwSignal::new(Lang::English);
+    // Reference counted, so no component's owner can dispose of it.
+    static LANG: ArcRwSignal<Lang> = ArcRwSignal::new(Lang::English);
     static BUNDLES: RefCell<HashMap<Lang, Bundle>> = RefCell::new(HashMap::new());
 }
 
@@ -83,8 +84,13 @@ pub fn lang() -> Lang {
     LANG.with(|l| l.get())
 }
 
+/// Switches the language. Setting the one in use redraws nothing.
 pub fn set_lang(lang: Lang) {
-    LANG.with(|l| l.set(lang));
+    LANG.with(|l| {
+        if l.get_untracked() != lang {
+            l.set(lang);
+        }
+    });
 }
 
 type Bundle = FluentBundle<FluentResource>;

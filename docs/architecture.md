@@ -27,19 +27,35 @@ starbooru-client = { git = "https://github.com/StarBooru/starbooru-server", tag 
 
 ```text
 src/
-  main.rs       mounts the app
+  main.rs       loads the store, picks the language, mounts the app
+  app.rs        theme and language on the root, and the routes
+  route.rs      the navigation's tabs, which tab a path is under, search addresses
   api.rs        the shared Client and the session signal
   store.rs      session and preferences in localStorage
+  theme.rs      the browser's bar colour (theme-color) from the seed hue
   i18n.rs       t!() over the Fluent catalogues
-  pages/        one module per page
-  components/   tiles, chips, menus, the tag box, the viewer stage
+  pages/        one module per page; shell.rs is the frame, soon.rs the placeholder
+  components/   icons, brand, snackbar; later tiles, chips, menus, the tag box, the viewer stage
   logic/        pure Rust with unit tests: tile layout, zoom, the word at the caret, file names
 locales/        en.ftl, it.ftl
-style/          tokens and components
+style/          tokens.css, base.css, shell.css, pages/<page>.css
 index.html      Trunk's entry, with the loading screen
 ```
 
-Routes keep the reference's paths, so links people saved still open: `/`, `/explore`, `/post/:id`, `/tags`, `/tag`, `/upload`, `/boorus`, `/boorus/post`, `/settings`, `/trash`, `/duplicates`, `/help`, `/admin`, `/oidc`, `/s/:token`, `/privacy`, `/terms`.
+Routes keep the reference's paths, so links people saved still open: `/`, `/explore`, `/post/:id`, `/tags`, `/tag`, `/upload`, `/boorus`, `/boorus/post`, `/settings`, `/trash`, `/duplicates`, `/help`, `/admin`, `/oidc`, `/s/:token`, `/privacy`, `/terms`. The first thirteen show inside the shell. A page that isn't built yet shows `Soon` with its title; it lands by replacing that view in `app.rs`.
+
+## Styles
+
+Plain CSS, split by role. `index.html` links each file with `<link data-trunk rel="css">` in this order:
+
+| File | Holds |
+|---|---|
+| `style/tokens.css` | Colour roles for light, dark and the system's dark, all from `--seed-hue` in OKLCH; radii, easing, durations, shadows; `.glass` |
+| `style/base.css` | Base elements and the shared components: buttons, switches, fields, segmented choices, chips, cards, banners, spinners, the snackbar, keyframes and the reduced-motion fallback |
+| `style/shell.css` | The top bar, the brand and search capsules, the navigation slider in its three places, the content area |
+| `style/pages/<page>.css` | One per page, linked after the three above when the page lands |
+
+Component CSS uses only the role variables, never a literal colour. The navigation sits at the top right from 1530 px, as a rail at the side from 761 to 1529 px, and at the bottom at 760 px and below.
 
 ## How it works
 

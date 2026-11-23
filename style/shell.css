@@ -1,0 +1,220 @@
+/* The frame every page lives in (pages/shell.rs): floating capsules for the
+   brand and the search, and the navigation slider, at the top right on wide
+   windows, a rail at the side in between and a bar at the bottom on phones. */
+
+/* The bars float: every part is its own glass capsule over the page, and the
+   row they sit in lets clicks through. The search stays on the window's middle
+   because the columns either side of it are always the same width (`--side`). */
+.app {
+  --bar-h: 52px; --bar-gap: 12px; --side: 200px;
+  --bar-top: max(var(--bar-gap), env(safe-area-inset-top));
+  --bar-end: calc(var(--bar-top) + var(--bar-h));
+  /* how far fixed things keep from the rail, when there is one */
+  --rail-l: 0px; --rail-r: 0px;
+}
+.float { box-shadow: inset 0 1px 0 var(--glass-edge), 0 0 0 1px var(--glass-line), var(--shadow-2); }
+.topbar {
+  position: fixed; inset: 0 0 auto; z-index: 10;
+  display: grid; grid-template-columns: var(--side) minmax(0, 1fr) var(--side); align-items: center; gap: var(--bar-gap);
+  padding: var(--bar-top) var(--bar-gap) 0; pointer-events: none;
+}
+.topbar > * { pointer-events: auto; }
+
+/* ---------- brand ---------- */
+
+.brand {
+  justify-self: start; display: flex; align-items: center; gap: 8px; height: var(--bar-h); padding: 0 18px 0 12px;
+  border-radius: 999px; color: var(--primary); text-decoration: none;
+  transition: transform var(--med) var(--ease-spring);
+}
+.brand:active { transform: scale(0.96); }
+.mark, .wordmark { display: block; flex: none; }
+/* The star turns a quarter, back onto itself. */
+.mark-star {
+  transform-box: fill-box; transform-origin: center;
+  transition: transform var(--slow) var(--ease-spring);
+}
+a.brand:hover .mark-star, a.search-home:hover .mark-star { transform: rotate(90deg) scale(1.08); }
+
+/* ---------- search ---------- */
+
+.search {
+  grid-column: 2; justify-self: center; position: relative; width: 100%; max-width: 680px;
+  display: flex; align-items: center; gap: 10px;
+  padding: 0 20px 0 16px; height: var(--bar-h); border-radius: 999px; color: var(--on-surface-2);
+  transition: box-shadow var(--med) var(--ease), background-color var(--med) var(--ease), transform var(--med) var(--ease-spring);
+}
+.search:focus-within {
+  background: var(--surface); transform: scale(1.012);
+  box-shadow: 0 0 0 2px var(--primary), var(--shadow-2);
+}
+.search-home { display: none; flex: none; color: var(--primary); }
+.search-field { position: relative; flex: 1; min-width: 0; display: grid; align-items: center; container-type: inline-size; }
+.search-field > * { grid-area: 1 / 1; }
+.search input {
+  width: 100%; min-width: 0; border: 0; background: transparent; color: var(--on-surface);
+  font: inherit; outline: none;
+}
+/* The box has its own clear button, in the app's colours. */
+.search input::-webkit-search-cancel-button { appearance: none; }
+.search-clear { flex: none; width: 36px; height: 36px; margin-right: -10px; }
+.search-clear .icon { width: 20px; height: 20px; }
+
+/* ---------- navigation ---------- */
+
+/* The navigation is a slider: equal cells in a capsule, and one thumb that
+   travels between them with the selected item's icon and label inside it. Its
+   edges move apart, the one going ahead first, so it stretches on the way.
+   `--n` is the cells, `--i` the selected one, `data-dir` the way it last went.
+
+   The edges move by `transform` alone, which the compositor runs while the page
+   is busy drawing the page it goes to. The thumb spans the whole track. In it
+   `.slider-fill` is the part after the start edge, round at its start, and
+   `.slider-clip` cuts it off at the end edge, round at its end. `.slider-unclip`
+   moves the other way to the clip, with the same timing, so the fill inside it
+   keeps to the track. */
+.nav-top, .nav-bottom { display: none; }
+.slider { --pad: 4px; position: relative; padding: var(--pad); border-radius: 999px; }
+.slider-thumb {
+  --step: calc(100% / var(--n));
+  position: absolute; inset: var(--pad); pointer-events: none;
+  filter: var(--drop-1);
+  transform-origin: calc((var(--i) + 0.5) * var(--step)) 50%;
+  transition: opacity var(--med) var(--ease), transform var(--med) var(--ease-spring);
+}
+.slider-clip, .slider-unclip, .slider-fill { position: absolute; top: 0; bottom: 0; left: 0; width: 100%; }
+.slider-clip {
+  left: auto; right: calc(100% - var(--step)); overflow: hidden; border-radius: 0 999px 999px 0;
+  transform: translateX(calc(var(--i) * var(--step)));
+  transition: transform var(--to-r) var(--ease);
+}
+.slider-unclip {
+  transform: translateX(calc((var(--n) - 1 - var(--i)) * var(--step)));
+  transition: transform var(--to-r) var(--ease);
+}
+.slider-fill {
+  border-radius: 999px 0 0 999px;
+  background: var(--primary-container);
+  box-shadow: inset 0 1px 0 var(--glass-edge);
+  transform: translateX(calc(var(--i) * var(--step)));
+  transition: transform var(--to-l) var(--ease);
+}
+.slider[data-dir="next"] { --to-l: 460ms; --to-r: 240ms; }
+.slider[data-dir="back"] { --to-l: 240ms; --to-r: 460ms; }
+.slider-thumb.off { opacity: 0; transform: scale(0.8); }
+.nav-item {
+  position: relative; display: flex; align-items: center; justify-content: center; gap: 6px; min-width: 0; min-height: 44px; padding: 0 12px;
+  border-radius: 999px; color: var(--on-surface); text-decoration: none; font-weight: 600; font-size: 14px; white-space: nowrap;
+  transition: color var(--med) var(--ease), background-color var(--fast) var(--ease);
+}
+.nav-item:focus-visible { outline-offset: -3px; }
+.nav-item.active { color: var(--on-primary-container); }
+@media (hover: hover) {
+  .nav-item:not(.active):hover { background: oklch(from var(--on-surface) l c h / 0.08); }
+}
+.nav-icon { position: relative; display: grid; place-items: center; transition: transform var(--med) var(--ease-spring); }
+.nav-item .icon { width: 20px; height: 20px; }
+.nav-item:active .nav-icon { transform: scale(0.86); }
+/* On a box of its own: the compositor runs no animation of an <svg>, nor one of
+   an element whose transform also has a transition going. */
+.nav-pop { display: grid; place-items: center; }
+.nav-item.active .nav-pop { animation: pop var(--slow) var(--ease-spring); }
+/* Work still going on under an item, such as uploads. */
+.nav-badge {
+  position: absolute; top: -7px; right: -10px; min-width: 18px; height: 18px; padding: 0 5px;
+  display: grid; place-items: center; border-radius: 999px; box-shadow: 0 0 0 2px var(--surface);
+  background: var(--primary); color: var(--on-primary);
+  font-size: 11px; font-weight: 700; line-height: 1; font-variant-numeric: tabular-nums;
+  animation: pop var(--med) var(--ease-spring);
+}
+
+/* ---------- content ---------- */
+
+.content { --pad-x: 16px; padding: calc(var(--bar-end) + 16px) var(--pad-x) 48px; }
+.page { max-width: 1600px; margin: 0 auto; animation: fade-up var(--med) var(--ease); }
+.page.narrow { max-width: 720px; }
+.soon-mark { color: var(--primary); opacity: 0.7; }
+.center-page { display: grid; place-items: center; min-height: 50vh; padding: 16px; }
+.center-page > .card { width: min(480px, 100%); }
+/* A page outside the shell, with no bars around it. */
+.solo-page { display: grid; place-items: center; min-height: 100vh; min-height: 100dvh; padding: 16px; }
+.solo-page > .card { width: min(480px, 100%); }
+
+/* ---------- breakpoints ---------- */
+
+/* Wide windows: the labelled slider fits beside the search. */
+@media (min-width: 1530px) {
+  .app { --side: 540px; }
+  .nav-top {
+    grid-column: 3; justify-self: end; display: grid; grid-auto-flow: column; grid-auto-columns: 1fr;
+    height: var(--bar-h);
+  }
+  .nav-top .nav-item { padding: 0 10px; }
+}
+
+/* Phones: the search takes the whole row, with the crown inside it, and the
+   slider floats at the bottom within reach of a thumb. */
+@media (max-width: 760px) {
+  .app { --bar-gap: 8px; }
+  .topbar { grid-template-columns: minmax(0, 1fr); gap: 0; }
+  .brand { display: none; }
+  .search { grid-column: 1; padding-left: 12px; }
+  .search > .icon { display: none; }
+  .search-home { display: block; border-radius: 999px; }
+  .nav-bottom {
+    position: fixed; left: 12px; right: 12px; bottom: max(12px, env(safe-area-inset-bottom)); z-index: 10;
+    margin-inline: auto; max-width: 480px;
+    display: grid; grid-auto-flow: column; grid-auto-columns: 1fr;
+  }
+  .nav-bottom .nav-item { flex-direction: column; gap: 1px; min-height: 52px; padding: 0 2px; font-size: 12px; }
+  .nav-bottom .nav-item .icon { width: 22px; height: 22px; }
+  .content { --pad-x: 8px; padding: calc(var(--bar-end) + 12px) var(--pad-x) calc(96px + env(safe-area-inset-bottom)); }
+  .snackbar-slot { bottom: calc(96px + env(safe-area-inset-bottom)); }
+}
+
+/* In between: tablets and laptops have the height to spare less than the width,
+   so the slider stands up as a rail at the side, its items centred within reach
+   of a thumb. `data-hand` picks the side; `--rail-l`/`--rail-r` keep fixed
+   things clear of it. */
+@media (min-width: 761px) and (max-width: 1529px) {
+  .app { --rail-w: 76px; --rail-l: calc(var(--rail-w) + 16px); }
+  .app[data-hand="right"] { --rail-l: 0px; --rail-r: calc(var(--rail-w) + 16px); }
+  .nav-bottom {
+    position: fixed; z-index: 9; left: var(--bar-gap); width: var(--rail-w); height: fit-content;
+    top: calc(var(--bar-end) + var(--bar-gap)); bottom: var(--bar-gap); margin-block: auto;
+    display: grid; grid-auto-rows: 1fr; border-radius: calc(var(--rail-w) / 2);
+  }
+  .app[data-hand="right"] .nav-bottom { left: auto; right: var(--bar-gap); }
+  /* Standing up: the same, down the rail. */
+  .nav-bottom .slider-thumb { --end: calc(var(--rail-w) / 2 - var(--pad)); transform-origin: 50% calc((var(--i) + 0.5) * var(--step)); }
+  .nav-bottom :is(.slider-clip, .slider-unclip, .slider-fill) { left: 0; right: 0; width: auto; top: 0; bottom: auto; height: 100%; }
+  .nav-bottom .slider-clip {
+    top: auto; bottom: calc(100% - var(--step)); border-radius: 0 0 var(--end) var(--end);
+    transform: translateY(calc(var(--i) * var(--step)));
+  }
+  .nav-bottom .slider-unclip { transform: translateY(calc((var(--n) - 1 - var(--i)) * var(--step))); }
+  .nav-bottom .slider-fill {
+    border-radius: var(--end) var(--end) 0 0;
+    transform: translateY(calc(var(--i) * var(--step)));
+  }
+  /* At least as tall as the thumb is wide, or a full radius rounds its left and
+     right instead of following the rail. */
+  .nav-bottom .nav-item {
+    flex-direction: column; gap: 2px; min-height: var(--rail-w); padding: 0 2px; font-size: 12px;
+    border-radius: calc(var(--rail-w) / 2 - var(--pad));
+  }
+  .nav-bottom .nav-item .icon { width: 22px; height: 22px; }
+  .content { padding-left: calc(8px + var(--rail-l)); padding-right: calc(8px + var(--rail-r)); }
+  .snackbar-slot { left: var(--rail-l); right: var(--rail-r); }
+}
+@media (min-width: 761px) and (max-width: 1100px) {
+  .app { --side: var(--bar-h); }
+  .brand { justify-content: center; width: var(--bar-h); padding: 0; }
+  .brand .wordmark { display: none; }
+}
+/* A phone on its side: icons alone fit the height, and still say what they are. */
+@media (min-width: 761px) and (max-width: 1529px) and (max-height: 500px) {
+  .app { --rail-w: 52px; }
+  .nav-bottom .nav-item { min-height: calc(var(--rail-w) - 2 * var(--pad)); }
+  .nav-bottom .nav-label { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
+}

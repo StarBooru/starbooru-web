@@ -10,11 +10,15 @@
     <link data-trunk rel="copy-file" href="assets/brand/apple-touch-icon.png">
     <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32.png">
     <link rel="apple-touch-icon" href="/apple-touch-icon.png">
+    <!-- The browser's own bars take the canvas colour. The app keeps these in
+         step with the theme and the accent (app.rs). -->
+    <meta id="theme-color-light" name="theme-color" content="#f9fafe" media="(prefers-color-scheme: light)">
+    <meta id="theme-color-dark" name="theme-color" content="#0e0e13" media="(prefers-color-scheme: dark)">
     <style>
-      /* The loading screen, over the page until the app is on it (main.css takes
+      /* The loading screen, over the page until the app is on it (base.css takes
          it away). It is styled here so that it paints before anything has
          loaded. The colours are the --canvas, --primary-container and --primary
-         of style/tokens.css. */
+         of style/tokens.css: a test in app.rs keeps the two the same. */
       html, body { margin: 0; }
       #boot {
         --h: 285;
@@ -49,7 +53,10 @@
         #boot::after { animation: boot-show 0.2s 0.4s forwards; }
       }
     </style>
-    <link data-trunk rel="css" href="style/main.css">
+    <!-- Tokens first: the rest are written in them. Pages add style/pages/<page>.css after these. -->
+    <link data-trunk rel="css" href="style/tokens.css">
+    <link data-trunk rel="css" href="style/base.css">
+    <link data-trunk rel="css" href="style/shell.css">
     <!-- wasm-opt has to be told the features Rust's wasm32 target uses by default. -->
     <link data-trunk rel="rust" data-bin="starbooru-web" data-wasm-opt="z"
       data-wasm-opt-params="--enable-bulk-memory --enable-nontrapping-float-to-int --enable-sign-ext --enable-mutable-globals --enable-reference-types --enable-multivalue">

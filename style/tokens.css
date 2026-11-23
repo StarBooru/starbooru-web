@@ -1,0 +1,164 @@
+/* StarBooru web: the design tokens. Material You-inspired, every colour a role
+   generated from one seed hue (--seed-hue, set on .app from the user's accent).
+   Components never hard-code a colour: they use these roles. */
+
+.app {
+  --h: var(--seed-hue, 285);
+
+  /* light role mapping */
+  color-scheme: light;
+  --canvas: oklch(0.985 0.006 var(--h));
+  --surface: oklch(0.965 0.014 var(--h));
+  --surface-2: oklch(0.94 0.02 var(--h));
+  --surface-3: oklch(0.905 0.028 var(--h));
+  --on-surface: oklch(0.23 0.02 var(--h));
+  --on-surface-2: oklch(0.43 0.025 var(--h));
+  --outline: oklch(0.8 0.025 var(--h));
+  --primary: oklch(0.5 0.17 var(--h));
+  --on-primary: oklch(0.99 0.01 var(--h));
+  --primary-container: oklch(0.9 0.06 var(--h));
+  --on-primary-container: oklch(0.28 0.1 var(--h));
+  --tertiary: oklch(0.62 0.15 calc(var(--h) + 70));
+  /* tag categories: text and edge of their chips */
+  --cat-artist: oklch(0.5 0.16 calc(var(--h) + 110));
+  --cat-character: oklch(0.5 0.14 calc(var(--h) + 215));
+  --cat-copyright: oklch(0.5 0.16 calc(var(--h) + 40));
+  --cat-meta: oklch(0.5 0.12 calc(var(--h) + 300));
+  --danger: oklch(0.53 0.2 27);
+  --danger-container: oklch(0.93 0.05 27);
+  --on-danger-container: oklch(0.36 0.13 27);
+  --warn-container: oklch(0.93 0.07 85);
+  --on-warn-container: oklch(0.36 0.08 70);
+  --ok: oklch(0.5 0.13 150);
+  /* password strength: lightness and chroma; the hue comes from the score */
+  --meter-l: 0.6;
+  --meter-c: 0.17;
+  --glass: oklch(0.975 0.012 var(--h) / 0.78);
+  /* a floating capsule's lit top edge, and the hairline around it */
+  --glass-edge: oklch(1 0 0 / 0.6);
+  --glass-line: oklch(0.2 0.04 var(--h) / 0.1);
+  --stage: oklch(0.2 0.015 var(--h));
+  --glow-a: 0.42;
+  /* controls over media: the stage is dark in both themes */
+  --scrim: oklch(0.12 0.01 var(--h) / 0.55);
+  --on-scrim: oklch(0.97 0.01 var(--h));
+  /* translated text over panels: light like speech balloons in both themes */
+  --paper: oklch(0.985 0.006 var(--h));
+  --on-paper: oklch(0.2 0.02 var(--h));
+  --shadow-1: 0 1px 2px oklch(0.2 0.04 var(--h) / 0.08), 0 2px 8px oklch(0.2 0.04 var(--h) / 0.06);
+  /* --shadow-1 as a filter, for a shape a box shadow doesn't follow. */
+  --drop-1: drop-shadow(0 1px 2px oklch(0.2 0.04 var(--h) / 0.08)) drop-shadow(0 2px 8px oklch(0.2 0.04 var(--h) / 0.06));
+  --shadow-2: 0 2px 4px oklch(0.2 0.04 var(--h) / 0.08), 0 12px 32px oklch(0.2 0.04 var(--h) / 0.14);
+
+  --radius-s: 12px;
+  --radius-m: 16px;
+  --radius-l: 28px;
+  --ease: cubic-bezier(0.2, 0, 0, 1);
+  --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+  --fast: 150ms;
+  --med: 250ms;
+  --slow: 420ms;
+  --fade: 640ms;
+
+  font-family: "Roboto Flex", Roboto, "Segoe UI Variable", "Segoe UI", system-ui, -apple-system,
+    "Noto Sans", sans-serif;
+  font-size: 16px;
+  line-height: 1.5;
+  color: var(--on-surface);
+  background: var(--canvas);
+  min-height: 100vh;
+  min-height: 100dvh;
+  transition: background-color var(--med) var(--ease), color var(--med) var(--ease);
+}
+
+.app[data-theme="dark"] {
+  color-scheme: dark;
+  --canvas: oklch(0.165 0.012 var(--h));
+  --surface: oklch(0.205 0.016 var(--h));
+  --surface-2: oklch(0.245 0.02 var(--h));
+  --surface-3: oklch(0.29 0.024 var(--h));
+  --on-surface: oklch(0.93 0.012 var(--h));
+  --on-surface-2: oklch(0.77 0.02 var(--h));
+  --outline: oklch(0.42 0.025 var(--h));
+  --primary: oklch(0.8 0.11 var(--h));
+  --on-primary: oklch(0.25 0.09 var(--h));
+  --primary-container: oklch(0.37 0.1 var(--h));
+  --on-primary-container: oklch(0.92 0.05 var(--h));
+  --tertiary: oklch(0.75 0.12 calc(var(--h) + 70));
+  --cat-artist: oklch(0.8 0.12 calc(var(--h) + 110));
+  --cat-character: oklch(0.8 0.11 calc(var(--h) + 215));
+  --cat-copyright: oklch(0.8 0.12 calc(var(--h) + 40));
+  --cat-meta: oklch(0.8 0.09 calc(var(--h) + 300));
+  --danger: oklch(0.75 0.15 27);
+  --danger-container: oklch(0.36 0.1 27);
+  --on-danger-container: oklch(0.92 0.04 27);
+  --warn-container: oklch(0.37 0.07 80);
+  --on-warn-container: oklch(0.93 0.05 85);
+  --ok: oklch(0.78 0.13 150);
+  --meter-l: 0.74;
+  --meter-c: 0.15;
+  --glass: oklch(0.205 0.016 var(--h) / 0.82);
+  --glass-edge: oklch(1 0 0 / 0.14);
+  --glass-line: oklch(1 0 0 / 0.08);
+  --stage: oklch(0.12 0.01 var(--h));
+  --glow-a: 0.34;
+  --shadow-1: 0 1px 2px oklch(0 0 0 / 0.3), 0 2px 8px oklch(0 0 0 / 0.2);
+  --drop-1: drop-shadow(0 1px 2px oklch(0 0 0 / 0.3)) drop-shadow(0 2px 8px oklch(0 0 0 / 0.2));
+  --shadow-2: 0 2px 4px oklch(0 0 0 / 0.3), 0 12px 32px oklch(0 0 0 / 0.4);
+}
+
+/* The same dark roles, when the theme follows the system. */
+@media (prefers-color-scheme: dark) {
+  .app[data-theme="system"] {
+    color-scheme: dark;
+    --canvas: oklch(0.165 0.012 var(--h));
+    --surface: oklch(0.205 0.016 var(--h));
+    --surface-2: oklch(0.245 0.02 var(--h));
+    --surface-3: oklch(0.29 0.024 var(--h));
+    --on-surface: oklch(0.93 0.012 var(--h));
+    --on-surface-2: oklch(0.77 0.02 var(--h));
+    --outline: oklch(0.42 0.025 var(--h));
+    --primary: oklch(0.8 0.11 var(--h));
+    --on-primary: oklch(0.25 0.09 var(--h));
+    --primary-container: oklch(0.37 0.1 var(--h));
+    --on-primary-container: oklch(0.92 0.05 var(--h));
+    --tertiary: oklch(0.75 0.12 calc(var(--h) + 70));
+    --cat-artist: oklch(0.8 0.12 calc(var(--h) + 110));
+    --cat-character: oklch(0.8 0.11 calc(var(--h) + 215));
+    --cat-copyright: oklch(0.8 0.12 calc(var(--h) + 40));
+    --cat-meta: oklch(0.8 0.09 calc(var(--h) + 300));
+    --danger: oklch(0.75 0.15 27);
+    --danger-container: oklch(0.36 0.1 27);
+    --on-danger-container: oklch(0.92 0.04 27);
+    --warn-container: oklch(0.37 0.07 80);
+    --on-warn-container: oklch(0.93 0.05 85);
+    --ok: oklch(0.78 0.13 150);
+    --meter-l: 0.74;
+    --meter-c: 0.15;
+    --glass: oklch(0.205 0.016 var(--h) / 0.82);
+    --glass-edge: oklch(1 0 0 / 0.14);
+    --glass-line: oklch(1 0 0 / 0.08);
+    --stage: oklch(0.12 0.01 var(--h));
+    --glow-a: 0.34;
+    --shadow-1: 0 1px 2px oklch(0 0 0 / 0.3), 0 2px 8px oklch(0 0 0 / 0.2);
+    --drop-1: drop-shadow(0 1px 2px oklch(0 0 0 / 0.3)) drop-shadow(0 2px 8px oklch(0 0 0 / 0.2));
+    --shadow-2: 0 2px 4px oklch(0 0 0 / 0.3), 0 12px 32px oklch(0 0 0 / 0.4);
+  }
+}
+
+/* Glass: only for the bars, the viewer's floating controls and the sign-in
+   card, which sit over scrolling media. */
+.glass {
+  background: var(--glass);
+  /* One spelling only: given the `-webkit-` one too, a minifier may keep that
+     one alone, and Chromium has no blur at all. Older WebKit gets the solid
+     surface below. */
+  backdrop-filter: blur(24px) saturate(1.8);
+}
+@supports not (backdrop-filter: blur(1px)) {
+  .glass { background: var(--surface); }
+}
+/* Reduced effects. The blur is worked out again on every frame that moves
+   under the glass, the first thing a small graphics chip can't keep up with.
+   The same tone without it, so what stands on the glass reads as before. */
+.app[data-effects="lite"] .glass { background: oklch(from var(--glass) l c h / 1); backdrop-filter: none; }
