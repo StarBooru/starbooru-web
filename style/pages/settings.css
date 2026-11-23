@@ -20,6 +20,21 @@
 /* It opens under its button; AccentMenu keeps it inside the window. */
 .accents .color-menu { left: 0; right: auto; }
 
+/* ---------- library ---------- */
+
+/* A setting among the library's links: the same row, with its switch at the
+   end, and the whole row flips it. */
+.switch-row {
+  grid-template-columns: auto 1fr auto; width: calc(100% + 24px); border: 0; background: none;
+  font: inherit; text-align: start; cursor: pointer;
+}
+.switch-row > .icon { grid-area: 1 / 1 / span 2; }
+.switch-row > span:not(.muted, .switch) { grid-area: 1 / 2; }
+.switch-row > .muted { grid-area: 2 / 2; }
+.switch-row > .switch { grid-area: 1 / 3 / span 2; }
+.switch-row:hover .switch-knob { scale: 1.08; }
+.switch-row:active .switch-knob { scale: 0.92; }
+
 /* ---------- account ---------- */
 
 .usage { display: grid; gap: 6px; }

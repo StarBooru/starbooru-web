@@ -275,6 +275,10 @@ pub struct Prefs {
     /// What swiping a gallery thumbnail to the right does.
     #[serde(deserialize_with = "lenient")]
     pub swipe_right: SwipeAction,
+    /// The viewer's People card, its editor and Suggest people. Off only
+    /// hides them: posts keep their people, and the tags those gave.
+    #[serde(deserialize_with = "lenient_yes")]
+    pub people: bool,
     /// Settings this version doesn't have yet (the reference's, or a newer
     /// version's), written back untouched.
     #[serde(flatten)]
@@ -306,6 +310,7 @@ impl Default for Prefs {
             effects_reduced: false,
             swipe_left: SwipeAction::Off,
             swipe_right: SwipeAction::Off,
+            people: true,
             other: Map::new(),
         }
     }
@@ -847,6 +852,7 @@ mod tests {
                 effects_reduced: true,
                 swipe_left: SwipeAction::Delete,
                 swipe_right: SwipeAction::Like,
+                people: false,
                 other: Map::new(),
             },
             memory: GalleryMemory {
@@ -884,6 +890,7 @@ mod tests {
         assert_eq!(value["prefs"]["effects_reduced"], true);
         assert_eq!(value["prefs"]["swipe_left"], "delete");
         assert_eq!(value["prefs"]["swipe_right"], "like");
+        assert_eq!(value["prefs"]["people"], false);
         assert_eq!(
             value["prefs"]["boorus"][0],
             serde_json::json!({"api": "danbooru", "base": "http://nas:8000"})
@@ -1249,6 +1256,26 @@ mod tests {
         assert_eq!(prefs.swipe_right, SwipeAction::Off);
         assert!(!prefs.effects_reduced);
         assert_eq!(prefs.theme, Theme::Light);
+    }
+
+    #[test]
+    fn people_stay_on_unless_turned_off() {
+        // Settings stored before the switch existed.
+        let prefs = parse(r#"{"prefs":{"theme":"dark","originals":true}}"#).prefs;
+        assert!(prefs.people);
+        assert!(prefs.originals);
+        assert!(Prefs::default().people);
+        assert!(!parse(r#"{"prefs":{"people":false}}"#).prefs.people);
+        assert!(parse(r#"{"prefs":{"people":true}}"#).prefs.people);
+        // An odd value leaves them on and costs nothing else.
+        for odd in [r#""no""#, "0", "null", "[]"] {
+            let prefs = parse(&format!(
+                r#"{{"prefs":{{"people":{odd},"theme":"light"}}}}"#
+            ))
+            .prefs;
+            assert!(prefs.people, "{odd}");
+            assert_eq!(prefs.theme, Theme::Light);
+        }
     }
 
     #[test]

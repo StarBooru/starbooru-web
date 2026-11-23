@@ -110,13 +110,15 @@ fn focus_box(id: String) {
 
 /// The people of the post on the page, and the way to change them for
 /// whoever `editable` says may. `editing` says the editor is open, which
-/// `on_edit` asks for; `unsaved`, whether closing it would lose changes.
+/// `on_edit` asks for; `unsaved`, whether closing it would lose changes;
+/// `kept`, that People went off with the editor holding changes.
 #[component]
 pub fn PeopleCard(
     #[prop(into)] post: Signal<Option<Arc<Post>>>,
     #[prop(into)] editable: Signal<bool>,
     #[prop(into)] editing: Signal<bool>,
     unsaved: RwSignal<bool>,
+    #[prop(into)] kept: Signal<bool>,
     on_edit: Callback<()>,
     on_cancel: Callback<()>,
     on_saved: Callback<Post>,
@@ -198,6 +200,7 @@ pub fn PeopleCard(
                         id=id
                         figures=figures
                         unsaved=unsaved
+                        kept=kept
                         on_cancel=on_cancel
                         on_saved=on_saved
                     />
@@ -317,6 +320,7 @@ fn PeopleEditor(
     id: i64,
     figures: Vec<Figure>,
     unsaved: RwSignal<bool>,
+    kept: Signal<bool>,
     on_cancel: Callback<()>,
     on_saved: Callback<Post>,
 ) -> impl IntoView {
@@ -560,6 +564,12 @@ fn PeopleEditor(
             </Show>
             {move || problem.get().map(|m| view! { <p class="field-error break" role="alert">{m}</p> })}
             {move || error.get().map(|message| view! { <ErrorBanner message=message /> })}
+            // Beside the two buttons it's about.
+            <Show when=move || kept.get()>
+                <div class="banner info" role="status">
+                    <span>{move || t!("people-turned-off")}</span>
+                </div>
+            </Show>
             <div class="row-end">
                 <button class="btn text" type="button" on:click=move |_| on_cancel.run(())>
                     {move || t!("cancel")}

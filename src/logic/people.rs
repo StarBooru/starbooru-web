@@ -210,6 +210,34 @@ pub fn people_known(post: &Post) -> bool {
     !post.tag_details.is_empty() || post.tags.is_empty()
 }
 
+/// What the viewer shows of People.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum PeopleShown {
+    /// The card, or its editor in its place.
+    Card,
+    /// People went off, in another tab, while the editor held changes: it
+    /// stays, saying so, until they're saved or cancelled.
+    Kept,
+    Hidden,
+}
+
+/// What the viewer shows, from the setting and whether the editor is open.
+/// With People off, the editor is only still open if it held changes
+/// (`closes_when_off`).
+pub fn people_shown(on: bool, editing: bool) -> PeopleShown {
+    match (on, editing) {
+        (true, _) => PeopleShown::Card,
+        (false, true) => PeopleShown::Kept,
+        (false, false) => PeopleShown::Hidden,
+    }
+}
+
+/// Whether turning People off closes the editor: only when closing loses
+/// nothing.
+pub fn closes_when_off(editing: bool, unsaved: bool) -> bool {
+    editing && !unsaved
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -431,5 +459,20 @@ mod tests {
             section: None,
         }];
         assert!(people_known(&post));
+    }
+
+    #[test]
+    fn turning_people_off_never_loses_an_edit() {
+        assert_eq!(people_shown(true, false), PeopleShown::Card);
+        assert_eq!(people_shown(true, true), PeopleShown::Card);
+        assert_eq!(people_shown(false, false), PeopleShown::Hidden);
+        // Off in another tab: an editor with nothing to lose closes, one
+        // with changes stays until they're saved or cancelled.
+        assert!(closes_when_off(true, false));
+        assert!(!closes_when_off(true, true));
+        assert!(!closes_when_off(false, false));
+        assert_eq!(people_shown(false, true), PeopleShown::Kept);
+        // Saved or cancelled, the editor closes and the card goes.
+        assert_eq!(people_shown(false, false), PeopleShown::Hidden);
     }
 }

@@ -1,5 +1,6 @@
-//! Settings › Appearance and Gestures: what this browser keeps for itself.
-//! Each choice is saved the moment it's made and shows at once.
+//! Settings › Appearance and Gestures, and the People switch: what this
+//! browser keeps for itself. Each choice is saved the moment it's made and
+//! shows at once.
 
 use leptos::ev::KeyboardEvent;
 use leptos::html;
@@ -413,6 +414,38 @@ fn AccentMenu(value: Rgb, on_close: Callback<()>) -> impl IntoView {
                 </p>
             </Show>
         </div>
+    }
+}
+
+/// People on or off, as a row among the library's links, with its switch at
+/// the end. A press anywhere on the row flips it.
+#[component]
+pub(super) fn PeopleSwitch() -> impl IntoView {
+    let on = Memo::new(|_| store::prefs().people);
+    view! {
+        <button
+            type="button"
+            class="list-link switch-row"
+            role="switch"
+            aria-checked=move || if on.get() { "true" } else { "false" }
+            aria-labelledby="people-switch-name"
+            aria-describedby="people-switch-hint"
+            on:click=move |_| store::update_prefs(|p| p.people = !p.people)
+        >
+            <Ico icon=Icon::People />
+            <span id="people-switch-name">{move || t!("settings-people")}</span>
+            <span id="people-switch-hint" class="muted">
+                {move || t!("settings-people-hint")}
+            </span>
+            <span class="switch" class:on=move || on.get() aria-hidden="true">
+                <span class="switch-knob">
+                    {move || {
+                        let icon = if on.get() { Icon::Check } else { Icon::Close };
+                        view! { <Ico icon=icon size=16 /> }
+                    }}
+                </span>
+            </span>
+        </button>
     }
 }
 

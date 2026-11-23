@@ -1,6 +1,6 @@
 //! Settings, card by card as the reference had them: how the app looks and
-//! behaves on this device (`appearance.rs`), the library's tools, the
-//! administration for administrators, help and the legal pages, then the
+//! behaves on this device (`appearance.rs`), the library's tools and the
+//! People switch, the administration for administrators, help and the legal pages, then the
 //! account, its ways in and its password (`account.rs`), the devices signed
 //! in (`sessions.rs`), the shared links, the API keys (`keys.rs`), and what
 //! this app is.
@@ -15,7 +15,7 @@ use leptos::task::spawn_local;
 use starbooru_core::SignInMethods;
 
 use self::account::{AccountCard, PasswordCard, SignInCard};
-use self::appearance::{AppearanceCard, GesturesCard};
+use self::appearance::{AppearanceCard, GesturesCard, PeopleSwitch};
 use self::keys::ApiKeysCard;
 use self::sessions::SessionsCard;
 use super::library::LibraryImportCard;
@@ -105,6 +105,7 @@ pub fn Settings() -> impl IntoView {
                     <span>{move || t!("dup-title")}</span>
                     <span class="muted">{move || t!("settings-dup-note")}</span>
                 </a>
+                <PeopleSwitch />
             </section>
             {library_import}
             {admin}
@@ -184,6 +185,7 @@ mod tests {
             "<GesturesCard />",
             "href=route::TRASH",
             "href=route::DUPLICATES",
+            "<PeopleSwitch />",
             "{library_import}",
             "{admin}",
             "href=route::HELP",

@@ -59,7 +59,7 @@ Both modes:
 
 ## 5. People
 
-- [ ] A setting to turn People on and off
+- [x] A setting to turn People on and off
 - [ ] AI that finds faces on upload, anime ones included: it keeps a crop of each face and fills in the name, the franchise, whether it's a cosplay, and the clothing and looks (server)
 - [ ] A franchise (copyright) on each person, to group people by franchise (server)
 - [ ] People in Explore (server)

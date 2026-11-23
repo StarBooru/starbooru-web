@@ -1,8 +1,9 @@
 //! The viewer at `/post/:id?q=…&seed=…`: the post on its stage, the bar of
 //! what can be done with it, and its tags and details beside or below.
 //! Previous and next walk the gallery's results for the same search. The
-//! tags card turns into the tag editor in place, and the people card into
-//! theirs; the media editor opens over the whole window.
+//! tags card turns into the tag editor in place, and the people card (shown
+//! while People are on in Settings) into theirs; the media editor opens over
+//! the whole window.
 
 mod edit;
 mod editor;
@@ -39,6 +40,7 @@ use crate::components::icons::{Ico, Icon};
 use crate::components::snackbar::{notify, notify_undo};
 use crate::components::tag_menu::TagPress;
 use crate::logic::editor::offer;
+use crate::logic::people::{PeopleShown, closes_when_off, people_shown};
 use crate::logic::tags::may_edit_post;
 use crate::logic::viewer::{
     back_through_history, download_name, needs_original, neighbour_href, queued, shown_url,
@@ -185,6 +187,24 @@ pub fn PostView() -> impl IntoView {
     let people_editing = RwSignal::new(false);
     let tags_unsaved = RwSignal::new(false);
     let people_unsaved = RwSignal::new(false);
+    // Settings in another tab can turn People off while this page is open:
+    // an edit in progress stays until it's saved or cancelled.
+    let people_on = Memo::new(|_| store::prefs().people);
+    let people = Memo::new(move |_| people_shown(people_on.get(), people_editing.get()));
+    Effect::watch(
+        move || people_on.get(),
+        move |on, _, _| {
+            if !*on
+                && closes_when_off(
+                    people_editing.get_untracked(),
+                    people_unsaved.get_untracked(),
+                )
+            {
+                people_editing.set(false);
+            }
+        },
+        false,
+    );
     // The media editor is open, and whether it's fading out, when the stage
     // under it takes keys again.
     let media_editing = RwSignal::new(false);
@@ -610,7 +630,7 @@ pub fn PostView() -> impl IntoView {
         }
     });
     let start_people = Callback::new(move |()| {
-        if here() && editable.get_untracked() {
+        if here() && editable.get_untracked() && people_on.get_untracked() {
             people_editing.set(true);
         }
     });
@@ -820,15 +840,18 @@ pub fn PostView() -> impl IntoView {
                             )
                         }
                     }}
-                    <PeopleCard
-                        post=post
-                        editable=editable
-                        editing=people_editing
-                        unsaved=people_unsaved
-                        on_edit=start_people
-                        on_cancel=Callback::new(move |()| people_editing.set(false))
-                        on_saved=people_saved
-                    />
+                    <Show when=move || people.get() != PeopleShown::Hidden>
+                        <PeopleCard
+                            post=post
+                            editable=editable
+                            editing=people_editing
+                            unsaved=people_unsaved
+                            kept=Signal::derive(move || people.get() == PeopleShown::Kept)
+                            on_edit=start_people
+                            on_cancel=Callback::new(move |()| people_editing.set(false))
+                            on_saved=people_saved
+                        />
+                    </Show>
                     <DetailsCard
                         post=post
                         sampled=sampled

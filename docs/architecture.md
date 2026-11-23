@@ -43,7 +43,7 @@ src/
   components/   icons, brand, snackbar, tiles and their swipes, downloads, the tag box and its grip, a tag's menu,
                   the button that asks "Sure?", the links to the legal pages
   logic/        pure Rust with unit tests: server addresses, the gallery's lists and layout, zoom, the viewer's
-                  tags, details and file names, the word at the caret, the tag editor's text and who may edit,
+                  tags, people, details and file names, the word at the caret, the tag editor's text and who may edit,
                   the gallery's selection and the mass edit it sends, the booru browser's sites, addresses and
                   results, the library import's text, the media editor's crop, turns and trim, share links'
                   lifetimes, addresses and expiry text, Settings' accent, lists and password checks, swipes, and
