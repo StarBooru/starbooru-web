@@ -1,5 +1,4 @@
-//! The StarBooru mark and wordmark as inline SVG, in the current colour. The
-//! reference's `docs/branding.md` says which to use where.
+//! The StarBooru mark and wordmark as inline SVG, in the current colour.
 
 use leptos::prelude::*;
 

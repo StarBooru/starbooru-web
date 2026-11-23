@@ -10,7 +10,6 @@ There is no code yet, only these docs. Read this file first, then `docs/`.
 |---|---|
 | `docs/architecture.md` | Stack, layout of the crate, how it reaches the server |
 | `docs/development.md` | Toolchain, running against a local server, tests, visual checks |
-| `docs/design.md` | How to use the archived app as the visual reference |
 | `docs/roadmap.md` | What to build, in order |
 
 The API is in starbooru-server's `docs/api.md`. The owner's backlog is its `docs/checklist.md`.
@@ -20,7 +19,6 @@ The API is in starbooru-server's `docs/api.md`. The owner's backlog is its `docs
 | Repository | Role |
 |---|---|
 | [starbooru-server](https://github.com/StarBooru/starbooru-server) | The server, plus `starbooru-core` (API types, search parser, validators) and `starbooru-client` (typed HTTP client, wasm and native) |
-| [StarBooru/StarBooru](https://github.com/StarBooru/StarBooru) | The first app, in Dioxus. Archived and read-only: the visual reference. Never push to it. |
 | `starbooru-android`, `starbooru-windows`, `starbooru-linux` | The other apps, built on the same crates |
 
 ## 3. Golden rules
@@ -35,7 +33,7 @@ The API is in starbooru-server's `docs/api.md`. The owner's backlog is its `docs
 
 1. **The API is the contract.** Use `starbooru-core` and `starbooru-client` from starbooru-server, pinned to a tag. Don't redefine API types here. A missing endpoint is added in starbooru-server first.
 2. **The app talks only to the API.** It reaches media through the signed `/media` URLs the API returns.
-3. **Design tokens, not literals.** Colours are CSS role variables derived from one seed hue, as in the reference's `apps/app/assets/main.css`. Glass (blur) only on the bars, the viewer's floating controls and the sign-in card. Respect `prefers-reduced-motion`.
+3. **Design tokens, not literals.** Colours are CSS role variables in `style/tokens.css`, derived from one seed hue. Glass (blur) only on the bars, the viewer's floating controls and the sign-in card. Respect `prefers-reduced-motion`.
 4. **Verify UI changes visually.** Light and dark, 1280 px and 390 px wide, then look at the PNGs (`docs/development.md` › Visual checks). Before committing anything that changes how the app looks, show the owner a preview and commit only once they confirm.
 5. **Tests are the gate.** Logic worth a branch lives in plain functions with unit tests, outside components.
 6. **Privacy.** Never log tokens, passwords or file contents. Test images are generated or public domain, never personal photos.
@@ -58,3 +56,4 @@ Then append a terse entry to `log/devlog.md`, which stays local (`/log` goes in 
 
 - License: AGPL-3.0-or-later, like the server. Add `LICENSE` with the first code.
 - The product name is written StarBooru in user-facing text. Machine names stay lowercase.
+- "The reference" in code comments and test names is the first StarBooru app, which this one replaced. Its links and the settings it saved in the browser still work here.

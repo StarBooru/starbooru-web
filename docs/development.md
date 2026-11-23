@@ -33,8 +33,7 @@ STARBOORU_WEB_DIR=$PWD/dist cargo run -p starbooru-server   # in starbooru-serve
 1. `trunk build --release` and serve it from a local server with generated test pictures.
 2. Drive a headless Chromium or Playwright through sign-in, the gallery, a post, upload and settings.
 3. Screenshot each in light and dark, at 1280 px and 390 px.
-4. Look at the PNGs next to the reference's (`docs/design.md`).
-5. Show the owner before committing.
+4. Look at the PNGs, then show the owner before committing.
 
 Headless Chromium draws in software, so blur and glows cost far more there than on a real card. Judge smoothness on a real browser.
 

@@ -1,6 +1,5 @@
-//! Filled, rounded icons as inline SVG on a 24 by 24 grid, from the reference
-//! app (sources in ATTRIBUTION.md). A new icon is a variant and its path data:
-//! take it from the reference's `icons.rs` when it has one.
+//! Filled, rounded icons as inline SVG on a 24 by 24 grid (sources in
+//! ATTRIBUTION.md). A new icon is a variant and its path data.
 
 use leptos::prelude::*;
 

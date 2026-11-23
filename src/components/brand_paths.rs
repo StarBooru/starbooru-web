@@ -1,5 +1,5 @@
-//! The logo's outlines, from the reference app (generated there by
-//! `tools/brand/brand.py`; change the drawing there and copy it over).
+//! The logo's outlines as SVG path data. The tests in `brand.rs` check that
+//! the mark stays symmetrical and inside its box.
 
 pub const WIDTH: u32 = 512;
 pub const FULL_HEIGHT: u32 = 434;
