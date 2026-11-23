@@ -12,12 +12,13 @@ pub const DAYS: u32 = 1;
 /// Random picks a shuffle asks for: as many as the server sends at first.
 pub const RANDOM_COUNT: u32 = 12;
 
-/// A search as the filter box sends it, the spaces in it collapsed.
+/// A search as Explore reads and sends it, the spaces in it collapsed.
 pub fn tidy(q: &str) -> String {
     q.split_whitespace().collect::<Vec<_>>().join(" ")
 }
 
-/// What a shuffle of the random picks searches: the filter, in random order.
+/// What a shuffle of the random picks searches: Explore's search, in random
+/// order.
 pub fn random_query(q: &str) -> String {
     with_order(&tidy(q), Order::parse("random"))
 }
@@ -56,7 +57,7 @@ mod tests {
     }
 
     #[test]
-    fn a_shuffle_searches_within_the_filter() {
+    fn a_shuffle_searches_within_explores_search() {
         assert_eq!(random_query(""), "order:random");
         assert_eq!(
             random_query("  fractal  -abstract "),

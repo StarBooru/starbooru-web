@@ -382,8 +382,7 @@ explore-years-ago = { $count ->
 }
 explore-random = Random picks
 explore-shuffle = Shuffle
-explore-filter-placeholder = Narrow down, e.g. -rating:e
-explore-filter-label = Narrow down with a search
+explore-search = Search Explore
 
 ## Recycle bin
 

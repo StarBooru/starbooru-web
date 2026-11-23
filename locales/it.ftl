@@ -382,8 +382,7 @@ explore-years-ago = { $count ->
 }
 explore-random = Scelti a caso
 explore-shuffle = Mescola
-explore-filter-placeholder = Restringi, ad es. -rating:e
-explore-filter-label = Restringi con una ricerca
+explore-search = Cerca in Esplora
 
 ## Cestino
 

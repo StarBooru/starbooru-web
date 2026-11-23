@@ -22,6 +22,7 @@ use crate::components::brand::{Mark, Wordmark};
 use crate::components::icons::{Ico, Icon};
 use crate::dom::{self, caret_of};
 use crate::logic::boorus;
+use crate::logic::explore::tidy;
 use crate::logic::search::{
     Hint, Latest, ListKey, REMOTE_PAUSE_MS, TYPING_PAUSE_MS, complete, list_key, short_count,
     still_fitting, utf16_index, word_at,
@@ -87,17 +88,21 @@ fn Frame() -> impl IntoView {
     }
 }
 
-/// What the search box searches: the collection, or on the booru browser's
-/// pages the sites its address names (`s`), with their own tags to suggest.
+/// What the search box searches: the collection, Explore while it's open,
+/// or on the booru browser's pages the sites its address names (`s`), with
+/// their own tags to suggest.
 #[derive(Clone, Debug, PartialEq, Eq)]
 enum Scope {
     Collection,
+    Explore,
     Boorus(String),
 }
 
 fn scope_of(path: &str, s: Option<String>) -> Scope {
     if path == route::BOORUS || path.starts_with("/boorus/") {
         Scope::Boorus(s.unwrap_or_default())
+    } else if route::is_explore(path) {
+        Scope::Explore
     } else {
         Scope::Collection
     }
@@ -108,6 +113,7 @@ fn scope_of(path: &str, s: Option<String>) -> Scope {
 fn search_href(scope: &Scope, q: &str, last_sites: &[String]) -> String {
     match scope {
         Scope::Collection => route::gallery(q),
+        Scope::Explore => route::explore(&tidy(q)),
         Scope::Boorus(s) => {
             let sites = boorus::sites_param(&boorus::chosen_sites(s, last_sites));
             route::boorus(&boorus::tidy_query(q), &sites)
@@ -115,20 +121,40 @@ fn search_href(scope: &Scope, q: &str, last_sites: &[String]) -> String {
     }
 }
 
-/// The search a page shows in the box: the gallery's and a post's own, the
-/// booru browser's as its address carries it, and the last one elsewhere.
+/// The search a page shows in the box: the gallery's, a post's and
+/// Explore's own, the booru browser's as its address carries it, and the
+/// last one elsewhere.
 fn shown_search(path: &str, q: Option<String>, last: &str) -> String {
     match scope_of(path, None) {
         Scope::Boorus(_) => boorus::from_address(&q.unwrap_or_default()),
+        Scope::Explore => q.unwrap_or_default(),
         Scope::Collection if route::has_search(path) => q.unwrap_or_default(),
         Scope::Collection => last.to_owned(),
+    }
+}
+
+/// What the empty box says it searches.
+fn placeholder(scope: &Scope) -> String {
+    match scope {
+        Scope::Collection => t!("search-placeholder"),
+        Scope::Explore => t!("explore-search"),
+        Scope::Boorus(_) => t!("boorus-search"),
+    }
+}
+
+/// The box's name for screen readers.
+fn label(scope: &Scope) -> String {
+    match scope {
+        Scope::Collection => t!("search-label"),
+        Scope::Explore => t!("explore-search"),
+        Scope::Boorus(_) => t!("boorus-search"),
     }
 }
 
 /// Suggestions kept from a moment ago for `typed` in `scope`.
 fn kept(scope: &Scope, typed: &str) -> Option<Vec<Hint>> {
     match scope {
-        Scope::Collection => api::kept_tags(typed),
+        Scope::Collection | Scope::Explore => api::kept_tags(typed),
         Scope::Boorus(s) => {
             let site = boorus::completing_site(s, &store::prefs_untracked().booru_sites)?;
             api::kept_remote_tags(&site, typed)
@@ -139,16 +165,16 @@ fn kept(scope: &Scope, typed: &str) -> Option<Vec<Hint>> {
 /// How long the typing pauses before `scope` is asked.
 fn pause(scope: &Scope) -> i32 {
     match scope {
-        Scope::Collection => TYPING_PAUSE_MS,
+        Scope::Collection | Scope::Explore => TYPING_PAUSE_MS,
         Scope::Boorus(_) => REMOTE_PAUSE_MS,
     }
 }
 
-/// Suggestions for `typed` in `scope`. On the boorus, the first site chosen
-/// completes the tags.
+/// Suggestions for `typed` in `scope`. Explore completes the collection's
+/// tags; on the boorus, the first site chosen completes them.
 async fn suggest(scope: Scope, typed: String) -> Vec<Hint> {
     match scope {
-        Scope::Collection => api::tag_hints(typed).await,
+        Scope::Collection | Scope::Explore => api::tag_hints(typed).await,
         Scope::Boorus(s) => {
             match boorus::completing_site(&s, &store::prefs_untracked().booru_sites) {
                 Some(site) => api::remote_tag_hints(site, typed).await,
@@ -179,9 +205,10 @@ fn reveal(i: usize) {
 }
 
 /// The search: Enter shows the gallery for what was typed, and an empty box
-/// all of it. It shows the search of the gallery or post it's on, and the last
-/// one elsewhere. The tag under the caret is completed from the collection's
-/// tags (the ARIA combobox pattern).
+/// all of it; on Explore and the booru browser, that page instead. It shows
+/// the search of the page it's on, and the gallery's last one elsewhere. The
+/// tag under the caret is completed from the collection's tags, or the
+/// boorus' (the ARIA combobox pattern).
 #[component]
 fn SearchBox() -> impl IntoView {
     let query = use_query_map();
@@ -194,7 +221,6 @@ fn SearchBox() -> impl IntoView {
         path.with(|p| last.with(|last| shown_search(p, q, last)))
     });
     let scope = Memo::new(move |_| path.with(|p| scope_of(p, query.with(|q| q.get("s")))));
-    let remote = Memo::new(move |_| scope.with(|s| matches!(s, Scope::Boorus(_))));
     let text = RwSignal::new(current.get_untracked());
     let focused = RwSignal::new(false);
     // Typing opens the list; Escape, a choice and leaving close it.
@@ -399,12 +425,8 @@ fn SearchBox() -> impl IntoView {
                     enterkeyhint="search"
                     autocomplete="off"
                     spellcheck="false"
-                    placeholder=move || {
-                        if remote.get() { t!("boorus-search") } else { t!("search-placeholder") }
-                    }
-                    aria-label=move || {
-                        if remote.get() { t!("boorus-search") } else { t!("search-label") }
-                    }
+                    placeholder=move || scope.with(placeholder)
+                    aria-label=move || scope.with(label)
                     role="combobox"
                     aria-autocomplete="list"
                     aria-controls=move || expanded.get().then_some(LIST_ID)
@@ -589,7 +611,7 @@ mod tests {
 
     #[test]
     fn the_box_searches_the_collection() {
-        for path in ["/", "/post/3", "/tags", "/help", "/booruss", "/explore"] {
+        for path in ["/", "/post/3", "/tags", "/help", "/booruss", "/explorer"] {
             assert_eq!(scope_of(path, Some("e926".into())), Scope::Collection);
         }
         assert_eq!(
@@ -600,6 +622,49 @@ mod tests {
         assert_eq!(shown_search("/", Some("sky".into()), "sea"), "sky");
         assert_eq!(shown_search("/tags", Some("sky".into()), "sea"), "sea");
         assert_eq!(pause(&Scope::Collection), TYPING_PAUSE_MS);
+    }
+
+    #[test]
+    fn on_explore_the_box_narrows_explore() {
+        for path in ["/explore", "/explore/"] {
+            assert_eq!(scope_of(path, Some("e926".into())), Scope::Explore);
+        }
+        // Its boorus side searches the boorus.
+        assert!(matches!(scope_of("/boorus", None), Scope::Boorus(_)));
+        assert_eq!(
+            search_href(&Scope::Explore, "  fractal   -abstract ", &["e926".into()]),
+            "/explore?q=fractal+-abstract"
+        );
+        // An empty box shows all of Explore.
+        assert_eq!(search_href(&Scope::Explore, "  ", &[]), "/explore");
+        // The box shows Explore's own search, not the gallery's last one.
+        assert_eq!(
+            shown_search("/explore", Some("fractal".into()), "sea"),
+            "fractal"
+        );
+        assert_eq!(shown_search("/explore", None, "sea"), "");
+        // Leaving brings back the gallery's search.
+        assert_eq!(shown_search("/", Some("sky".into()), "sea"), "sky");
+        assert_eq!(shown_search("/tags", None, "sea"), "sea");
+        // The collection's tags complete it, as fast as on the gallery.
+        assert_eq!(pause(&Scope::Explore), pause(&Scope::Collection));
+    }
+
+    #[test]
+    fn the_empty_box_says_what_it_searches() {
+        let scopes = [
+            Scope::Collection,
+            Scope::Explore,
+            Scope::Boorus(String::new()),
+        ];
+        for (i, a) in scopes.iter().enumerate() {
+            assert!(!placeholder(a).is_empty());
+            assert!(!label(a).is_empty());
+            for b in scopes.iter().skip(i + 1) {
+                assert_ne!(placeholder(a), placeholder(b), "{a:?} {b:?}");
+                assert_ne!(label(a), label(b), "{a:?} {b:?}");
+            }
+        }
     }
 
     #[test]

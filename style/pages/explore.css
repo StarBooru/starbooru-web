@@ -1,5 +1,6 @@
-/* Explore (pages/explore.rs): the sides and the filter in the header, then
-   one section after another, each a grid of the gallery's tiles. */
+/* Explore (pages/explore.rs): the sides in the header, then one section
+   after another, each a grid of the gallery's tiles. The top bar's search
+   narrows it. */
 
 .explore .page-head { margin-bottom: 8px; }
 .explore .page-head .page-title { margin: 0; }
@@ -26,15 +27,6 @@
   .sides > .side { padding: 0 8px; font-size: 17px; }
   .sides > .side.on::after { left: 8px; right: 8px; }
 }
-.explore-filter {
-  display: flex; align-items: center; gap: 8px; flex: 0 1 300px; margin-left: auto;
-  min-height: 40px; padding: 0 16px; border: 1px solid var(--outline); border-radius: 999px;
-  background: var(--surface); color: var(--on-surface-2);
-  transition: border-color var(--fast) var(--ease), box-shadow var(--fast) var(--ease);
-}
-.explore-filter:focus-within { border-color: var(--primary); box-shadow: 0 0 0 3px oklch(from var(--primary) l c h / 0.25); }
-.explore-filter input { flex: 1; min-width: 0; border: 0; outline: none; background: transparent; color: var(--on-surface); font: inherit; font-size: 14px; }
-.explore-filter input::-webkit-search-cancel-button { display: none; }
 .explore .card.empty { margin-top: 20px; }
 .explore > .banner { margin-top: 16px; }
 .explore-section { margin-top: 28px; }
@@ -56,8 +48,4 @@
   position: absolute; z-index: 1; top: 8px; left: 8px; pointer-events: none;
   padding: 2px 8px; border-radius: 999px; font-size: 12px; font-weight: 700; font-variant-numeric: tabular-nums;
   background: var(--scrim); color: var(--on-scrim);
-}
-
-@media (max-width: 760px) {
-  .explore-filter { flex-basis: 100%; margin-left: 0; }
 }

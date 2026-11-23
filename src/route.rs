@@ -89,10 +89,17 @@ pub fn exact(q: &str) -> String {
 pub fn explore(q: &str) -> String {
     let q = q.trim();
     if q.is_empty() {
-        "/explore".to_owned()
+        EXPLORE.to_owned()
     } else {
-        format!("/explore?q={}", query_value(q))
+        format!("{EXPLORE}?q={}", query_value(q))
     }
+}
+
+/// Whether `path` is Explore's collection side, where the search box
+/// narrows Explore.
+pub fn is_explore(path: &str) -> bool {
+    let segments: Vec<&str> = path.split('/').filter(|s| !s.is_empty()).collect();
+    segments.as_slice() == ["explore"]
 }
 
 /// Post `id`, opened from the gallery for search `q`, so the viewer can step
@@ -172,6 +179,8 @@ pub fn booru_post(u: &str, q: &str, s: &str) -> String {
     )
 }
 
+/// Explore's collection side.
+pub const EXPLORE: &str = "/explore";
 /// The booru browser.
 pub const BOORUS: &str = "/boorus";
 
@@ -212,12 +221,18 @@ mod tests {
     }
 
     #[test]
-    fn explore_carries_its_filter() {
+    fn explore_carries_its_search() {
         assert_eq!(explore(""), "/explore");
         assert_eq!(explore("  "), "/explore");
         assert_eq!(explore("fractal -abstract"), "/explore?q=fractal+-abstract");
         assert_eq!(explore(" fractal "), "/explore?q=fractal");
         assert_eq!(explore("a&b"), "/explore?q=a%26b");
+        for path in ["/explore", "/explore/", "explore"] {
+            assert!(is_explore(path), "{path}");
+        }
+        for path in ["/", "/explorer", "/explore/x", "/boorus", "/post/1"] {
+            assert!(!is_explore(path), "{path}");
+        }
     }
 
     #[test]

@@ -67,7 +67,7 @@ Both modes:
 
 ## 6. Browsing and sharing
 
-- [ ] Explore has no search field of its own: the top bar's search narrows Explore while it's open
+- [x] Explore has no search field of its own: the top bar's search narrows Explore while it's open
 - [ ] The last posts opened (history) in Explore
 - [ ] The staggered view fills left to right before top to bottom, so the next post in the viewer is the tile beside it
 - [ ] Click and drag across tiles to select several

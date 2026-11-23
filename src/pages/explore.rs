@@ -1,5 +1,6 @@
 //! Explore at `/explore?q=…`: posts added on this day in earlier years and
-//! random picks, both narrowed by `q`. A private booru has no Trending or
+//! random picks, both narrowed by `q`, which the top bar's search box sets
+//! while Explore is open (`shell.rs`). A private booru has no Trending or
 //! Popular tags, and until the server reports a mode every instance is
 //! private, so neither shows. An older link's `days` is ignored.
 
@@ -8,9 +9,7 @@ use std::sync::Arc;
 use chrono::Utc;
 use leptos::prelude::*;
 use leptos::task::spawn_local;
-use leptos_router::NavigateOptions;
-use leptos_router::hooks::{use_navigate, use_query_map};
-use send_wrapper::SendWrapper;
+use leptos_router::hooks::use_query_map;
 use starbooru_core::{Explore as Found, Post, TagCorrection};
 
 use super::post_menu::PostPress;
@@ -108,7 +107,6 @@ fn tiles(posts: Vec<Arc<Post>>, open: Callback<Arc<Post>>) -> impl IntoView {
 pub fn Explore() -> impl IntoView {
     let query = use_query_map();
     let q = Memo::new(move |_| query.with(|m| tidy(&m.get("q").unwrap_or_default())));
-    let filter = RwSignal::new(q.get_untracked());
     let found = RwSignal::new(None::<Result<Sections, String>>);
     // Replaces the random picks after a shuffle, until the next load.
     let shuffled = RwSignal::new(None::<Vec<Arc<Post>>>);
@@ -133,7 +131,6 @@ pub fn Explore() -> impl IntoView {
     Effect::watch(
         move || q.get(),
         move |search, _, _| {
-            filter.set(search.clone());
             LAST.with(|l| l.set(route::explore(search)));
             load();
         },
@@ -169,11 +166,6 @@ pub fn Explore() -> impl IntoView {
             }
         });
     };
-
-    let navigate = SendWrapper::new(use_navigate());
-    let go = move |to: String| (*navigate)(&to, NavigateOptions::default());
-    let go = SendWrapper::new(go);
-    let go = Callback::new(move |to: String| (*go)(to));
 
     // The post a right-clicked tile stands for, in either section.
     let find = Callback::new(move |id: i64| {
@@ -329,29 +321,15 @@ pub fn Explore() -> impl IntoView {
     view! {
         <div class="page explore">
             <div class="page-head">
-                <h1 class="page-title visually-hidden">{move || t!("nav-explore")}</h1>
+                // The search box above narrows Explore; the two sides stand
+                // where the gallery has its title.
+                <h1 class="page-title visually-hidden">
+                    {move || {
+                        let q = q.get();
+                        if q.is_empty() { t!("nav-explore") } else { q }
+                    }}
+                </h1>
                 <Sides boorus=false />
-                <form
-                    class="explore-filter"
-                    role="search"
-                    on:submit=move |e| {
-                        e.prevent_default();
-                        go.run(route::explore(&filter.get_untracked()));
-                    }
-                >
-                    <Ico icon=Icon::Search size=20 />
-                    <input
-                        type="search"
-                        enterkeyhint="search"
-                        autocomplete="off"
-                        autocapitalize="none"
-                        spellcheck="false"
-                        placeholder=move || t!("explore-filter-placeholder")
-                        aria-label=move || t!("explore-filter-label")
-                        prop:value=move || filter.get()
-                        on:input=move |e| filter.set(event_target_value(&e))
-                    />
-                </form>
             </div>
             {move || {
                 if found.with(Option::is_none) {
@@ -382,5 +360,20 @@ mod tests {
         }
         // The tiles have their menu.
         assert!(source.contains(r#"data-press="post""#));
+    }
+
+    #[test]
+    fn the_top_bar_searches_explore_and_a_search_finding_nothing_leads_back() {
+        let source = include_str!("explore.rs");
+        let (page, _) = source.split_once("#[cfg(test)]").unwrap_or_default();
+        // No box of its own: the shell's narrows Explore.
+        for own in ["<input", "<form", "role=\"search\""] {
+            assert!(!page.contains(own), "{own}");
+        }
+        assert!(page.contains("t!(\"explore-everything\")"));
+        assert!(page.contains("href=route::explore(\"\")"));
+        assert!(page.contains("<CorrectionBanner"));
+        let css = include_str!("../../style/pages/explore.css");
+        assert!(!css.contains("explore-filter"));
     }
 }
