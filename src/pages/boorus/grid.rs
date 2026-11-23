@@ -5,69 +5,46 @@ use std::sync::Arc;
 
 use leptos::ev::{KeyboardEvent, MouseEvent, SubmitEvent};
 use leptos::prelude::*;
-use leptos_router::NavigateOptions;
-use leptos_router::hooks::use_navigate;
-use send_wrapper::SendWrapper;
 use starbooru_core::RemotePost;
 
 use wasm_bindgen::JsCast;
 
 use crate::components::icons::{Ico, Icon};
 use crate::components::thumb::place_style;
-use crate::logic::boorus::results::{Picks, Status, picture_src};
+use crate::logic::boorus::results::{Picks, Status, picture_src, status_note};
 use crate::logic::boorus::site_name;
 use crate::logic::layout::Place;
-use crate::route;
 use crate::{api, dom};
 
-/// A picture's address as the browser can load it.
+/// A picture's address as the browser may load it, or `None` for the
+/// tile's colour.
 pub(super) fn src_of(url: &str) -> Option<String> {
-    if url.trim().is_empty() {
-        return None;
-    }
-    let client = api::client();
-    Some(picture_src(url, |path| {
-        client
-            .as_ref()
-            .map_or_else(|| path.to_owned(), |c| c.absolute(path))
-    }))
+    let server = api::client().map(|c| c.base_url().to_owned());
+    picture_src(url, server.as_deref().unwrap_or_default())
 }
 
-/// How saving a post here stands, on its tile and its page: on its way, in
-/// the collection (a click goes to it), or failed with the reason.
+/// How saving a post here stands, as a short mark on its tile: on its way,
+/// in the collection, or failed. The tile's description says it in full;
+/// the post's own page links to the post here.
 #[component]
-pub(super) fn StatusMark(#[prop(into)] status: Signal<Option<Status>>) -> impl IntoView {
-    let navigate = SendWrapper::new(use_navigate());
+fn StatusMark(#[prop(into)] status: Signal<Option<Status>>) -> impl IntoView {
     move || {
         let view = match status.get()? {
             Status::Busy(percent) => {
                 let shown = percent.map_or_else(|| "…".to_owned(), |p| format!("{p}%"));
                 view! {
-                    <span class="pill busy remote-status" role="status" title=move || t!("upload-job-running")>
+                    <span class="pill busy remote-status" aria-hidden="true" title=move || t!("upload-job-running")>
                         {shown}
                     </span>
                 }
                 .into_any()
             }
-            Status::Saved(Some(id), _) => {
-                let navigate = navigate.clone();
-                view! {
-                    <span
-                        class="remote-mark"
-                        role="link"
-                        title=move || t!("post-number", id = id)
-                        // Straight to the post here, past the tile's own click.
-                        on:click=move |e: MouseEvent| {
-                            e.prevent_default();
-                            e.stop_propagation();
-                            (*navigate)(&route::post(id, "", None), NavigateOptions::default());
-                        }
-                    >
-                        <Ico icon=Icon::Check size=18 />
-                    </span>
-                }
-                .into_any()
+            Status::Saved(Some(id), _) => view! {
+                <span class="remote-mark" aria-hidden="true" title=move || t!("post-number", id = id)>
+                    <Ico icon=Icon::Check size=18 />
+                </span>
             }
+            .into_any(),
             Status::Saved(None, note) => {
                 let title = if note.is_empty() {
                     t!("boorus-known")
@@ -75,14 +52,14 @@ pub(super) fn StatusMark(#[prop(into)] status: Signal<Option<Status>>) -> impl I
                     note
                 };
                 view! {
-                    <span class="remote-mark" title=title>
+                    <span class="remote-mark" aria-hidden="true" title=title>
                         <Ico icon=Icon::Check size=18 />
                     </span>
                 }
                 .into_any()
             }
             Status::Failed(message) => view! {
-                <span class="pill bad remote-status" role="status" title=message>
+                <span class="pill bad remote-status" aria-hidden="true" title=message>
                     {move || t!("upload-failed")}
                 </span>
             }
@@ -176,6 +153,13 @@ pub(super) fn RemoteThumb(
     };
     let site = site_name(&post.site);
     let video = post.is_video();
+    // How saving it stands, read with the tile; the marks on it are short.
+    let note_id = format!("booru-tile-note-{index}");
+    let described = {
+        let note_id = note_id.clone();
+        move || status.with(Option::is_some).then(|| note_id.clone())
+    };
+    let note = move || status.with(|s| s.as_ref().map(status_note));
     view! {
         <a
             class="thumb"
@@ -186,6 +170,7 @@ pub(super) fn RemoteThumb(
             style=style
             href=move || href.get()
             aria-label=label
+            aria-describedby=described
             role=move || pickable().then_some("button")
             aria-pressed=move || pickable().then(|| if selected.get() { "true" } else { "false" })
             on:click=click
@@ -207,6 +192,7 @@ pub(super) fn RemoteThumb(
                 </span>
             })}
             <StatusMark status=status />
+            <span id=note_id class="visually-hidden">{note}</span>
             <Show when=pickable>
                 <span class="check-mark" aria-hidden="true">
                     <Ico icon=Icon::Check size=20 />
@@ -228,7 +214,8 @@ pub(super) fn SaveBar(
     on_close: Callback<()>,
 ) -> impl IntoView {
     let extra = RwSignal::new(String::new());
-    let count = Memo::new(move |_| picks.with(Picks::len));
+    // Only what the grid still shows and can still save.
+    let count = Memo::new(move |_| free.with(|f| picks.with(|p| p.count_in(f))));
     // Escape ends the selection, unless the sheet of sites or a box has it.
     let keys = web_sys::window().map(|window| {
         dom::listen(&window, "keydown", false, move |e| {
@@ -311,7 +298,7 @@ pub(super) fn SaveBar(
                     }
                 }
             />
-            <button class="btn" type="submit" disabled=move || busy.get() || picks.with(Picks::is_empty)>
+            <button class="btn" type="submit" disabled=move || busy.get() || count.get() == 0>
                 <Ico icon=Icon::Download />
                 {move || {
                     if busy.get() { t!("boorus-saving") } else { t!("boorus-save", count = count.get()) }

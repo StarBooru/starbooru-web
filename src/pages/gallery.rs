@@ -23,6 +23,7 @@ use starbooru_core::{Post, TagCorrection, parse_query};
 
 use super::bulk::BulkBar;
 use super::post_menu::PostPress;
+use super::query_error_text;
 use super::saved::{self, SaveToggle, SavedList};
 use super::upload::DropToUpload;
 use crate::api;
@@ -419,6 +420,9 @@ pub fn Gallery() -> impl IntoView {
         }
     };
 
+    // While the spot is being put back, the screen isn't where the user left
+    // it, and the spot already says where that was.
+    let placing = StoredValue::new(false);
     // Puts the remembered tile back where it was on the screen, or failing
     // that, the scroll position, once the list is on the page.
     let go_to_spot = move || {
@@ -428,11 +432,36 @@ pub fn Gallery() -> impl IntoView {
         let top = post.and_then(|id| {
             tiles.with_untracked(|t| posts.with_untracked(|p| g.tile_top(t, p, id)))
         });
+        placing.set_value(true);
         request_animation_frame(move || {
             put_back(5, top, offset, y, masonry, move || {
+                placing.set_value(false);
                 check_near(true);
                 landed.try_update(|n| *n = n.wrapping_add(1));
             });
+        });
+    };
+
+    // Where the gallery is: the first whole tile under the top bar, worked out
+    // from the layout rather than by measuring tiles.
+    let report = move || {
+        let count = posts.with_untracked(Vec::len);
+        let Some(el) = masonry.get_untracked().filter(|_| count > 0) else {
+            return;
+        };
+        let grid_top = el.get_bounding_client_rect().top();
+        let Grid { tile, gap, .. } = grid.get_untracked();
+        let line = dom::bar_bottom() - grid_top;
+        let Some((index, top)) = tiles.with_untracked(|t| t.first_below(tile, gap, line)) else {
+            return;
+        };
+        let (y, _) = dom::scroll();
+        store::remember_spot(Spot {
+            q: shown_q.get_untracked(),
+            post: posts.with_untracked(|p| p.get(index).map(|p| p.id)),
+            offset: grid_top + top,
+            y,
+            count: u32::try_from(count).unwrap_or(u32::MAX),
         });
     };
 
@@ -463,7 +492,7 @@ pub fn Gallery() -> impl IntoView {
         let q = shown_q.get_untracked();
         // The server reads a search the same way and would only say this back.
         if let Err(e) = parse_query(&q) {
-            error.set(Some(e.to_string()));
+            error.set(Some(query_error_text(&e)));
             return;
         }
         let shuffle = seed(&q);
@@ -531,6 +560,10 @@ pub fn Gallery() -> impl IntoView {
                     }
                 }
             }
+            // The loop may not have run, and the page may have gone since.
+            if generation.try_get_value() != Some(at_start) {
+                return;
+            }
             loading.set(false);
             settled.set(found.len());
             if failure.is_none() {
@@ -572,9 +605,16 @@ pub fn Gallery() -> impl IntoView {
             let Some(merged) = posts.with_untracked(|p| merge_head(p, found.posts, more)) else {
                 return;
             };
+            // A page still on its way belongs to the list being replaced.
+            generation.update_value(|g| *g = g.wrapping_add(1));
+            loading.set(false);
             if merged.len() == head {
                 next_page.set(2);
                 has_more.set(more);
+            }
+            // Where the screen is now, to put it back once the list changes.
+            if !placing.get_value() {
+                report();
             }
             settled.set(merged.len());
             posts.set(merged);
@@ -673,37 +713,18 @@ pub fn Gallery() -> impl IntoView {
         }
     });
 
-    // Where the gallery is: the first whole tile under the top bar, worked out
-    // from the layout rather than by measuring tiles.
-    let report = move || {
-        let count = posts.with_untracked(Vec::len);
-        let Some(el) = masonry.get_untracked().filter(|_| count > 0) else {
-            return;
-        };
-        let grid_top = el.get_bounding_client_rect().top();
-        let Grid { tile, gap, .. } = grid.get_untracked();
-        let line = dom::bar_bottom() - grid_top;
-        let Some((index, top)) = tiles.with_untracked(|t| t.first_below(tile, gap, line)) else {
-            return;
-        };
-        let (y, _) = dom::scroll();
-        store::remember_spot(Spot {
-            q: shown_q.get_untracked(),
-            post: posts.with_untracked(|p| p.get(index).map(|p| p.id)),
-            offset: grid_top + top,
-            y,
-            count: u32::try_from(count).unwrap_or(u32::MAX),
-        });
-    };
-
     // The viewer may have moved on, with previous and next, to a post far from
     // the spot: its tile comes to the middle of the window when it's mostly
     // out of sight, loading a few more pages to find it if need be.
     let reveal = move || {
-        let Some(Seek::Landing(id, pages) | Seek::Loading(id, pages)) = seek.get_value() else {
+        // From a frame, which can come after the page has gone.
+        let Some(Some(Seek::Landing(id, pages) | Seek::Loading(id, pages))) = seek.try_get_value()
+        else {
             return;
         };
-        let Grid { tile, gap, .. } = grid.get_untracked();
+        let Some(Grid { tile, gap, .. }) = grid.try_get_untracked() else {
+            return;
+        };
         let found = tiles.with_untracked(|t| {
             posts.with_untracked(|p| {
                 let index = p.iter().position(|p| p.id == id)?;
@@ -721,7 +742,7 @@ pub fn Gallery() -> impl IntoView {
             return;
         };
         seek.set_value(None);
-        let Some(el) = masonry.get_untracked() else {
+        let Some(Some(el)) = masonry.try_get_untracked() else {
             return;
         };
         let start = el.get_bounding_client_rect().top() + top;
@@ -1160,10 +1181,38 @@ fn escape_closes(open: RwSignal<bool>) -> impl Fn(KeyboardEvent) + Copy {
     }
 }
 
+/// As a dialog does: the focus goes into the menu as it opens, and back to
+/// the button that opened it as it closes.
+fn focus_follows(open: RwSignal<bool>, button: NodeRef<html::Button>, panel: NodeRef<html::Div>) {
+    Effect::new(move |_| {
+        if let Some(el) = panel.get() {
+            // Once it's on the page.
+            request_animation_frame(move || {
+                let _ = el.focus();
+            });
+        }
+    });
+    Effect::watch(
+        move || open.get(),
+        move |now, before, _| {
+            if !*now
+                && before == Some(&true)
+                && let Some(el) = button.get_untracked()
+            {
+                let _ = el.focus();
+            }
+        },
+        false,
+    );
+}
+
 /// Rewrites the search's `color:` term from the wheel or the named swatches.
 #[component]
 fn ColorMenu(q: Memo<String>) -> impl IntoView {
     let open = RwSignal::new(false);
+    let button: NodeRef<html::Button> = NodeRef::new();
+    let panel: NodeRef<html::Div> = NodeRef::new();
+    focus_follows(open, button, panel);
     let go = search_with();
     let pick = Callback::new(move |value: Option<String>| {
         open.set(false);
@@ -1207,7 +1256,13 @@ fn ColorMenu(q: Memo<String>) -> impl IntoView {
         });
         view! {
             <div class="select-backdrop" on:click=move |_| open.set(false)></div>
-            <div class="color-menu" role="dialog" aria-label=move || t!("color-search")>
+            <div
+                class="color-menu"
+                role="dialog"
+                aria-label=move || t!("color-search")
+                tabindex="-1"
+                node_ref=panel
+            >
                 <ColorPicker
                     value=now.as_ref().map(|c| c.rgb)
                     on_pick=Callback::new(move |rgb| pick.run(Some(to_hex(rgb))))
@@ -1221,6 +1276,7 @@ fn ColorMenu(q: Memo<String>) -> impl IntoView {
         <div class="color-pick" on:keydown=escape_closes(open)>
             <button
                 type="button"
+                node_ref=button
                 class="icon-btn color-toggle"
                 class:on=move || current.with(Option::is_some)
                 title=move || t!("color-search")
@@ -1243,6 +1299,9 @@ fn ColorMenu(q: Memo<String>) -> impl IntoView {
 #[component]
 pub(crate) fn ViewMenu(grid: Memo<Grid>) -> impl IntoView {
     let open = RwSignal::new(false);
+    let button: NodeRef<html::Button> = NodeRef::new();
+    let panel: NodeRef<html::Div> = NodeRef::new();
+    focus_follows(open, button, panel);
     let prefs = Memo::new(|_| {
         let p = store::prefs();
         (p.gallery_view, p.gallery_columns, p.flush_tiles)
@@ -1282,7 +1341,13 @@ pub(crate) fn ViewMenu(grid: Memo<Grid>) -> impl IntoView {
         let flush = move || prefs.get().2;
         view! {
             <div class="select-backdrop" on:click=move |_| open.set(false)></div>
-            <div class="view-menu" role="dialog" aria-label=move || t!("view-title")>
+            <div
+                class="view-menu"
+                role="dialog"
+                aria-label=move || t!("view-title")
+                tabindex="-1"
+                node_ref=panel
+            >
                 <div class="segmented" role="radiogroup" aria-label=move || t!("view-shape")>
                     {fixed}
                     <button
@@ -1356,6 +1421,7 @@ pub(crate) fn ViewMenu(grid: Memo<Grid>) -> impl IntoView {
         <div class="view-pick" on:keydown=escape_closes(open)>
             <button
                 type="button"
+                node_ref=button
                 class="icon-btn view-toggle"
                 title=move || t!("view-title")
                 aria-label=move || t!("view-title")

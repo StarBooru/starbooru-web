@@ -62,15 +62,20 @@ impl Veil {
 
     /// Takes the veil away into the element `into` picks, where it is now.
     pub fn hide(self, into: &str) {
-        if self.phase.get_untracked() != Phase::In {
+        // Also called once a drop is read, when the page may have gone.
+        if self.phase.try_get_untracked() != Some(Phase::In) {
             return;
         }
         if let Some(edges) = dom::edges_of(into) {
             self.edges.set(edges);
         }
         self.phase.set(Phase::Out);
-        self.round.update(|r| *r = r.wrapping_add(1));
-        let round = self.round.get_untracked();
+        let Some(round) = self.round.try_update(|r| {
+            *r = r.wrapping_add(1);
+            *r
+        }) else {
+            return;
+        };
         spawn_local(async move {
             dom::sleep(LEAVE.as_millis().try_into().unwrap_or(250)).await;
             if self.round.try_get_untracked() == Some(round) {
@@ -223,10 +228,18 @@ pub fn DropToUpload() -> impl IntoView {
             }
             spawn_local(async move {
                 let (added, skipped) = super::take_drop(dropped).await;
-                if let Some(said) = skipped_notice(&skipped) {
+                let gone = closing.try_get_untracked() != Some(false);
+                // Reading a folder takes a while: the gallery, or its sheet,
+                // may have gone, and the files wait on the Upload page.
+                let said = if gone && !added.is_empty() {
+                    Some(t!("upload-drop-waiting", count = added.len()))
+                } else {
+                    skipped_notice(&skipped)
+                };
+                if let Some(said) = said {
                     notify(said);
                 }
-                if added.is_empty() || closing.try_get_untracked() != Some(false) {
+                if added.is_empty() || gone {
                     return;
                 }
                 keys.update(|k| k.extend(added));

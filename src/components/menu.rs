@@ -7,6 +7,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Duration;
 
 use leptos::prelude::*;
+use send_wrapper::SendWrapper;
 use wasm_bindgen::{JsCast, JsValue};
 use web_sys::{Element, HtmlElement, KeyboardEvent, MouseEvent};
 
@@ -119,8 +120,20 @@ fn step_focus(by: i32) {
     }
 }
 
+/// The element with the focus, unless it's nowhere in particular: the page
+/// itself, or something no longer on it.
+fn focused() -> Option<HtmlElement> {
+    let doc = web_sys::window()?.document()?;
+    let el = doc.active_element()?.dyn_into::<HtmlElement>().ok()?;
+    let body = doc
+        .body()
+        .is_some_and(|b| AsRef::<Element>::as_ref(&b) == AsRef::<Element>::as_ref(&el));
+    (!body && el.is_connected()).then_some(el)
+}
+
 /// A menu at `at` over a backdrop that closes it. Escape and Tab close it
-/// too, and the arrows go through its items, wherever the focus is.
+/// too, and the arrows go through its items, wherever the focus is. As it
+/// closes, the focus goes back where it was.
 #[component]
 pub fn ActionMenu(
     at: MenuAt,
@@ -129,6 +142,8 @@ pub fn ActionMenu(
     children: Children,
 ) -> impl IntoView {
     let opened = js_sys::Date::now();
+    // Where the focus was, to go back to as the menu goes.
+    let opener = SendWrapper::new(focused());
     // Off as soon as the menu goes; the listener itself goes a moment later.
     let open = Arc::new(AtomicBool::new(true));
     let listening = Arc::clone(&open);
@@ -155,11 +170,18 @@ pub fn ActionMenu(
     on_cleanup(move || {
         open.store(false, Ordering::Relaxed);
         // Escape closes the menu from inside this very listener, which can't
-        // be dropped while it runs.
+        // be dropped while it runs. By then the menu has left the page.
         set_timeout(
             move || {
                 if let Some(keys) = keys {
                     keys.stop();
+                }
+                // Unless what the menu did put the focus somewhere of its own.
+                if let Some(el) = opener.take()
+                    && el.is_connected()
+                    && focused().is_none()
+                {
+                    let _ = el.focus();
                 }
             },
             Duration::ZERO,

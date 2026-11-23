@@ -20,11 +20,11 @@ use crate::activity::{self, Activity};
 use crate::api;
 use crate::components::brand::{Mark, Wordmark};
 use crate::components::icons::{Ico, Icon};
-use crate::dom;
+use crate::dom::{self, caret_of};
 use crate::logic::boorus;
 use crate::logic::search::{
-    Hint, Latest, ListKey, REMOTE_PAUSE_MS, TYPING_PAUSE_MS, byte_index, complete, list_key,
-    short_count, still_fitting, utf16_index, word_at,
+    Hint, Latest, ListKey, REMOTE_PAUSE_MS, TYPING_PAUSE_MS, complete, list_key, short_count,
+    still_fitting, utf16_index, word_at,
 };
 use crate::route::{self, Tab};
 use crate::store;
@@ -45,8 +45,11 @@ fn Frame() -> impl IntoView {
     // Whether the session kept from last time still works. A token signed out
     // elsewhere or past its 90 days signs out here, with a note on the
     // sign-in screen, instead of failing on every page.
-    spawn_local(async {
-        if let Ok(user) = api::call(|c| async move { c.me().await }).await {
+    let owner = store::owner();
+    spawn_local(async move {
+        if let Ok(user) = api::call(|c| async move { c.me().await }).await
+            && store::owner() == owner
+        {
             store::update_user(user);
         }
     });
@@ -159,15 +162,6 @@ const LIST_ID: &str = "search-suggestions";
 
 fn option_id(i: usize) -> String {
     format!("suggestion-{i}")
-}
-
-/// Where the caret is in `el`, in bytes into `value`.
-fn caret_of(el: &web_sys::HtmlInputElement, value: &str) -> usize {
-    el.selection_start()
-        .ok()
-        .flatten()
-        .and_then(|c| usize::try_from(c).ok())
-        .map_or(value.len(), |c| byte_index(value, c))
 }
 
 /// Keeps suggestion `i` in sight when the list scrolls.
@@ -413,7 +407,7 @@ fn SearchBox() -> impl IntoView {
                     }
                     role="combobox"
                     aria-autocomplete="list"
-                    aria-controls=LIST_ID
+                    aria-controls=move || expanded.get().then_some(LIST_ID)
                     aria-expanded=move || if expanded.get() { "true" } else { "false" }
                     aria-activedescendant=move || {
                         active.get().filter(|_| expanded.get()).map(option_id)

@@ -377,7 +377,10 @@ explore-phrase-today = oggi
 explore-phrase-week = questa settimana
 explore-phrase-month = questo mese
 explore-phrase-year = quest'anno
-explore-phrase-days = negli ultimi { $count } giorni
+explore-phrase-days = { $count ->
+        [one] nell'ultimo giorno
+       *[other] negli ultimi { $count } giorni
+    }
 explore-nothing = Ancora niente da esplorare
 explore-nothing-body = Carica immagini o video e i migliori compariranno qui.
 explore-everything = Esplora tutto
@@ -506,7 +509,7 @@ post-votes = Voti
 post-score = Punteggio
 vote-failed = Impossibile salvare il voto: { $reason }
 post-download = Scarica
-download-failed = Download non riuscito: { $reason }
+download-failed = Il download non è finito. Controlla la connessione e riprova.
 share-button = Condividi
 editor-open = Modifica immagine o video
 editor-image-short = Modifica immagine
@@ -755,7 +758,10 @@ upload-start =
         [one] Carica 1 file
        *[other] Carica { $count } file
     }
-upload-progress = { $done } di { $count } completati
+upload-progress = { $done ->
+        [one] 1 di { $count } completato
+       *[other] { $done } di { $count } completati
+    }
 upload-queued = In coda
 upload-uploading = In caricamento
 upload-uploaded = Caricato
@@ -1020,7 +1026,11 @@ library-unrated = Classificazione dei post senza un tag che la definisca
 library-check = Controlla
 library-checking = Controllo…
 library-start = Importa tutto
-library-found = Trovati { $count } post.
+library-found =
+    { $count ->
+        [one] Trovato 1 post.
+       *[other] Trovati { $count } post.
+    }
 library-found-some = Il sito risponde, ma non dice quanti post ha.
 library-no-rules = Alias e implicazioni resteranno fuori, perché qui solo un amministratore può importarli.
 library-full = Possono attendere o essere in corso fino a cinque importazioni. Avvia questa quando un’altra finisce.
@@ -1035,11 +1045,27 @@ library-state-groups = Lettura di pool e “mi piace”
 library-state-done = Finita
 library-state-stopped = Fermata
 library-state-failed = Non riuscita
-library-count = { $done } fatti
+library-count =
+    { $done ->
+        [one] 1 fatto
+       *[other] { $done } fatti
+    }
 library-count-of = { $done } di { $total }
-library-count-merged = { $count } già presenti
-library-count-failed = { $count } non riusciti
-library-count-rules = { $count } alias e implicazioni
+library-count-merged =
+    { $count ->
+        [one] 1 già presente
+       *[other] { $count } già presenti
+    }
+library-count-failed =
+    { $count ->
+        [one] 1 non riuscito
+       *[other] { $count } non riusciti
+    }
+library-count-rules =
+    { $count ->
+        [one] 1 alias o implicazione
+       *[other] { $count } alias e implicazioni
+    }
 library-stop = Ferma
 library-retry = Importa di nuovo
 library-remove = Togli dall’elenco
@@ -1057,7 +1083,11 @@ ago-hours =
        *[other] { $count } ore fa
     }
 ago-yesterday = ieri
-ago-days = { $count } giorni fa
+ago-days =
+    { $count ->
+        [one] 1 giorno fa
+       *[other] { $count } giorni fa
+    }
 
 ## Share links
 
@@ -1283,3 +1313,62 @@ backups-keep-error = Da 1 a { $max }.
 backups-restore-title = Ripristino
 backups-restore = Ferma StarBooru, poi carica il backup nel suo database con pg_restore:
 backups-restore-note = Poi riavvia StarBooru. La guida al deployment ha tutti i passaggi.
+
+## Dimensioni, e i ripensamenti del visualizzatore e delle pagine dei tag
+
+size-b = { $size } B
+size-kb = { $size } KB
+size-mb = { $size } MB
+size-gb = { $size } GB
+size-tb = { $size } TB
+sure-named = Sicuro? { $action }
+post-unsaved = Prima salva o annulla le modifiche.
+post-neighbours-failed = Impossibile trovare i post vicini a questo: { $reason }
+post-media-failed = Il file non si è caricato. Il suo link potrebbe essere scaduto.
+people-remove-named = Togli { $person }
+ai-suggest-people-replace = Sostituire le persone inserite?
+
+## Errori a parole: lato server, ricerche, ricerche salvate, download e caricamenti
+
+error-server-fault = Qualcosa è andato storto su { $server }. Riprova tra un minuto. Se continua a succedere, avvisa chi gestisce il server: i dettagli sono nel suo log.
+error-storage-full = Lo spazio su disco di { $server } è finito. Chi lo gestisce deve liberarne un po' prima che si possa salvare altro.
+error-proxy-too-large = { $server } l'ha rifiutato come troppo grande prima che arrivasse a StarBooru. Chi lo gestisce può alzare il limite di caricamento del server web che gli sta davanti.
+error-unexpected-answer = { $server } ha dato una risposta che StarBooru non si aspettava ({ $status }). Controlla l'indirizzo o riprova più tardi.
+query-error-terms = Troppi termini di ricerca. Usane al massimo { $max }.
+query-error-rating = Classificazione “{ $value }” sconosciuta. Usa g, s, q o e.
+query-error-kind = Tipo “{ $value }” sconosciuto. Usa image, animation o video.
+query-error-status = Stato “{ $value }” sconosciuto. Usa active o deleted.
+query-error-order = Ordine “{ $value }” sconosciuto. Usa new, old, score, size, pixels, longside, tags, updated o random, e aggiungi _asc per invertirlo.
+query-error-text-empty = text: richiede qualche parola, come text:ciao o text:"due parole".
+query-error-text-long = text: è troppo lungo. Resta entro { $max } caratteri.
+query-error-figure-empty = { "{}" } richiede dei tag all'interno, come { "{" }girl blonde_hair boots{ "}" }.
+query-error-figure-kinds = Un termine { "{…}" } indica due tipi. Usane uno solo tra girl, boy e other.
+query-error-date = date:{ $value } non è una data. Prova date:2024-03, date:2023..2024 o date:>30d.
+query-error-size = { $field }:{ $value } non è una dimensione. Prova width:>1920, mpixels:>8 o ratio:16:9.
+query-error-color = color:{ $value } non è un colore. Prova color:red o color:2060e0.
+query-error-tag-long = Un tag nella ricerca è troppo lungo. Resta entro { $max } caratteri per tag.
+query-error-tag-other = Un tag nella ricerca contiene un carattere che nessun tag può avere.
+saved-error-no-name = Dai un nome alla ricerca.
+saved-error-name-long = Il nome è troppo lungo. Resta entro { $max } caratteri.
+saved-error-control = Il nome contiene un carattere non ammesso.
+saved-error-empty = Non c'è nessuna ricerca da salvare.
+saved-error-long = La ricerca è troppo lunga per essere salvata. Resta entro { $max } caratteri.
+download-expired = Il link a questo file è scaduto. Ricarica la pagina e riprova.
+upload-stopped-late = { $name } era già arrivato, come post { $id }.
+upload-drop-waiting =
+    { $count ->
+        [one] Il file aspetta nella pagina Carica.
+       *[other] { $count } file aspettano nella pagina Carica.
+    }
+
+## Other boorus, Settings and the administration, second pass
+
+boorus-saved-as = Salvato qui come post #{ $id }
+boorus-save-failed = Non è stato possibile salvarlo: { $reason }
+boorus-post-missing = Questo indirizzo non dice quale post aprire.
+boorus-account-left = Sul server è salvato un account per { $site } ({ $login }), ma il sito non è in questo elenco.
+search-list-failed = Non è stato possibile leggere le ricerche salvate: { $reason } Premi per riprovare.
+keys-done = Fatto
+admin-delete-named = Elimina l’account { $name }
+admin-ai-uninstall-named = Disinstalla { $name }
+admin-ai-downloading-named = Download di { $name }

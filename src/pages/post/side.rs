@@ -8,6 +8,7 @@ use leptos::prelude::*;
 use starbooru_core::{MediaKind, Post};
 
 use crate::components::icons::{Ico, Icon};
+use crate::logic::gallery::tint;
 use crate::logic::viewer::{
     Group, category_class, color_href, dimensions, file_date, format_duration, group_tags, headed,
     human_size, source_link, when,
@@ -150,12 +151,17 @@ pub fn DetailsCard(
                 <dd>{shown}</dd>
             }
         });
-        let colours = (!p.palette.is_empty()).then(|| {
-            let swatches = p
-                .palette
-                .iter()
+        // Only plain `#rrggbb`: each goes into a style attribute.
+        let palette: Vec<&str> = p
+            .palette
+            .iter()
+            .filter_map(|c| tint(std::slice::from_ref(c)))
+            .collect();
+        let colours = (!palette.is_empty()).then(|| {
+            let swatches = palette
+                .into_iter()
                 .map(|hex| {
-                    let color = hex.clone();
+                    let color = hex.to_owned();
                     let title = move || t!("post-color-search", color = color.clone());
                     let label = title.clone();
                     view! {

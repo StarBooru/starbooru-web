@@ -13,8 +13,10 @@ use starbooru_core::{MediaKind, Post};
 use wasm_bindgen::{JsCast, JsValue};
 use web_sys::{Element, KeyboardEvent, WheelEvent};
 
+use crate::components::banner::ErrorBanner;
 use crate::components::icons::{Ico, Icon};
 use crate::dom;
+use crate::logic::gallery::tint;
 use crate::logic::viewer::{
     Tap, css_url, double_tap, enter_class, fit_style, resist, sideways, speed, swipe_turns,
 };
@@ -26,6 +28,9 @@ const REST_MS: u64 = 2800;
 const TAP_MS: f64 = 300.0;
 /// The strip at the foot of a video where its own controls are, in pixels.
 const VIDEO_CONTROLS: f64 = 64.0;
+/// What on the stage keeps its own presses, which aren't fingers on the
+/// picture.
+const CONTROLS: &str = ".stage-btn, .stage-tools, .stage-error";
 
 /// What the fingers on the stage are doing. Kept out of signals: nothing on
 /// the page needs to follow each move.
@@ -96,7 +101,7 @@ impl Shown {
             key: p.id.to_string(),
             kind: p.kind,
             size: p.width.zip(p.height),
-            tint: p.palette.first().cloned(),
+            tint: tint(&p.palette).map(str::to_owned),
             alt: p.tags.join(" "),
             poster: p.sample_url.as_deref().map(super::absolute),
             label: t!("post-number", id = p.id),
@@ -106,10 +111,6 @@ impl Shown {
 
 fn document() -> Option<web_sys::Document> {
     web_sys::window()?.document()
-}
-
-fn now() -> f64 {
-    js_sys::Date::now()
 }
 
 /// Calls a browser method that answers with a promise, and lets a refusal go
@@ -164,6 +165,11 @@ pub fn Stage(
     on_back: Option<Callback<()>>,
     /// `E` opens the tag editor.
     on_edit: Callback<()>,
+    /// Asks for the post again, with fresh addresses, when its file didn't
+    /// load and Retry is pressed. The callback it gets loads the file again,
+    /// once the post has come.
+    #[prop(optional)]
+    on_retry: Option<Callback<Callback<()>>>,
 ) -> impl IntoView {
     let stage: NodeRef<html::Section> = NodeRef::new();
     let kind = Memo::new(move |_| shown.with(|s| s.as_ref().map(|s| s.kind)));
@@ -394,7 +400,9 @@ pub fn Stage(
                     t.clear();
                 }
             }
-            // Leaving the page in fullscreen leaves fullscreen too.
+            // Leaving the page in fullscreen leaves fullscreen too, and the
+            // page around the stage hears so.
+            full.try_set(false);
             if let Some(doc) = document()
                 && doc.fullscreen_element().is_some()
             {
@@ -410,7 +418,7 @@ pub fn Stage(
         }
         let mouse = e.pointer_type() == "mouse";
         fingers.update_value(|f| f.mouse = mouse);
-        if within(e.target(), ".stage-btn, .stage-tools") {
+        if within(e.target(), CONTROLS) {
             return;
         }
         // A video's own controls, along its foot, keep their drags.
@@ -429,11 +437,13 @@ pub fn Stage(
                 return;
             }
             e.prevent_default();
-            if let Some(el) = stage.get_untracked() {
-                let _ = el.set_pointer_capture(e.pointer_id());
-            }
         }
-        let t = now();
+        // The stage then hears its lift even off the stage, so it never
+        // counts a finger that has gone.
+        if let Some(el) = stage.get_untracked() {
+            let _ = el.set_pointer_capture(e.pointer_id());
+        }
+        let t = e.time_stamp();
         fingers.update_value(|f| {
             f.put(e.pointer_id(), x, y);
             if f.down.len() == 1 {
@@ -488,7 +498,7 @@ pub fn Stage(
                     first.get_untracked()
                 };
                 swipe_x.set(Some(resist(dx, at_end)));
-                fingers.update_value(|f| f.trail.push((now(), x)));
+                fingers.update_value(|f| f.trail.push((e.time_stamp(), x)));
             }
         }
         fingers.update_value(|f| f.put(id, x, y));
@@ -496,7 +506,7 @@ pub fn Stage(
 
     let up = move |e: PointerEvent| {
         let id = e.pointer_id();
-        let t = now();
+        let t = e.time_stamp();
         let (x, y) = (f64::from(e.client_x()), f64::from(e.client_y()));
         let single = fingers.with_value(|f| f.down.len() == 1 && f.get(id).is_some());
         fingers.update_value(|f| f.lift(id));
@@ -532,9 +542,15 @@ pub fn Stage(
         }
     };
 
+    // Also for a pointer the stage lost without its lift, which is gone too.
     let cancel = move |e: PointerEvent| {
+        let id = e.pointer_id();
+        // Every lift lets go of the stage as well: nothing more to do then.
+        if e.type_() == "lostpointercapture" && fingers.with_value(|f| f.get(id).is_none()) {
+            return;
+        }
         fingers.update_value(|f| {
-            f.lift(e.pointer_id());
+            f.lift(id);
             f.sideways = None;
         });
         swipe_x.set(None);
@@ -543,10 +559,7 @@ pub fn Stage(
 
     let double_click = move |e: MouseEvent| {
         // A double tap is handled as it lifts.
-        if !fingers.with_value(|f| f.mouse)
-            || !zoomable()
-            || within(e.target(), ".stage-btn, .stage-tools")
-        {
+        if !fingers.with_value(|f| f.mouse) || !zoomable() || within(e.target(), CONTROLS) {
             return;
         }
         let at = from_centre(f64::from(e.client_x()), f64::from(e.client_y()));
@@ -555,17 +568,56 @@ pub fn Stage(
 
     // The media, made anew for each post so its entrance plays.
     let media_key = Memo::new(move |_| shown.with(|s| s.as_ref().map(|s| (s.key.clone(), s.kind))));
+    let failed = RwSignal::new(false);
+    // Another post, or new addresses for this one: no longer failed.
+    Effect::watch(
+        move || (media_key.get(), src.get()),
+        move |_, _, _| failed.set(false),
+        false,
+    );
+    // Loads the file shown again. Setting a picture's address anew does,
+    // even when it's the same one.
+    let reload = Callback::new(move |()| {
+        let Some(el) = stage
+            .get_untracked()
+            .and_then(|s| s.query_selector("#stage-img, video").ok().flatten())
+        else {
+            return;
+        };
+        if let Some(video) = el.dyn_ref::<web_sys::HtmlMediaElement>() {
+            video.load();
+        } else if let Some(address) = el.get_attribute("src") {
+            let _ = el.set_attribute("src", &address);
+        }
+    });
+    let retry = Callback::new(move |()| {
+        failed.set(false);
+        match on_retry {
+            Some(again) => again.run(reload),
+            None => reload.run(()),
+        }
+    });
     let media = move || {
         let (_, kind) = media_key.get()?;
         let entrance = enter_class(enter.get_untracked());
         let size = shown.with_untracked(|s| s.as_ref().and_then(|s| s.size));
-        let tint = shown.with_untracked(|s| {
+        // Checked again here: it goes into a style attribute.
+        let colour = shown.with_untracked(|s| {
             s.as_ref()
                 .and_then(|s| s.tint.as_ref())
+                .and_then(|hex| tint(std::slice::from_ref(hex)))
                 .map(|hex| format!("; --tint: {hex}"))
                 .unwrap_or_default()
         });
-        let alt = shown.with_untracked(|s| s.as_ref().map(|s| s.alt.clone()).unwrap_or_default());
+        // Once the file failed, the thumbnail stands in, without alt text:
+        // the banner says what happened, and a broken thumbnail would show
+        // the text over the stage.
+        let alt = move || {
+            if failed.get() {
+                return String::new();
+            }
+            shown.with(|s| s.as_ref().map(|s| s.alt.clone()).unwrap_or_default())
+        };
         let swiped = move || {
             swipe_x
                 .get()
@@ -580,11 +632,12 @@ pub fn Stage(
                     poster=move || {
                         shown.with(|s| s.as_ref().and_then(|s| s.poster.clone())).or_else(|| thumb.get())
                     }
-                    style=move || format!("{}{tint}{}", fit_style(size), swiped())
+                    style=move || format!("{}{colour}{}", fit_style(size), swiped())
                     controls=true
                     playsinline=true
                     preload="metadata"
                     loop=true
+                    on:error=move |_| failed.set(true)
                 ></video>
             }
             .into_any(),
@@ -593,7 +646,7 @@ pub fn Stage(
                 let style = move || {
                     let mut style = zoom.with(Zoom::css);
                     style.push_str(&fit_style(size));
-                    style.push_str(&tint);
+                    style.push_str(&colour);
                     if let Some(t) = thumb.get() {
                         style.push_str("; --thumb: ");
                         style.push_str(&css_url(&t));
@@ -606,13 +659,14 @@ pub fn Stage(
                         id="stage-img"
                         class=entrance
                         class:loading=move || !loaded.get()
-                        src=move || src.get()
+                        src=move || if failed.get() { thumb.get() } else { Some(src.get()) }
                         alt=alt
                         draggable="false"
                         decoding="async"
                         fetchpriority="high"
                         style=style
                         on:load=move |_| loaded.set(true)
+                        on:error=move |_| failed.set(true)
                     />
                 }
                 .into_any()
@@ -636,10 +690,16 @@ pub fn Stage(
             on:pointermove=moved
             on:pointerup=up
             on:pointercancel=cancel
+            on:lostpointercapture=cancel
             on:dblclick=double_click
         >
             <canvas class="stage-glow" aria-hidden="true"></canvas>
             {media}
+            <Show when=move || failed.get()>
+                <div class="stage-error">
+                    <ErrorBanner message=Signal::derive(|| t!("post-media-failed")) on_retry=retry />
+                </div>
+            </Show>
             {on_back
                 .map(|back| {
                     view! {

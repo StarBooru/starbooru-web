@@ -142,6 +142,12 @@ html:has(.stage) { overscroll-behavior-x: none; }
 }
 .stage.full .stage-back { display: none; }
 .stage.full .stage-tools { top: max(12px, env(safe-area-inset-top)); }
+/* The file didn't load: why, and Retry, over the foot of the stage. */
+.stage-error {
+  position: absolute; left: 12px; right: 12px; bottom: 12px; z-index: 3;
+  display: flex; justify-content: center; pointer-events: none;
+}
+.stage-error .banner { margin: 0; max-width: 560px; pointer-events: auto; box-shadow: var(--shadow-2); }
 .stage-zoom {
   /* As wide as "100%" or "Adatta", so the buttons beside it stay where they are. */
   width: var(--zoom-w); min-height: 40px; padding: 0; border: 0; border-radius: 999px; background: transparent;

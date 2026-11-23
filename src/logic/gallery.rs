@@ -66,20 +66,6 @@ pub fn is_random(q: &str) -> bool {
     parse_query(q).is_ok_and(|p| p.order.key == SortKey::Random)
 }
 
-/// `m:ss`, or `h:mm:ss` from an hour. `None` for nonsense.
-pub fn format_duration(ms: i64) -> Option<String> {
-    if ms < 0 {
-        return None;
-    }
-    let s = ms.saturating_add(500) / 1000;
-    let (h, m, s) = (s / 3600, s / 60 % 60, s % 60);
-    Some(if h > 0 {
-        format!("{h}:{m:02}:{s:02}")
-    } else {
-        format!("{m}:{s:02}")
-    })
-}
-
 /// A post's main colour for its tile, if it is `#rrggbb` and nothing else: it
 /// goes into a style attribute as it comes from the server.
 pub fn tint(palette: &[String]) -> Option<&str> {
@@ -230,7 +216,9 @@ pub fn to_middle(top: f64, height: f64, from: f64, to: f64) -> f64 {
 
 /// How many posts going back to a spot loads, at most, before it settles for
 /// the scroll position. Only their details: pictures load near the screen.
-pub const MAX_RESTORE: u32 = 100_000;
+/// The requests go one after another behind the spinner, so this keeps them
+/// to a dozen or so.
+pub const MAX_RESTORE: u32 = 3000;
 /// Going back to a spot asks for this many pages of results at a time.
 pub const RESTORE_PAGES: u32 = 3;
 
@@ -362,19 +350,6 @@ mod tests {
         // No further pages: the first page is the whole list.
         assert_eq!(merged(&[5, 4, 3], &[5, 4], false), Some(vec![5, 4]));
         assert_eq!(merged(&[5, 4, 3], &[], false), Some(vec![]));
-    }
-
-    #[test]
-    fn video_lengths_read_as_on_a_player() {
-        assert_eq!(format_duration(0).as_deref(), Some("0:00"));
-        assert_eq!(format_duration(1_499).as_deref(), Some("0:01"));
-        assert_eq!(format_duration(1_500).as_deref(), Some("0:02"));
-        assert_eq!(format_duration(65_000).as_deref(), Some("1:05"));
-        assert_eq!(format_duration(599_000).as_deref(), Some("9:59"));
-        assert_eq!(format_duration(3_600_000).as_deref(), Some("1:00:00"));
-        assert_eq!(format_duration(3_725_000).as_deref(), Some("1:02:05"));
-        assert_eq!(format_duration(-1), None);
-        assert!(format_duration(i64::MAX).is_some());
     }
 
     #[test]
@@ -600,5 +575,12 @@ mod tests {
         assert_eq!(page_after_restore(0), 1);
         assert_eq!(page_after_restore(2), 7);
         assert_eq!(page_after_restore(u32::MAX), u32::MAX);
+    }
+
+    #[test]
+    fn going_back_takes_a_few_requests_at_most() {
+        let (_, size) = restore_request(0);
+        let requests = MAX_RESTORE.div_ceil(size);
+        assert!((10..=20).contains(&requests), "{requests} requests");
     }
 }

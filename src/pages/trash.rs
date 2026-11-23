@@ -16,6 +16,7 @@ use starbooru_core::{Post, Role};
 use super::{gallery, post};
 use crate::api::{self, Refused};
 use crate::components::banner::{ErrorBanner, Spinner};
+use crate::components::confirm::ConfirmButton;
 use crate::components::icons::{Ico, Icon};
 use crate::components::snackbar::notify;
 use crate::components::thumb::Thumb;
@@ -135,6 +136,8 @@ pub fn Trash() -> impl IntoView {
             .map(|s| s.trash_days)
     });
 
+    // Bumped when the list starts again, so a page asked for before is dropped.
+    let generation = StoredValue::new(0_u32);
     let load_more = move || {
         if loading.get_untracked()
             || !has_more.get_untracked()
@@ -145,15 +148,17 @@ pub fn Trash() -> impl IntoView {
         // Counted from what's listed: a post restored or purged here moves
         // the rest of the bin up a place.
         let page = bin_page(posts.with_untracked(Vec::len));
+        let at_start = generation.get_value();
         loading.set(true);
         spawn_local(async move {
             let result =
                 api::call(move |c| async move { c.search_posts(BIN, None, page, BIN_PAGE).await })
                     .await;
-            // The page may have gone meanwhile.
-            if loading.try_set(false).is_some() {
+            // The page may have gone meanwhile, or started the list again.
+            if generation.try_get_value() != Some(at_start) {
                 return;
             }
+            loading.set(false);
             match result {
                 Ok(found) => {
                     posts.update(|list| {
@@ -169,6 +174,8 @@ pub fn Trash() -> impl IntoView {
     };
     // From the top again, after a step that changed the whole bin.
     let reload = move || {
+        generation.update_value(|g| *g = g.wrapping_add(1));
+        loading.set(false);
         posts.set(Vec::new());
         has_more.set(true);
         error.set(None);
@@ -429,7 +436,6 @@ fn TrashItem(
     on_purge: Callback<i64>,
 ) -> impl IntoView {
     let id = post.id;
-    let confirm = RwSignal::new(false);
     let href = route::post(id, BIN, None);
     let place: Option<Place> = None;
     view! {
@@ -446,25 +452,13 @@ fn TrashItem(
                 >
                     <Ico icon=Icon::Restore />
                 </button>
-                <button
-                    type="button"
-                    class=move || if confirm.get() { "btn danger small" } else { "icon-btn danger" }
-                    title=move || t!("trash-purge")
-                    aria-label=move || t!("trash-purge-post", id = id)
-                    disabled=move || busy.get()
-                    on:blur=move |_| confirm.set(false)
-                    on:click=move |_| {
-                        if confirm.get_untracked() {
-                            confirm.set(false);
-                            on_purge.run(id);
-                        } else {
-                            confirm.set(true);
-                        }
-                    }
-                >
-                    <Ico icon=Icon::DeleteForever />
-                    <Show when=move || confirm.get()>{move || t!("sure")}</Show>
-                </button>
+                <ConfirmButton
+                    icon=Icon::DeleteForever
+                    title=Signal::derive(|| t!("trash-purge"))
+                    label=Signal::derive(move || t!("trash-purge-post", id = id))
+                    disabled=busy
+                    on_confirm=Callback::new(move |()| on_purge.run(id))
+                />
             </div>
         </div>
     }
@@ -480,7 +474,8 @@ mod tests {
         // Deleting for good always asks first; restoring and emptying the
         // whole bin too.
         let source = include_str!("trash.rs");
-        for id in ["sure", "trash-empty-confirm", "trash-restore-all-confirm"] {
+        assert!(source.contains("<ConfirmButton"));
+        for id in ["trash-empty-confirm", "trash-restore-all-confirm"] {
             assert!(source.contains(&format!("t!(\"{id}\")")), "{id}");
         }
     }

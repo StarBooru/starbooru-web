@@ -6,15 +6,18 @@ use leptos::html;
 use leptos::prelude::*;
 use starbooru_core::color::Rgb;
 
+use wasm_bindgen::JsCast;
+
 use crate::components::color_picker::ColorPicker;
+use crate::components::focus::hold_focus;
 use crate::components::icons::{Ico, Icon};
 use crate::components::select::{Choice, Select};
 use crate::i18n::Lang;
 use crate::logic::settings::{
     SWATCHES, accent_rgb, custom_in_use, pick, pick_color, picked, swatch_name,
 };
-use crate::power;
 use crate::store::{self, Effects, Hand, Prefs, Saver, SwipeAction, Theme};
+use crate::{dom, power};
 
 fn theme_label(theme: Theme) -> String {
     match theme {
@@ -326,20 +329,56 @@ fn AccentPicker(hue: Signal<u16>, value: Signal<Rgb>, on: Signal<bool>) -> impl 
             </button>
             <Show when=move || open.get()>
                 <div class="select-backdrop" on:click=move |_| open.set(false)></div>
-                <AccentMenu value=value.get_untracked() />
+                <AccentMenu value=value.get_untracked() on_close=Callback::new(move |()| open.set(false)) />
             </Show>
         </div>
     }
 }
 
-/// The picker itself, opened on the colour in use.
+/// The picker itself, opened on the colour in use. It takes the focus, keeps
+/// Tab inside, and gives the focus back to its button when it closes.
 #[component]
-fn AccentMenu(value: Rgb) -> impl IntoView {
+fn AccentMenu(value: Rgb, on_close: Callback<()>) -> impl IntoView {
     let grey = RwSignal::new(false);
     let menu: NodeRef<html::Div> = NodeRef::new();
+    hold_focus(menu, true);
+    // Escape closes it wherever the focus went; inside, `.color-pick` hears
+    // it first.
+    let keys = web_sys::window().map(|window| {
+        dom::listen(&window, "keydown", false, move |e| {
+            let escape = e
+                .dyn_ref::<web_sys::KeyboardEvent>()
+                .is_some_and(|k| k.key() == "Escape");
+            if escape && !e.default_prevented() {
+                e.prevent_default();
+                on_close.try_run(());
+            }
+        })
+    });
+    on_cleanup(move || {
+        // It can close from inside this very listener, which can't be
+        // dropped while it runs.
+        set_timeout(
+            move || {
+                if let Some(keys) = keys {
+                    keys.stop();
+                }
+            },
+            std::time::Duration::ZERO,
+        );
+    });
     // Under its button, as far as the window allows: the row of colours
-    // wraps, so the button can be anywhere across it.
+    // wraps, so the button can be anywhere across it. The hex field takes
+    // the focus, as it's how the keyboard picks.
     menu.on_load(|el| {
+        let field = el
+            .query_selector("input")
+            .ok()
+            .flatten()
+            .and_then(|f| f.dyn_into::<web_sys::HtmlElement>().ok());
+        if let Some(field) = field {
+            let _ = field.focus();
+        }
         let Some(button) = el.parent_element() else {
             return;
         };

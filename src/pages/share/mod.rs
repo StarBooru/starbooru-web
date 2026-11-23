@@ -31,8 +31,9 @@ fn LinkField(url: String, #[prop(optional)] focus: bool) -> impl IntoView {
             });
         });
     }
+    // Also after the clipboard's answer, when the field may have gone.
     let select = move || {
-        if let Some(el) = field.get_untracked() {
+        if let Some(el) = field.try_get_untracked().flatten() {
             let _ = el.focus();
             el.select();
         }

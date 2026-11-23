@@ -377,7 +377,10 @@ explore-phrase-today = today
 explore-phrase-week = this week
 explore-phrase-month = this month
 explore-phrase-year = this year
-explore-phrase-days = in the last { $count } days
+explore-phrase-days = { $count ->
+        [one] in the last day
+       *[other] in the last { $count } days
+    }
 explore-nothing = Nothing to explore yet
 explore-nothing-body = Upload images or videos, and the best of them show up here.
 explore-everything = Explore everything
@@ -455,7 +458,10 @@ posts-count =
         [one] 1 post
        *[other] { $count } posts
     }
-dup-some-of = { $shown } of { $count } posts
+dup-some-of = { $count ->
+        [one] { $shown } of 1 post
+       *[other] { $shown } of { $count } posts
+    }
 dup-keep-which = Post to keep
 dup-merge = Copy their tags to the kept post
 dup-dismiss = Not duplicates
@@ -506,7 +512,7 @@ post-votes = Votes
 post-score = Score
 vote-failed = Couldn't save your vote: { $reason }
 post-download = Download
-download-failed = Download failed: { $reason }
+download-failed = The download didn't finish. Check your connection and try again.
 share-button = Share
 editor-open = Edit image or video
 editor-image-short = Edit image
@@ -1011,7 +1017,11 @@ library-unrated = Rating for posts without a defining tag
 library-check = Check
 library-checking = Checking…
 library-start = Import everything
-library-found = Found { $count } posts.
+library-found =
+    { $count ->
+        [one] Found 1 post.
+       *[other] Found { $count } posts.
+    }
 library-found-some = The site answers, but doesn’t say how many posts it has.
 library-no-rules = Aliases and implications will stay behind, because only an administrator can import them here.
 library-full = Up to five imports can wait or run at once. Start this one when another ends.
@@ -1030,7 +1040,11 @@ library-count = { $done } done
 library-count-of = { $done } of { $total }
 library-count-merged = { $count } already here
 library-count-failed = { $count } failed
-library-count-rules = { $count } aliases and implications
+library-count-rules =
+    { $count ->
+        [one] 1 alias or implication
+       *[other] { $count } aliases and implications
+    }
 library-stop = Stop
 library-retry = Import again
 library-remove = Remove from list
@@ -1048,7 +1062,11 @@ ago-hours =
        *[other] { $count } hours ago
     }
 ago-yesterday = yesterday
-ago-days = { $count } days ago
+ago-days =
+    { $count ->
+        [one] 1 day ago
+       *[other] { $count } days ago
+    }
 
 ## Share links
 
@@ -1210,7 +1228,11 @@ admin-bin-empty-confirm =
 admin-ai-title = AI
 admin-ai-unavailable = Local AI can't start on this server.
 admin-ai-unavailable-api = Each tool can still use an API instead.
-admin-ai-hw-threads = { $count } threads
+admin-ai-hw-threads =
+    { $count ->
+        [one] 1 thread
+       *[other] { $count } threads
+    }
 admin-ai-hw-memory = { $total } RAM
 admin-ai-tagging = Tag suggestions
 admin-ai-translation = Translation
@@ -1274,3 +1296,62 @@ backups-keep-error = From 1 to { $max }.
 backups-restore-title = Restoring
 backups-restore = Stop StarBooru, then load the backup into its database with pg_restore:
 backups-restore-note = Start StarBooru again afterwards. The deployment guide has the full steps.
+
+## Sizes, and the viewer's and tag pages' second thoughts
+
+size-b = { $size } B
+size-kb = { $size } KB
+size-mb = { $size } MB
+size-gb = { $size } GB
+size-tb = { $size } TB
+sure-named = Sure? { $action }
+post-unsaved = Save or cancel your changes first.
+post-neighbours-failed = Couldn't find the posts around this one: { $reason }
+post-media-failed = The file didn't load. Its link may have expired.
+people-remove-named = Remove { $person }
+ai-suggest-people-replace = Replace the people typed?
+
+## Failures in words: the server's side, searches, saved searches, downloads and uploads
+
+error-server-fault = Something went wrong on { $server }. Try again in a minute. If it keeps happening, tell whoever runs the server; it has the details in its log.
+error-storage-full = { $server } has run out of disk space. Whoever runs it needs to free some before anything more can be saved.
+error-proxy-too-large = { $server } turned this away as too large before StarBooru saw it. Whoever runs it can raise the upload limit of the web server in front of it.
+error-unexpected-answer = { $server } gave an answer StarBooru didn't expect ({ $status }). Check the address, or try again later.
+query-error-terms = Too many search terms. Use { $max } at most.
+query-error-rating = Unknown rating “{ $value }”. Use g, s, q or e.
+query-error-kind = Unknown type “{ $value }”. Use image, animation or video.
+query-error-status = Unknown status “{ $value }”. Use active or deleted.
+query-error-order = Unknown order “{ $value }”. Use new, old, score, size, pixels, longside, tags, updated or random, and add _asc to reverse it.
+query-error-text-empty = text: needs some words, such as text:hello or text:"two words".
+query-error-text-long = text: is too long. Keep it to { $max } characters.
+query-error-figure-empty = { "{}" } needs tags inside, such as { "{" }girl blonde_hair boots{ "}" }.
+query-error-figure-kinds = A { "{…}" } term names two kinds. Use one of girl, boy or other.
+query-error-date = date:{ $value } isn't a date. Try date:2024-03, date:2023..2024 or date:>30d.
+query-error-size = { $field }:{ $value } isn't a size. Try width:>1920, mpixels:>8 or ratio:16:9.
+query-error-color = color:{ $value } isn't a colour. Try color:red or color:2060e0.
+query-error-tag-long = A tag in the search is too long. Keep tags to { $max } characters.
+query-error-tag-other = A tag in the search has a character no tag can have.
+saved-error-no-name = Give the search a name.
+saved-error-name-long = The name is too long. Keep it to { $max } characters.
+saved-error-control = The name has a character it can't have.
+saved-error-empty = There's no search to save.
+saved-error-long = The search is too long to save. Keep it to { $max } characters.
+download-expired = The link to this file has expired. Reload the page and try again.
+upload-stopped-late = { $name } had already arrived, as post { $id }.
+upload-drop-waiting =
+    { $count ->
+        [one] The file waits on the Upload page.
+       *[other] { $count } files wait on the Upload page.
+    }
+
+## Other boorus, Settings and the administration, second pass
+
+boorus-saved-as = Saved here as post #{ $id }
+boorus-save-failed = Couldn't save it: { $reason }
+boorus-post-missing = This address doesn't say which post to open.
+boorus-account-left = An account for { $site } ({ $login }) is saved on the server, but the site isn't in this list.
+search-list-failed = Couldn't read the saved searches: { $reason } Press to try again.
+keys-done = Done
+admin-delete-named = Delete account { $name }
+admin-ai-uninstall-named = Uninstall { $name }
+admin-ai-downloading-named = Downloading { $name }

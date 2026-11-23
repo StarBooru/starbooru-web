@@ -11,20 +11,14 @@ use leptos::prelude::*;
 use leptos::task::spawn_local;
 
 use crate::api;
-use crate::dom;
+use crate::dom::{self, caret_of};
 use crate::logic::search::{
-    Hint, Latest, TYPING_PAUSE_MS, byte_index, complete, short_count, still_fitting, tag_word_at,
-    utf16_index,
+    Hint, Latest, TYPING_PAUSE_MS, complete, short_count, still_fitting, tag_word_at, utf16_index,
 };
 use crate::logic::tags::offers;
 
-/// Where the caret is in `el`, in bytes into `value`.
-fn caret_of(el: &web_sys::HtmlTextAreaElement, value: &str) -> usize {
-    el.selection_start()
-        .ok()
-        .flatten()
-        .and_then(|c| usize::try_from(c).ok())
-        .map_or(value.len(), |c| byte_index(value, c))
+fn offer_id(list: &str, i: usize) -> String {
+    format!("{list}-{i}")
 }
 
 /// The tag box: a `textarea` with its grip, and the offers under it. `id` is
@@ -67,7 +61,16 @@ pub fn TagBox(
         text.with(|t| offers(t, found))
     });
     let list_id = format!("{id}-offers");
-    let controls = list_id.clone();
+    let expanded = Memo::new(move |_| shown.with(|s| !s.is_empty()));
+    // The list is only there while it has offers; the first is the one Tab takes.
+    let controls = {
+        let list = list_id.clone();
+        move || expanded.get().then(|| list.clone())
+    };
+    let active = {
+        let list = list_id.clone();
+        move || expanded.get().then(|| offer_id(&list, 0))
+    };
 
     // Asks for the tags starting with `typed` once the typing pauses, as the
     // search box does.
@@ -165,6 +168,7 @@ pub fn TagBox(
         }
     };
 
+    let options_of = list_id.clone();
     let list = move || {
         shown
             .get()
@@ -176,6 +180,7 @@ pub fn TagBox(
                 view! {
                     <button
                         type="button"
+                        id=offer_id(&options_of, i)
                         role="option"
                         class=format!("chip {class}")
                         aria-selected=first
@@ -200,8 +205,11 @@ pub fn TagBox(
                 spellcheck="false"
                 autocapitalize="none"
                 autocomplete="off"
+                role="combobox"
                 aria-autocomplete="list"
+                aria-expanded=move || if expanded.get() { "true" } else { "false" }
                 aria-controls=controls
+                aria-activedescendant=active
                 aria-invalid=move || invalid.get().then_some("true")
                 aria-label=move || label.map(|l| l.get())
                 placeholder=move || placeholder.map(|p| p.get())
@@ -239,14 +247,14 @@ pub fn TagBox(
             ></textarea>
             {(!one_line).then(|| view! { <Grip area=area /> })}
         </span>
-        <Show when=move || shown.with(|s| !s.is_empty())>
+        <Show when=move || expanded.get()>
             <div
                 class="tag-offers"
                 id=list_id.clone()
                 role="listbox"
                 aria-label=move || t!("tag-offers")
             >
-                {list}
+                {list.clone()}
             </div>
         </Show>
     }
@@ -292,7 +300,8 @@ fn Grip(area: NodeRef<html::Textarea>) -> impl IntoView {
 
     let size = move || {
         frame.try_set_value(false);
-        let (Some(Some(d)), Some(el)) = (drag.try_get_value(), area.get_untracked()) else {
+        let (Some(Some(d)), Some(Some(el))) = (drag.try_get_value(), area.try_get_untracked())
+        else {
             return;
         };
         let h = grip_height(d.start, d.from, d.y, d.least);
@@ -392,8 +401,11 @@ mod tests {
     fn the_box_is_a_combobox_over_its_offers() {
         let source = include_str!("tag_box.rs");
         for attr in [
+            r#"role="combobox""#,
             r#"aria-autocomplete="list""#,
             "aria-controls=controls",
+            "aria-activedescendant=active",
+            "id=offer_id(&options_of, i)",
             r#"role="listbox""#,
             r#"role="option""#,
             "<Grip area=area />",

@@ -9,13 +9,15 @@ use starbooru_core::admin::{MAX_BACKUP_DAYS, MAX_BACKUP_KEEP};
 use starbooru_core::{Backup, BackupSchedule, Backups as List};
 
 use super::Waiting;
-use crate::api;
 use crate::components::banner::ErrorBanner;
 use crate::components::confirm::ConfirmButton;
 use crate::components::download::DownloadLink;
 use crate::components::icons::{Ico, Icon};
 use crate::components::snackbar::notify;
-use crate::logic::admin::{RESTORE_COMMAND, backup_line, backup_time, check_schedule};
+use crate::logic::admin::{
+    BACKUP_POLL_MS, RESTORE_COMMAND, backup_line, backup_time, check_schedule,
+};
+use crate::{api, dom};
 
 #[component]
 pub(super) fn Backups() -> impl IntoView {
@@ -39,6 +41,41 @@ pub(super) fn Backups() -> impl IntoView {
     };
     load();
     let retry = Callback::new(move |()| load());
+    // The download links are signed for a while only: back on this browser
+    // tab, the list is read again for fresh ones.
+    let shown_again = web_sys::window().and_then(|w| w.document()).map(|doc| {
+        let page = doc.clone();
+        dom::listen(&doc, "visibilitychange", false, move |_| {
+            if !page.hidden() {
+                load();
+            }
+        })
+    });
+    // While a backup is being made, here or by the schedule, the list is
+    // read again every few seconds until it's there.
+    let following = StoredValue::new(false);
+    Effect::new(move |_| {
+        let running = data.with(|d| d.as_ref().is_some_and(|d| d.running));
+        if !running || following.get_value() {
+            return;
+        }
+        following.set_value(true);
+        spawn_local(async move {
+            loop {
+                dom::sleep(BACKUP_POLL_MS).await;
+                // Gone with the page, or done.
+                let still = data.try_with_untracked(|d| d.as_ref().is_some_and(|d| d.running));
+                if still != Some(true) {
+                    break;
+                }
+                if let Ok(found) = api::call(|c| async move { c.backups().await }).await {
+                    data.try_set(Some(found));
+                }
+            }
+            following.set_value(false);
+        });
+    });
+    on_cleanup(move || drop(shown_again));
     let back_up = move |_| {
         if busy.get_untracked() {
             return;
@@ -100,10 +137,12 @@ pub(super) fn Backups() -> impl IntoView {
     let loaded = move || data.with(Option::is_some);
     let available = move || data.with(|d| d.as_ref().is_some_and(|d| d.available));
     let running = move || making.get() || data.with(|d| d.as_ref().is_some_and(|d| d.running));
+    // A row is the backup at its address: a fresh signature makes a new row,
+    // with a link that works.
     let names = Memo::new(move |_| {
         data.with(|d| {
             d.iter()
-                .flat_map(|d| d.items.iter().map(|b| b.name.clone()))
+                .flat_map(|d| d.items.iter().map(|b| (b.name.clone(), b.url.clone())))
                 .collect::<Vec<_>>()
         })
     });
@@ -142,11 +181,14 @@ pub(super) fn Backups() -> impl IntoView {
                     <ul class="sessions backups">
                         <For
                             each=move || names.get()
-                            key=|name| name.clone()
-                            children=move |name| {
+                            key=|row| row.clone()
+                            children=move |(name, url)| {
                                 let backup = data
                                     .with_untracked(|d| {
-                                        d.iter().flat_map(|d| d.items.iter()).find(|b| b.name == name).cloned()
+                                        d.iter()
+                                            .flat_map(|d| d.items.iter())
+                                            .find(|b| b.name == name && b.url == url)
+                                            .cloned()
                                     });
                                 backup.map(|b| view! { <BackupRow backup=b busy=busy on_delete=remove /> })
                             }

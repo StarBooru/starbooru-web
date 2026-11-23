@@ -168,6 +168,20 @@ pub fn check_password(has_password: bool, current: &str, new: &str, repeat: &str
     }
 }
 
+/// Whether the server refused a new password because the current one was
+/// wrong. Only an account with a password is asked for it; any other 400
+/// (a password the server finds too short, say) keeps the server's words.
+pub fn wrong_current(
+    has_password: bool,
+    status: Option<u16>,
+    code: Option<&str>,
+    message: &str,
+) -> bool {
+    let about_current = code.is_some_and(|c| c.contains("current"))
+        || message.to_lowercase().contains("current password");
+    has_password && status == Some(400) && about_current
+}
+
 // ---------- signed-in devices ----------
 
 /// A device's name, as the server worked it out from its browser.
@@ -452,6 +466,31 @@ mod tests {
         assert!(check_password(false, "", "Velvet-Comet-1", "Velvet-Comet-1").ready);
         // Characters, not bytes.
         assert!(!check_password(false, "", "éééééééé", "éééééééé").too_short);
+    }
+
+    #[test]
+    fn only_a_refusal_about_the_current_password_says_it_is_wrong() {
+        let wrong = "the current password is wrong";
+        assert!(wrong_current(true, Some(400), Some("bad_request"), wrong));
+        assert!(wrong_current(
+            true,
+            Some(400),
+            Some("wrong_current_password"),
+            "no"
+        ));
+        // No password to be wrong about: the account sets its first one.
+        assert!(!wrong_current(false, Some(400), Some("bad_request"), wrong));
+        // Other refusals keep the server's words.
+        let short = "password must be at least 8 characters";
+        assert!(!wrong_current(true, Some(400), Some("bad_request"), short));
+        assert!(!wrong_current(
+            true,
+            Some(400),
+            Some("weak_password"),
+            "too weak"
+        ));
+        assert!(!wrong_current(true, Some(429), Some("rate_limited"), wrong));
+        assert!(!wrong_current(true, None, None, wrong));
     }
 
     #[test]

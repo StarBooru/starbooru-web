@@ -5,6 +5,8 @@
 
 use std::cell::{Cell, RefCell};
 use std::collections::{HashMap, HashSet};
+use std::future::Future;
+use std::rc::Rc;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 
@@ -14,16 +16,44 @@ use leptos::prelude::*;
 use leptos::task::spawn_local;
 use send_wrapper::SendWrapper;
 use starbooru_client::FileUpload;
-use starbooru_core::{ImportJob, ImportRequest, MAX_IMPORT_BATCH, Meter, Rating, Transfer};
+use starbooru_core::{
+    ImportJob, ImportRequest, MAX_IMPORT_BATCH, Meter, Rating, Transfer, UPLOAD_CHUNK_SIZE,
+};
 
 use crate::api::{self, Refused};
 use crate::components::snackbar::notify;
 use crate::dom;
 use crate::files::{self, Picked};
 use crate::logic::jobs::{Ended, finished, merge, poll_every};
-use crate::logic::queue::{AT_ONCE, Batch, Outcome, Queue, Source};
+use crate::logic::queue::{AT_ONCE, Batch, Outcome, Queue, Source, Status};
 use crate::logic::upload::{Refusal, duplicate_post, human_size, refusal, too_big};
 use crate::pages::{bad_tag_text, gallery};
+use crate::store;
+
+/// A file on its way, and how to stop it.
+struct Flight {
+    attempt: u32,
+    /// Drops the request at once.
+    abort: AbortHandle,
+    /// Makes the next piece of the file fail to read, so the client gives up
+    /// on its own and tells the server to drop the pieces it has.
+    stop: Rc<Cell<bool>>,
+    /// Sent in pieces, which dropping the request would leave on the server.
+    chunked: bool,
+}
+
+impl Flight {
+    /// Stops it. Says whether it's still winding down: a chunked one is,
+    /// until the piece on its way is answered and the server told.
+    fn stop(&self) -> bool {
+        self.stop.set(true);
+        if self.chunked {
+            return true;
+        }
+        self.abort.abort();
+        false
+    }
+}
 
 thread_local! {
     // Reference counted, as they outlive every page.
@@ -32,8 +62,8 @@ thread_local! {
     /// The picked files, by their item's key. Kept apart from the queue, as
     /// a browser handle isn't plain data.
     static FILES: RefCell<HashMap<u64, web_sys::File>> = RefCell::new(HashMap::new());
-    /// How to stop each file on its way, and which attempt that is.
-    static ABORTS: RefCell<HashMap<u64, (u32, AbortHandle)>> = RefCell::new(HashMap::new());
+    /// The files on their way, by their item's key.
+    static FLIGHTS: RefCell<HashMap<u64, Flight>> = RefCell::new(HashMap::new());
     /// Set to ask for the job list on the next check.
     static STALE: Cell<bool> = const { Cell::new(true) };
     /// Jobs seen going since the list was last still, for the notice when it is.
@@ -150,10 +180,36 @@ pub fn cancel(key: u64) {
     let mut stopped = false;
     update(|q| stopped = q.cancel(key));
     if stopped {
-        if let Some((_, handle)) = ABORTS.with_borrow_mut(|a| a.remove(&key)) {
-            handle.abort();
-        }
+        FLIGHTS.with_borrow_mut(|f| {
+            if f.get(&key).is_some_and(|flight| !flight.stop()) {
+                f.remove(&key);
+            }
+        });
         pump();
+    }
+}
+
+/// Stops every file on its way.
+fn stop_all() {
+    FLIGHTS.with_borrow_mut(|f| f.retain(|_, flight| flight.stop()));
+}
+
+/// How long signing out waits for the files sent in pieces to tell the
+/// server to drop them, in tenths of a second.
+const WIND_DOWN_TENTHS: u32 = 100;
+
+/// Stops every file on its way, as at sign-out. The future ends once those
+/// sent in pieces have told the server to drop them, which needs the
+/// session, or after a while.
+pub fn wind_down() -> impl Future<Output = ()> {
+    stop_all();
+    async {
+        for _ in 0..WIND_DOWN_TENTHS {
+            if FLIGHTS.with_borrow(HashMap::is_empty) {
+                return;
+            }
+            dom::sleep(100).await;
+        }
     }
 }
 
@@ -221,6 +277,26 @@ fn ran() {
     }
 }
 
+/// Whether attempt `attempt` at item `key` is still the one on its way.
+fn still_sending(key: u64, attempt: u32) -> bool {
+    QUEUE.with(|q| {
+        q.with_untracked(|q| {
+            q.get(key)
+                .is_some_and(|i| i.status == Status::Sending && i.attempt == attempt)
+        })
+    })
+}
+
+/// Takes attempt `attempt` at item `key` off the files on their way, unless
+/// a later one has taken its place.
+fn landed(key: u64, attempt: u32) {
+    FLIGHTS.with_borrow_mut(|f| {
+        if f.get(&key).is_some_and(|flight| flight.attempt == attempt) {
+            f.remove(&key);
+        }
+    });
+}
+
 /// One file, from its first byte to the server's answer.
 async fn send(key: u64, attempt: u32) {
     let item = QUEUE.with(|q| {
@@ -233,8 +309,25 @@ async fn send(key: u64, attempt: u32) {
         end(key, attempt, Outcome::Failed(t!("upload-gone")));
         return;
     };
+    // Stoppable from the start, so a cancel while the server is asked below
+    // isn't lost.
+    let (abort, registration) = AbortHandle::new_pair();
+    let stop = Rc::new(Cell::new(false));
+    let flight = Flight {
+        attempt,
+        abort,
+        stop: Rc::clone(&stop),
+        chunked: size > UPLOAD_CHUNK_SIZE,
+    };
+    FLIGHTS.with_borrow_mut(|f| f.insert(key, flight));
+    let owner = store::owner();
     let limit = api::server_info().await.map_or(0, |i| i.max_upload_bytes);
+    if stop.get() || !still_sending(key, attempt) {
+        landed(key, attempt);
+        return;
+    }
     if too_big(size, limit) {
+        landed(key, attempt);
         let max = human_size(limit);
         end(
             key,
@@ -243,16 +336,15 @@ async fn send(key: u64, attempt: u32) {
         );
         return;
     }
-    let (handle, registration) = AbortHandle::new_pair();
-    ABORTS.with_borrow_mut(|a| a.insert(key, (attempt, handle)));
     let upload = FileUpload {
-        file_name: name,
+        file_name: name.clone(),
         size,
         tags: plan.tags,
         rating: plan.rating,
         source: plan.source,
         autotag: plan.autotag,
     };
+    let reading = Rc::clone(&stop);
     let work = api::attempt(move |client| async move {
         let meter = RefCell::new(Meter::new(Utc::now()));
         let sent = |done: u64| {
@@ -266,20 +358,34 @@ async fn send(key: u64, attempt: u32) {
         };
         let read = move |offset: u64, len: u64| {
             let file = file.clone();
-            async move { files::read_range(&file, offset, len).await }
+            let stopped = reading.get();
+            async move {
+                // Never shown: a stopped file's outcome is dropped.
+                if stopped {
+                    return Err("stopped".to_owned());
+                }
+                files::read_range(&file, offset, len).await
+            }
         };
         client.upload_file(upload, read, &sent).await
     });
     let result = Abortable::new(work, registration).await;
-    ABORTS.with_borrow_mut(|a| {
-        if a.get(&key).is_some_and(|(at, _)| *at == attempt) {
-            a.remove(&key);
-        }
-    });
-    // Cancelled: the queue already says so.
+    landed(key, attempt);
+    // Cancelled while sent whole: the queue already says so.
     let Ok(result) = result else {
         return;
     };
+    if stop.get() {
+        // The whole file was on the server before the stop came.
+        if let Ok(post) = result
+            && store::owner() == owner
+        {
+            notify(t!("upload-stopped-late", name = name, id = post.id));
+            api::forget_tags();
+            gallery::posts_arrived();
+        }
+        return;
+    }
     let outcome = match result {
         Ok(post) => Outcome::Posted(post.id),
         Err(refused) => outcome_of(refused, limit),
@@ -320,10 +426,16 @@ fn end(key: u64, attempt: u32, outcome: Outcome) {
 /// Queues addresses on the server. Those it takes leave the list and show
 /// up as its jobs.
 async fn send_imports(batch: Vec<(u64, ImportRequest)>) {
+    let owner = store::owner();
     for chunk in batch.chunks(MAX_IMPORT_BATCH) {
         let keys: Vec<u64> = chunk.iter().map(|(k, _)| *k).collect();
         let requests: Vec<ImportRequest> = chunk.iter().map(|(_, r)| r.clone()).collect();
-        match api::call(move |c| async move { c.queue_imports(requests).await }).await {
+        let answer = api::call(move |c| async move { c.queue_imports(requests).await }).await;
+        // Signed out meanwhile: the list was that account's, and has gone.
+        if store::owner() != owner {
+            return;
+        }
+        match answer {
             Ok(jobs) => {
                 WATCHED.with_borrow_mut(|w| w.extend(jobs.iter().map(|j| j.id)));
                 JOBS.with(|j| j.update(|list| *list = merge(list, jobs)));
@@ -340,9 +452,13 @@ async fn send_imports(batch: Vec<(u64, ImportRequest)>) {
 /// browser's selection). They show up as jobs here, on the Upload page and
 /// in the navigation's badge. The words to show when the server refuses.
 pub async fn queue_imports(requests: Vec<ImportRequest>) -> Result<(), String> {
+    let owner = store::owner();
     for chunk in requests.chunks(MAX_IMPORT_BATCH) {
         let items = chunk.to_vec();
         let jobs = api::call(move |c| async move { c.queue_imports(items).await }).await?;
+        if store::owner() != owner {
+            return Ok(());
+        }
         WATCHED.with_borrow_mut(|w| w.extend(jobs.iter().map(|j| j.id)));
         JOBS.with(|j| j.update(|list| *list = merge(list, jobs)));
     }
@@ -352,8 +468,13 @@ pub async fn queue_imports(requests: Vec<ImportRequest>) -> Result<(), String> {
 
 /// Cancels an import that hasn't started.
 pub fn cancel_job(id: i64) {
+    let owner = store::owner();
     spawn_local(async move {
-        match api::call(move |c| async move { c.delete_import(id).await }).await {
+        let answer = api::call(move |c| async move { c.delete_import(id).await }).await;
+        if store::owner() != owner {
+            return;
+        }
+        match answer {
             Ok(()) => JOBS.with(|j| j.update(|list| list.retain(|j| j.id != id))),
             Err(message) => notify(message),
         }
@@ -368,8 +489,11 @@ pub fn clear_jobs_now() {
         return;
     }
     JOBS.with(|j| j.update(|list| list.retain(|j| j.state.is_active())));
-    spawn_local(async {
-        if let Err(message) = api::call(|c| async move { c.clear_imports().await }).await {
+    let owner = store::owner();
+    spawn_local(async move {
+        if let Err(message) = api::call(|c| async move { c.clear_imports().await }).await
+            && store::owner() == owner
+        {
             notify(message);
         }
     });
@@ -381,10 +505,15 @@ pub fn refresh() {
 }
 
 async fn poll() {
+    let owner = store::owner();
     // A failed check keeps the list it had; the next one tries again.
     let Ok(now) = api::call(|c| async move { c.imports().await }).await else {
         return;
     };
+    // Signed out meanwhile: these are the last account's.
+    if store::owner() != owner {
+        return;
+    }
     let ended = WATCHED.with_borrow_mut(|w| finished(w, &now));
     if let Some(ended) = ended {
         // Out of any view: the language is read, not followed.
@@ -461,9 +590,8 @@ pub fn Activity() -> impl IntoView {
         if let Some(watch) = watch.take() {
             watch.stop();
         }
-        for (_, (_, handle)) in ABORTS.with_borrow_mut(std::mem::take) {
-            handle.abort();
-        }
+        // Sign-out stopped them already, unless the server ended the session.
+        stop_all();
         QUEUE.with(|q| q.set(Queue::default()));
         JOBS.with(|j| j.set(Vec::new()));
         FILES.with_borrow_mut(HashMap::clear);

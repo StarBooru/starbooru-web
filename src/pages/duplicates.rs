@@ -21,8 +21,8 @@ use crate::logic::duplicates::{
     LEVELS, Level, Likeness, PAGE, Summary, day, group_key, has_more, level, likeness, more,
     resolve_request, size_of, suggested_keeper, summary, unmerge,
 };
-use crate::logic::gallery::{format_duration, tint};
-use crate::logic::viewer::human_size;
+use crate::logic::gallery::tint;
+use crate::logic::viewer::{format_duration, human_size};
 use crate::route;
 
 thread_local! {
@@ -439,9 +439,11 @@ fn DupItem(post: Post, index: usize, group: i64, keep: RwSignal<i64>) -> impl In
     view! {
         <div class="dup-item" class:on=chosen>
             <label class="dup-pick">
+                // Named even when there's no picture to name it.
                 <input
                     type="radio"
                     class="visually-hidden"
+                    aria-label=move || t!("post-alt", id = id)
                     name=format!("keep-{group}")
                     prop:checked=chosen
                     on:change=move |_| keep.set(id)

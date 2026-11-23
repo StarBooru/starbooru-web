@@ -5,6 +5,8 @@
 use starbooru_core::{FORMATS, Transfer, normalize_tag, post_link};
 
 use super::tags::{BadTag, parse_tags};
+// Kept here too: the upload pages and the admin panel import it from here.
+pub use super::viewer::human_size;
 
 /// Names the server's file types go by, which save reading the file.
 const MEDIA_EXTENSIONS: [&str; 16] = [
@@ -76,23 +78,6 @@ pub fn folder_tag(path: &str) -> Option<String> {
     let (folder, _) = path.trim_end_matches('/').rsplit_once('/')?;
     let name = folder.rsplit('/').next()?;
     normalize_tag(name).ok()
-}
-
-/// `1536` → `1.5 KB`.
-pub fn human_size(bytes: u64) -> String {
-    const UNITS: [&str; 5] = ["B", "KB", "MB", "GB", "TB"];
-    let mut value = bytes as f64;
-    let mut unit = 0;
-    while value >= 1024.0 && unit + 1 < UNITS.len() {
-        value /= 1024.0;
-        unit += 1;
-    }
-    let name = UNITS.get(unit).copied().unwrap_or("B");
-    if unit == 0 {
-        format!("{value:.0} {name}")
-    } else {
-        format!("{value:.1} {name}")
-    }
 }
 
 /// What to say beside a transfer's bar: `42% · 1.2 MB/s`, or the bytes so

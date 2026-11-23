@@ -159,8 +159,26 @@ pub async fn begin_link() -> Result<(), String> {
     )
 }
 
+/// Whether `url`, which the server gave, is a web address to leave for. A
+/// hostile server could answer with a `javascript:` one, which would run on
+/// this page.
+fn is_web_address(url: &str) -> bool {
+    // As the browser reads an address: tabs and line breaks anywhere in it
+    // don't count, nor spaces and control characters in front.
+    let read: String = url
+        .chars()
+        .filter(|c| !matches!(c, '\t' | '\n' | '\r'))
+        .collect();
+    let start = read.trim_start_matches(|c: char| c <= ' ');
+    let scheme = start.split_once(':').map(|(s, _)| s.to_ascii_lowercase());
+    matches!(scheme.as_deref(), Some("http" | "https"))
+}
+
 /// Keeps what the way back needs and goes to the provider at `url`.
 fn leave(pending: &Pending, url: &str) -> Result<(), String> {
+    if !is_web_address(url) {
+        return Err(Why::Failed.text());
+    }
     let kept = pending.to_json().is_some_and(|json| page::keep(&json));
     if kept && page::go(url) {
         Ok(())
@@ -178,12 +196,10 @@ pub fn take() -> Option<Pending> {
 mod page {
     const KEY: &str = "starbooru-oidc";
 
+    pub use crate::dom::origin;
+
     fn storage() -> Option<web_sys::Storage> {
         web_sys::window()?.session_storage().ok()?
-    }
-
-    pub fn origin() -> Option<String> {
-        web_sys::window()?.location().origin().ok()
     }
 
     pub fn keep(json: &str) -> bool {
@@ -328,6 +344,38 @@ mod tests {
         assert_eq!(back("", Some(pending())), Back::Nothing);
         assert_eq!(back("?oidc_code=", None), Back::Nothing);
         assert_eq!(back("?q=cat", None), Back::Nothing);
+    }
+
+    #[test]
+    fn only_a_web_address_is_left_for() {
+        for good in [
+            "https://id.example/auth?x=1",
+            "http://127.0.0.1:9000/auth",
+            "HTTPS://ID.EXAMPLE/",
+            "  https://id.example/",
+        ] {
+            assert!(is_web_address(good), "{good}");
+        }
+        for bad in [
+            "javascript:alert(1)",
+            "JavaScript:alert(1)",
+            " \u{1}javascript:alert(1)",
+            "java\tscript:alert(1)",
+            "jav\nascript:alert(1)",
+            "data:text/html,<script>alert(1)</script>",
+            "vbscript:x",
+            "//id.example/auth",
+            "/auth",
+            "",
+            "https",
+        ] {
+            assert!(!is_web_address(bad), "{bad:?}");
+        }
+        // Refused before anything is kept or the page leaves.
+        assert_eq!(
+            leave(&pending(), "javascript:alert(1)"),
+            Err(Why::Failed.text())
+        );
     }
 
     #[test]

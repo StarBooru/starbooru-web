@@ -99,6 +99,16 @@ pub fn rebase(text: &str, before: &[String], after: &[String]) -> String {
     out
 }
 
+/// Whether the editor's `text` holds other tags than the post's `saved` ones,
+/// so leaving would lose them. Order, repeats and what normalising tidies
+/// don't count; a word that can't be a tag does.
+pub fn tags_changed(text: &str, saved: &[String]) -> bool {
+    match parse_tags(text) {
+        Ok(typed) => typed.len() != saved.len() || typed.iter().any(|t| !saved.contains(t)),
+        Err(_) => true,
+    }
+}
+
 /// The words of `text` that aren't among the post's `saved` tags: the ones
 /// worth a "did you mean".
 pub fn new_words(text: &str, saved: &[String]) -> String {
@@ -378,6 +388,21 @@ mod tests {
         // Already typed, it isn't added twice; unchanged tags change nothing.
         assert_eq!(rebase("cat hat", &tags("cat"), &tags("cat hat")), "cat hat");
         assert_eq!(rebase("cat  dog", &before, &before), "cat  dog");
+    }
+
+    #[test]
+    fn only_other_tags_are_unsaved_changes() {
+        let saved = ["cat".to_owned(), "blue_sky".to_owned()];
+        // As it opened, or the same tags written another way.
+        assert!(!tags_changed("cat blue_sky", &saved));
+        assert!(!tags_changed(" Blue_Sky\ncat  cat ", &saved));
+        assert!(!tags_changed("", &[]));
+        // A tag more, one fewer, another, or a word that can't be one.
+        assert!(tags_changed("cat blue_sky dog", &saved));
+        assert!(tags_changed("cat", &saved));
+        assert!(tags_changed("cat sky", &saved));
+        assert!(tags_changed("cat blue_sky -dog", &saved));
+        assert!(tags_changed("dog", &[]));
     }
 
     #[test]

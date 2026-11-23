@@ -44,6 +44,20 @@ pub fn kept_on_device(saved: &[SavedBooru]) -> Vec<SaveBooruAccount> {
         .collect()
 }
 
+/// Whether a key kept on this device comes off it after it was offered to
+/// the server. `refused` is `None` when the server took it, else the
+/// refusal's status, `None` when there was none (the network, or being told
+/// to wait). Trouble that may pass keeps the key for the next try: no
+/// status, a 5xx, 401 and 429. Any other refusal would come again, so the
+/// key goes.
+pub fn drop_moved_key(refused: Option<Option<u16>>) -> bool {
+    match refused {
+        None => true,
+        Some(None | Some(401 | 429)) => false,
+        Some(Some(status)) => (400..500).contains(&status),
+    }
+}
+
 /// Takes the account for `base` off this device.
 pub fn forget_on_device(saved: &mut [SavedBooru], base: &str) {
     for site in saved.iter_mut().filter(|s| tidy(&s.base) == tidy(base)) {
@@ -408,6 +422,21 @@ mod tests {
         assert_eq!(tidy(" https://a.org// "), "https://a.org");
         assert_eq!(api_of("e621"), Some(BooruApi::E621));
         assert_eq!(api_of("szurubooru"), None);
+    }
+
+    #[test]
+    fn a_moved_key_stays_on_the_device_only_for_trouble_that_passes() {
+        // Taken by the server.
+        assert!(drop_moved_key(None));
+        // No answer, a server in trouble, a session that ended, a wait.
+        for kept in [None, Some(500), Some(502), Some(503), Some(401), Some(429)] {
+            assert!(!drop_moved_key(Some(kept)), "{kept:?}");
+        }
+        // Refusals that would only come again: a bad key, too many accounts,
+        // URL import turned off.
+        for gone in [400, 403, 404, 409, 413, 422] {
+            assert!(drop_moved_key(Some(Some(gone))), "{gone}");
+        }
     }
 
     #[test]

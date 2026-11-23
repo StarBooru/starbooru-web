@@ -366,6 +366,10 @@ enum Change {
     Remove(Relation, String),
 }
 
+/// A name typed to add to one of the lists, and what empties its box once
+/// the server has it.
+type Adding = (Relation, String, Callback<()>);
+
 /// What the server has after a change: the tag alone, or all of the page.
 enum Changed {
     Tag(Tag),
@@ -429,8 +433,9 @@ pub fn TagPage() -> impl IntoView {
     let error = RwSignal::new(None::<String>);
     let busy = RwSignal::new(false);
     // An alias that is a tag already, and its posts: merging it in waits for
-    // a yes, as it can't be taken back.
+    // a yes, as it can't be taken back. Its box keeps the name until then.
     let merging = RwSignal::new(None::<(String, i32)>);
+    let merge_done = StoredValue::new(None::<Callback<()>>);
     let generation = StoredValue::new(0_u64);
     let user = Memo::new(|_| store::session().map(|s| s.user));
     let editable = Signal::derive(move || user.with(|u| may_edit_tag(u.as_ref())));
@@ -443,6 +448,7 @@ pub fn TagPage() -> impl IntoView {
         failure.set(None);
         error.set(None);
         merging.set(None);
+        merge_done.set_value(None);
         busy.set(false);
         spawn_local(async move {
             let result = api::fetch(move |c| async move { c.tag(&wanted).await }).await;
@@ -472,7 +478,9 @@ pub fn TagPage() -> impl IntoView {
         true,
     );
 
-    let act = move |change: Change| {
+    // `done` hears when the change is saved: the box it was typed in empties
+    // then, and keeps the text when it fails.
+    let act = move |change: Change, done: Option<Callback<()>>| {
         let Some(current) = detail.with_untracked(|d| d.as_ref().map(|d| d.tag.name.clone()))
         else {
             return;
@@ -492,12 +500,12 @@ pub fn TagPage() -> impl IntoView {
             }
             busy.set(false);
             match result {
-                Ok(done) => {
+                Ok(changed) => {
                     api::forget_tags();
                     if moves_posts {
                         gallery::forget_lists();
                     }
-                    match done {
+                    match changed {
                         Changed::Tag(tag) => detail.update(|d| {
                             if let Some(d) = d {
                                 d.tag = tag;
@@ -505,18 +513,21 @@ pub fn TagPage() -> impl IntoView {
                         }),
                         Changed::Detail(d) => detail.set(Some(d)),
                     }
+                    if let Some(done) = done {
+                        done.try_run(());
+                    }
                 }
                 Err(message) => error.set(Some(message)),
             }
         });
     };
     // An alias that names a tag of its own merges that tag in: ask first.
-    let add = Callback::new(move |(relation, value): (Relation, String)| {
+    let add = Callback::new(move |(relation, value, done): Adding| {
         let Some(this) = detail.with_untracked(|d| d.as_ref().map(|d| d.tag.id)) else {
             return;
         };
         if relation == Relation::Implies {
-            act(Change::Add(relation, value));
+            act(Change::Add(relation, value), Some(done));
             return;
         }
         if busy.get_untracked() {
@@ -534,19 +545,22 @@ pub fn TagPage() -> impl IntoView {
             busy.set(false);
             match found {
                 Ok(other) if merges(&other.tag, &value, this) => {
+                    merge_done.set_value(Some(done));
                     merging.set(Some((value, other.tag.post_count)));
                 }
                 Ok(_) | Err(Failure { missing: true, .. }) => {
-                    act(Change::Add(Relation::Alias, value));
+                    act(Change::Add(Relation::Alias, value), Some(done));
                 }
                 Err(f) => error.set(Some(f.message)),
             }
         });
     });
     let remove = Callback::new(move |(relation, value): (Relation, String)| {
-        act(Change::Remove(relation, value));
+        act(Change::Remove(relation, value), None);
     });
-    let set_parent = Callback::new(move |parent: String| act(Change::Parent(parent)));
+    let set_parent = Callback::new(move |(parent, done): (String, Option<Callback<()>>)| {
+        act(Change::Parent(parent), done);
+    });
 
     let failed = move || {
         let f = failure.get()?;
@@ -622,7 +636,7 @@ pub fn TagPage() -> impl IntoView {
                             disabled=move || busy.get() || !editable.get()
                             on:click=move |_| {
                                 if !on {
-                                    act(Change::Category(c));
+                                    act(Change::Category(c), None);
                                 }
                             }
                         >
@@ -641,7 +655,14 @@ pub fn TagPage() -> impl IntoView {
                             {move || t!("tags-merge-confirm", name = alias.clone(), count = count)}
                         </span>
                         <div class="row-end">
-                            <button type="button" class="btn text" on:click=move |_| merging.set(None)>
+                            <button
+                                type="button"
+                                class="btn text"
+                                on:click=move |_| {
+                                    merging.set(None);
+                                    merge_done.set_value(None);
+                                }
+                            >
                                 {move || t!("cancel")}
                             </button>
                             <button
@@ -649,7 +670,8 @@ pub fn TagPage() -> impl IntoView {
                                 class="btn danger"
                                 on:click=move |_| {
                                     merging.set(None);
-                                    act(Change::Add(Relation::Alias, merged.clone()));
+                                    let done = merge_done.try_update_value(Option::take).flatten();
+                                    act(Change::Add(Relation::Alias, merged.clone()), done);
                                 }
                             >
                                 {move || t!("tags-merge")}
@@ -741,22 +763,23 @@ fn tag_link(name: String, class: &'static str) -> impl IntoView {
     }
 }
 
-/// A box and a button that hands what was typed on, then empties the box.
+/// A box and a button that hands what was typed on, with a way to empty the
+/// box once it's saved. Until then the text stays, to mend or try again.
 #[component]
 fn InlineAdd(
     #[prop(into)] label: Signal<String>,
     #[prop(into)] button: Signal<String>,
     #[prop(optional)] icon: Option<Icon>,
     busy: RwSignal<bool>,
-    on_add: Callback<String>,
+    on_add: Callback<(String, Callback<()>)>,
 ) -> impl IntoView {
     let text = RwSignal::new(String::new());
+    let saved = Callback::new(move |()| text.set(String::new()));
     let submit = move |e: SubmitEvent| {
         e.prevent_default();
         let value = text.get_untracked().trim().to_owned();
         if !value.is_empty() && !busy.get_untracked() {
-            on_add.run(value);
-            text.set(String::new());
+            on_add.run((value, saved));
         }
     };
     view! {
@@ -789,7 +812,7 @@ fn TreeCard(
     detail: RwSignal<Option<TagDetail>>,
     busy: RwSignal<bool>,
     editable: Signal<bool>,
-    on_parent: Callback<String>,
+    on_parent: Callback<(String, Option<Callback<()>>)>,
 ) -> impl IntoView {
     let trail = move || {
         let (here, above) = detail.with(|d| {
@@ -822,7 +845,7 @@ fn TreeCard(
                         class="btn text small"
                         type="button"
                         disabled=move || busy.get()
-                        on:click=move |_| on_parent.run(String::new())
+                        on:click=move |_| on_parent.run((String::new(), None))
                     >
                         {move || t!("tags-move-top")}
                     </button>
@@ -852,7 +875,9 @@ fn TreeCard(
                     label=Signal::derive(move || t!("tags-parent"))
                     button=Signal::derive(move || t!("tags-move"))
                     busy=busy
-                    on_add=on_parent
+                    on_add=Callback::new(move |(parent, done): (String, Callback<()>)| {
+                        on_parent.run((parent, Some(done)));
+                    })
                 />
             </Show>
             <h3 class="sub-title">{move || t!("tags-children")}</h3>
@@ -869,7 +894,7 @@ fn RelationCard(
     names: Signal<Vec<String>>,
     busy: RwSignal<bool>,
     may: Signal<bool>,
-    on_add: Callback<(Relation, String)>,
+    on_add: Callback<Adding>,
     on_remove: Callback<(Relation, String)>,
     #[prop(optional)] children: Option<Children>,
 ) -> impl IntoView {
@@ -947,7 +972,9 @@ fn RelationCard(
                     button=Signal::derive(move || t!("add"))
                     icon=Icon::Add
                     busy=busy
-                    on_add=Callback::new(move |value: String| on_add.run((relation, value)))
+                    on_add=Callback::new(move |(value, done): (String, Callback<()>)| {
+                        on_add.run((relation, value, done));
+                    })
                 />
             </Show>
             {children.map(|c| c())}

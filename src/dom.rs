@@ -7,8 +7,8 @@ use wasm_bindgen::closure::Closure;
 use wasm_bindgen::{JsCast, JsValue};
 use web_sys::{Element, IntersectionObserverEntry, ScrollBehavior, ScrollToOptions};
 
-/// A watcher to stop. It can go into `on_cleanup`, which wants `Send`, as the
-/// app only ever runs on the browser's one thread.
+/// A watcher, which stops when dropped. It can go into `on_cleanup`, which
+/// wants `Send`, as the app only ever runs on the browser's one thread.
 pub struct Watch(Option<SendWrapper<Box<dyn FnOnce()>>>);
 
 impl Watch {
@@ -21,7 +21,13 @@ impl Watch {
         Self(None)
     }
 
-    pub fn stop(mut self) {
+    pub fn stop(self) {
+        drop(self);
+    }
+}
+
+impl Drop for Watch {
+    fn drop(&mut self) {
         if let Some(stop) = self.0.take() {
             (stop.take())();
         }
@@ -114,6 +120,32 @@ pub async fn sleep(ms: i32) {
         }
     });
     let _ = wasm_bindgen_futures::JsFuture::from(promise).await;
+}
+
+/// A box with a caret: a one-line field or a text area.
+pub trait Caret {
+    /// The caret's place, in UTF-16 units.
+    fn caret(&self) -> Option<u32>;
+}
+
+impl Caret for web_sys::HtmlInputElement {
+    fn caret(&self) -> Option<u32> {
+        self.selection_start().ok().flatten()
+    }
+}
+
+impl Caret for web_sys::HtmlTextAreaElement {
+    fn caret(&self) -> Option<u32> {
+        self.selection_start().ok().flatten()
+    }
+}
+
+/// Where the caret is in `el`, in bytes into `value`, its text. At the end
+/// when the browser doesn't say.
+pub fn caret_of(el: &impl Caret, value: &str) -> usize {
+    el.caret()
+        .and_then(|c| usize::try_from(c).ok())
+        .map_or(value.len(), |c| crate::logic::search::byte_index(value, c))
 }
 
 /// Whether an event comes from a place the user types in, where keys are

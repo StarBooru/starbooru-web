@@ -492,16 +492,30 @@ pub fn Boorus() -> impl IntoView {
         });
         picks.update(|p| p.toggle(&free, index, shift));
     });
+    // What can still be picked: not what is saved or on its way.
+    let free = Memo::new(move |_| {
+        list.with(|l| {
+            jobs.with(|j| {
+                l.iter()
+                    .filter(|f| status_of(&f.post, j).is_none())
+                    .map(|f| f.post.page_url.clone())
+                    .collect::<Vec<_>>()
+            })
+        })
+    });
     let save = Callback::new(move |extra: String| {
         if saving.get_untracked() {
             return;
         }
+        // Only what the grid still shows, and still free to save.
         let requests: Result<Vec<ImportRequest>, _> = list.with_untracked(|l| {
             picks.with_untracked(|p| {
-                l.iter()
-                    .filter(|f| p.contains(&f.post.page_url))
-                    .map(|f| import_request(&f.post, &extra))
-                    .collect()
+                jobs.with_untracked(|j| {
+                    l.iter()
+                        .filter(|f| p.contains(&f.post.page_url) && status_of(&f.post, j).is_none())
+                        .map(|f| import_request(&f.post, &extra))
+                        .collect()
+                })
             })
         });
         let requests = match requests {
@@ -517,24 +531,16 @@ pub fn Boorus() -> impl IntoView {
         // The server runs the imports; their progress comes with the jobs.
         spawn_local(async move {
             match queue(requests).await {
-                Ok(()) => stop_selecting.run(()),
+                // The page may have gone meanwhile.
+                Ok(()) => {
+                    stop_selecting.try_run(());
+                }
                 Err(message) => {
                     save_error.try_set(Some(message));
                 }
             }
             saving.try_set(false);
         });
-    });
-    // What can still be picked: not what is saved or on its way.
-    let free = Memo::new(move |_| {
-        list.with(|l| {
-            jobs.with(|j| {
-                l.iter()
-                    .filter(|f| status_of(&f.post, j).is_none())
-                    .map(|f| f.post.page_url.clone())
-                    .collect::<Vec<_>>()
-            })
-        })
     });
 
     let near_tiles = Memo::new(move |_| {
@@ -734,7 +740,8 @@ pub fn Boorus() -> impl IntoView {
                 on_go=go
                 on_close=Callback::new(move |()| {
                     sheet.set(false);
-                    focus_sites_button();
+                    // Once the sheet is gone, which also lets go of the focus.
+                    request_animation_frame(focus_sites_button);
                 })
             />
         </Show>

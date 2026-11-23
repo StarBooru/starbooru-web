@@ -28,7 +28,11 @@ pub(super) fn ApiKeysCard() -> impl IntoView {
     let name = RwSignal::new(String::new());
     let read_only = RwSignal::new(false);
     let lifetime = RwSignal::new(key_lifetime_value(None));
+    // A new key's token, shown once: until Done, the next key, or leaving.
     let created = RwSignal::new(None::<CreatedApiKey>);
+    on_cleanup(move || {
+        created.try_set(None);
+    });
 
     let load = move || {
         error.set(None);
@@ -60,6 +64,7 @@ pub(super) fn ApiKeysCard() -> impl IntoView {
         };
         busy.set(true);
         error.set(None);
+        created.set(None);
         spawn_local(async move {
             match api::call(move |c| async move { c.create_api_key(&request).await }).await {
                 Ok(done) => {
@@ -113,6 +118,11 @@ pub(super) fn ApiKeysCard() -> impl IntoView {
                 <div class="banner info key-created" role="status">
                     <strong class="break">{move || t!("keys-copy-now", name = label.clone())}</strong>
                     <TokenField token=done.token />
+                    <div class="row-end">
+                        <button class="btn tonal small" type="button" on:click=move |_| created.set(None)>
+                            {move || t!("keys-done")}
+                        </button>
+                    </div>
                 </div>
             }
         })
@@ -258,8 +268,9 @@ fn TokenField(token: String) -> impl IntoView {
     let copied = RwSignal::new(false);
     let failed = RwSignal::new(false);
     let field: NodeRef<html::Input> = NodeRef::new();
+    // Also called after the clipboard answers, when the field may be gone.
     let select = move || {
-        if let Some(el) = field.get_untracked() {
+        if let Some(el) = field.try_get_untracked().flatten() {
             let _ = el.focus();
             el.select();
         }

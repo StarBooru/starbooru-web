@@ -171,11 +171,14 @@ fn scene(
 fn paint(el: &HtmlCanvasElement, img: &HtmlImageElement) -> Option<()> {
     let document = document()?;
     let rect = el.get_bounding_client_rect();
-    let aspect = if rect.width() > 0.0 && rect.height() > 0.0 {
-        rect.width() / rect.height()
+    // Fullscreen's canvas is hidden, with no size, until fullscreen starts:
+    // it will be the window's shape then.
+    let (bw, bh) = if rect.width() > 0.0 && rect.height() > 0.0 {
+        (rect.width(), rect.height())
     } else {
-        1.0
+        dom::window_size()
     };
+    let aspect = if bw > 0.0 && bh > 0.0 { bw / bh } else { 1.0 };
     let size = |long: f64| -> (u32, u32) {
         let short = |v: f64| v.round().max(2.0) as u32;
         if aspect >= 1.0 {

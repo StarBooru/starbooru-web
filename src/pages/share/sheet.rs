@@ -15,6 +15,7 @@ use wasm_bindgen::JsCast;
 use super::LinkField;
 use crate::api;
 use crate::components::banner::ErrorBanner;
+use crate::components::focus::hold_focus;
 use crate::components::icons::{Ico, Icon};
 use crate::components::select::{Choice, Select};
 use crate::dom;
@@ -40,6 +41,9 @@ pub fn ShareSheet(post_ids: Vec<i64>, on_close: Callback<()>) -> impl IntoView {
             let _ = el.focus();
         });
     });
+    // Tab stays in the sheet, and the focus goes back to Share after.
+    let dialog: NodeRef<html::Div> = NodeRef::new();
+    hold_focus(dialog, true);
     // Escape also closes the sheet when the focus is outside it, as it is for
     // a moment while it opens or while the link replaces the form. Inside,
     // the scrim handles it, after an open list has had it.
@@ -167,7 +171,7 @@ pub fn ShareSheet(post_ids: Vec<i64>, on_close: Callback<()>) -> impl IntoView {
                 <div class="field">
                     <span>{move || t!("share-lifetime")}</span>
                     <Select
-                        class="share-lifetime"
+                        class="boxed"
                         value=Signal::derive(move || lifetime_value(lifetime.get()))
                         options=choices
                         on_change=Callback::new(move |v: String| lifetime.set(lifetime_days(&v)))
@@ -201,6 +205,7 @@ pub fn ShareSheet(post_ids: Vec<i64>, on_close: Callback<()>) -> impl IntoView {
             }
         >
             <div
+                node_ref=dialog
                 class="card sheet share-sheet"
                 role="dialog"
                 aria-modal="true"

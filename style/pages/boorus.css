@@ -46,12 +46,14 @@
   position: absolute; top: 8px; right: 8px; display: grid; place-items: center; width: 28px; height: 28px;
   border-radius: 999px; background: var(--primary); color: var(--on-primary); box-shadow: var(--shadow-1);
 }
-.remote-mark[role="link"] { cursor: pointer; }
 .dedupe.on { color: var(--on-primary-container); }
 
 /* The sheet of sites: a line for each, and under it the boxes of its account. */
 .sites-sheet { display: grid; gap: 12px; }
 .sites-sheet .field-error { margin: 0; }
+/* An account saved for a site that has no line here. */
+.sites-sheet .site-left { margin: 0; }
+.sites-sheet .site-left .btn { margin-left: auto; }
 .site-list { list-style: none; margin: 0; padding: 0; display: grid; }
 .site-row { display: grid; gap: 8px; padding: 6px 0; border-top: 1px solid oklch(from var(--outline) l c h / 0.5); }
 .site-row:first-child { border-top: 0; }
@@ -80,6 +82,10 @@
 .site-add .select { min-width: 0; }
 @media (max-width: 520px) {
   .site-kind { display: none; }
+  /* An account to enter again: its note goes under the name and buttons. */
+  .site-line:has(.site-login .pill) { flex-wrap: wrap; row-gap: 2px; }
+  .site-line:has(.site-login .pill) .site-name { flex: 1 1 auto; }
+  .site-line:has(.site-login .pill) .site-login { order: 1; flex-basis: 100%; justify-content: flex-start; }
   .site-account { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
   .site-account .btn { grid-column: 1 / -1; }
   .site-add { grid-template-columns: minmax(0, 1fr) auto; }

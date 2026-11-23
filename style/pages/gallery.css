@@ -195,6 +195,8 @@ html.sb-scrolling .thumb img { filter: none; transition: opacity var(--med) var(
   border: 1px solid oklch(from var(--outline) l c h / 0.4); box-shadow: var(--shadow-2);
   animation: drop-in var(--med) var(--ease); transform-origin: top right;
 }
+/* They take the focus as they open, to hand it on to what's inside. */
+.color-menu:focus, .view-menu:focus { outline: none; }
 .view-menu { justify-items: stretch; width: min(380px, calc(100vw - 32px)); font-size: 14px; }
 .view-menu .segmented { display: flex; align-self: stretch; }
 .view-menu .seg { flex: 1 1 0; min-width: 0; padding: 0 6px; font-size: 13px; white-space: normal; line-height: 1.2; }

@@ -6,6 +6,7 @@ use leptos::prelude::*;
 use leptos::task::spawn_local;
 use starbooru_core::{SavedSearch, clean_saved_search};
 
+use super::saved_search_error_text;
 use crate::api;
 use crate::components::icons::{Ico, Icon};
 use crate::components::snackbar::{notify, notify_undo};
@@ -64,7 +65,7 @@ pub fn load() {
 async fn save(name: String, query: String) -> Option<String> {
     let (name, query) = match clean_saved_search(&name, &query) {
         Ok(clean) => clean,
-        Err(e) => return Some(e.to_string()),
+        Err(e) => return Some(saved_search_error_text(&e)),
     };
     match api::call(move |c| async move { c.save_search(&name, &query).await }).await {
         Ok(saved) => {

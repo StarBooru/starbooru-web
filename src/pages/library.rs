@@ -34,28 +34,53 @@ pub fn LibraryImportCard() -> impl IntoView {
     let secret = RwSignal::new(String::new());
     let unrated = RwSignal::new(Rating::Questionable);
     let checked = RwSignal::new(None::<LibraryCheck>);
+    // Why the list couldn't be read the first time.
+    let load_error = RwSignal::new(None::<String>);
+    // Bumped by every change made here, so a reading sent before one and
+    // answered after it is dropped rather than undo it.
+    let generation = StoredValue::new(0_u64);
 
     // Goes on while the card is on the page, reading often only while
-    // something moves.
-    spawn_local(async move {
-        loop {
-            if let Ok(found) = api::call(|c| async move { c.library_imports().await }).await
-                && list.try_set(Some(found)).is_some()
-            {
-                return;
-            }
-            for _ in 0..IDLE_ROUNDS {
-                dom::sleep(POLL_MS).await;
-                let Some(now) = list.try_with_untracked(|l| l.as_deref().is_some_and(moving))
-                else {
+    // something moves. Stops when the first reading fails; Retry starts it
+    // again.
+    let follow = move || {
+        load_error.set(None);
+        spawn_local(async move {
+            loop {
+                let Some(at) = generation.try_get_value() else {
                     return;
                 };
-                if now {
-                    break;
+                match api::call(|c| async move { c.library_imports().await }).await {
+                    Ok(found) => {
+                        if generation.try_get_value() == Some(at)
+                            && list.try_set(Some(found)).is_some()
+                        {
+                            return;
+                        }
+                    }
+                    Err(message) => {
+                        // Later on, what's shown stays until a reading works.
+                        if list.try_with_untracked(Option::is_none) == Some(true) {
+                            load_error.try_set(Some(message));
+                            return;
+                        }
+                    }
+                }
+                for _ in 0..IDLE_ROUNDS {
+                    dom::sleep(POLL_MS).await;
+                    let Some(now) = list.try_with_untracked(|l| l.as_deref().is_some_and(moving))
+                    else {
+                        return;
+                    };
+                    if now {
+                        break;
+                    }
                 }
             }
-        }
-    });
+        });
+    };
+    follow();
+    let retry_list = Callback::new(move |()| follow());
 
     let form = move || -> Result<LibrarySite, String> {
         let chosen = source.get_untracked();
@@ -102,6 +127,7 @@ pub fn LibraryImportCard() -> impl IntoView {
         spawn_local(async move {
             match api::call(move |c| async move { c.start_library_import(&site).await }).await {
                 Ok(import) => {
+                    generation.try_update_value(|g| *g = g.wrapping_add(1));
                     list.try_update(|l| l.get_or_insert_default().insert(0, import));
                     base.try_set(String::new());
                     login.try_set(String::new());
@@ -151,9 +177,13 @@ pub fn LibraryImportCard() -> impl IntoView {
                 .map(|l| l.iter().map(|i| (i.id, i.source)).collect::<Vec<_>>())
         })
     });
-    let imports = move || {
-        match ids.get() {
-        None => view! { <Spinner /> }.into_any(),
+    let imports = move || match ids.get() {
+        None => match load_error.get() {
+            Some(message) => {
+                view! { <ErrorBanner message=message on_retry=retry_list /> }.into_any()
+            }
+            None => view! { <Spinner /> }.into_any(),
+        },
         Some(ids) if ids.is_empty() => ().into_any(),
         Some(_) => view! {
             <h3 class="library-heading">{move || t!("library-list")}</h3>
@@ -161,12 +191,13 @@ pub fn LibraryImportCard() -> impl IntoView {
                 <For
                     each=move || ids.get().unwrap_or_default()
                     key=|(id, _)| *id
-                    children=move |(id, source)| view! { <ImportRow id=id source=source list=list /> }
+                    children=move |(id, source)| {
+                        view! { <ImportRow id=id source=source list=list generation=generation /> }
+                    }
                 />
             </ul>
         }
         .into_any(),
-    }
     };
 
     view! {
@@ -209,10 +240,13 @@ pub fn LibraryImportCard() -> impl IntoView {
                         }
                     />
                 </label>
+                // Another site's account: the browser mustn't fill in the
+                // StarBooru sign-in it keeps.
                 <Show when=move || source.get().takes_login()>
                     <label class="field">
                         <span>{move || t!("boorus-login")}</span>
                         <input
+                            name="library-login"
                             autocomplete="off"
                             autocapitalize="none"
                             spellcheck="false"
@@ -226,7 +260,8 @@ pub fn LibraryImportCard() -> impl IntoView {
                         <span>{move || t!("boorus-key")}</span>
                         <input
                             type="password"
-                            autocomplete="off"
+                            name="library-key"
+                            autocomplete="new-password"
                             prop:value=move || secret.get()
                             on:input=move |e| secret.set(event_target_value(&e))
                         />
@@ -266,11 +301,14 @@ pub fn LibraryImportCard() -> impl IntoView {
     }
 }
 
+/// One import. `generation` is bumped with each change made here, as the
+/// card's reading of the list wants.
 #[component]
 fn ImportRow(
     id: i64,
     source: LibrarySource,
     list: RwSignal<Option<Vec<LibraryImport>>>,
+    generation: StoredValue<u64>,
 ) -> impl IntoView {
     let error = RwSignal::new(None::<String>);
     let busy = RwSignal::new(false);
@@ -284,6 +322,7 @@ fn ImportRow(
         Memo::new(move |_| import.with(|i| i.as_ref().is_some_and(|i| i.state.is_active())));
 
     let replace = move |updated: LibraryImport| {
+        generation.try_update_value(|g| *g = g.wrapping_add(1));
         list.try_update(|l| {
             if let Some(found) = l.iter_mut().flatten().find(|i| i.id == updated.id) {
                 *found = updated;
@@ -335,6 +374,7 @@ fn ImportRow(
         spawn_local(async move {
             match api::call(move |c| async move { c.delete_library_import(id).await }).await {
                 Ok(()) => {
+                    generation.try_update_value(|g| *g = g.wrapping_add(1));
                     list.try_update(|l| {
                         if let Some(all) = l.as_mut() {
                             all.retain(|i| i.id != id);
@@ -435,6 +475,7 @@ fn ImportRow(
                         <label class="field">
                             <span>{move || t!("boorus-login")}</span>
                             <input
+                                name="library-login"
                                 autocomplete="off"
                                 autocapitalize="none"
                                 spellcheck="false"
@@ -448,7 +489,8 @@ fn ImportRow(
                             <span>{move || t!("boorus-key")}</span>
                             <input
                                 type="password"
-                                autocomplete="off"
+                                name="library-key"
+                                autocomplete="new-password"
                                 prop:value=move || secret.get()
                                 on:input=move |e| secret.set(event_target_value(&e))
                             />

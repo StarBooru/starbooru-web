@@ -6,7 +6,6 @@
 .share-sheet .sheet-head { margin-bottom: 4px; }
 .share-sheet .key-created { margin: 12px 0; }
 .share-sheet .key-created .field-error { margin: 0; }
-.share-sheet .select.boxed { display: block; }
 /* The lifetimes open upwards, over the title, so the sheet doesn't scroll
    to show them. */
 .share-sheet .select-list { top: auto; bottom: calc(100% + 6px); transform-origin: bottom right; }

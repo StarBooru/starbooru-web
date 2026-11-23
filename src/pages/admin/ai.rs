@@ -4,23 +4,26 @@
 
 use std::future::Future;
 
-use leptos::ev::{MouseEvent, SubmitEvent};
+use leptos::ev::SubmitEvent;
 use leptos::prelude::*;
 use leptos::task::spawn_local;
 use starbooru_client::{Client, ClientError};
 use starbooru_core::ai::MAX_AI_FIELD_CHARS;
 use starbooru_core::{
-    AiAdminStatus, AiMode, AiModelOption, AiPreset, AiTool, AiToolSettings, AiToolState,
-    AiToolStatus,
+    AiAdminStatus, AiMode, AiPreset, AiTool, AiToolSettings, AiToolState, AiToolStatus,
 };
 
 use super::Waiting;
 use crate::components::banner::ErrorBanner;
+use crate::components::confirm::ConfirmButton;
+use crate::components::icons::Icon;
 use crate::logic::admin::{
-    ApiFormError, BUSY_POLL_MS, IDLE_ROUNDS, ModeChoice, api_form_error_text, api_request, busy,
-    choose_mode, clear_key_request, duration, effective_preset, hardware_line, model_request,
-    model_time, percent, preset_request, sentence, size, translate_request, wanted_model,
+    ApiFormError, BUSY_POLL_MS, IDLE_ROUNDS, ModeChoice, ModelState, api_form_error_text,
+    api_request, busy, choose_mode, clear_key_request, duration, effective_preset, hardware_line,
+    model_request, model_state, model_time, percent, preset_request, sentence, translate_request,
+    wanted_model,
 };
+use crate::logic::viewer::human_size;
 use crate::{api, dom};
 
 type Status = RwSignal<Option<AiAdminStatus>>;
@@ -50,10 +53,13 @@ fn preset_label(preset: AiPreset) -> String {
 }
 
 /// One tool's change in flight: `working` while it goes, what the server says
-/// afterwards in `status`, and a refusal in `problem`.
+/// afterwards in `status`, and a refusal in `problem`. `generation` is the
+/// card's, bumped when a change goes and when its answer comes, so only the
+/// newest answer, a look's or a change's, is shown.
 #[derive(Clone, Copy)]
 struct Changer {
     status: Status,
+    generation: StoredValue<u64>,
     problem: RwSignal<Option<String>>,
     working: RwSignal<bool>,
 }
@@ -64,20 +70,37 @@ impl Changer {
         F: FnOnce(Client) -> Fut + 'static,
         Fut: Future<Output = Result<AiAdminStatus, ClientError>> + 'static,
     {
+        self.run_or(change, || {});
+    }
+
+    /// As `run`, with `undo` putting back what the page changed ahead of the
+    /// server when the server refuses.
+    fn run_or<F, Fut>(self, change: F, undo: impl FnOnce() + 'static)
+    where
+        F: FnOnce(Client) -> Fut + 'static,
+        Fut: Future<Output = Result<AiAdminStatus, ClientError>> + 'static,
+    {
         if self.working.get_untracked() {
+            undo();
             return;
         }
         self.working.set(true);
         self.problem.set(None);
+        let at = self.generation.get_value().wrapping_add(1);
+        self.generation.set_value(at);
         spawn_local(async move {
             match api::call(change).await {
                 Ok(s) => {
-                    self.status.try_set(Some(s));
+                    if self.generation.try_get_value() == Some(at) {
+                        self.generation.set_value(at.wrapping_add(1));
+                        self.status.try_set(Some(s));
+                    }
                     // The viewer and the upload page offer the tools anew.
                     api::forget_server_answers();
                 }
                 Err(message) => {
                     self.problem.try_set(Some(message));
+                    undo();
                 }
             }
             self.working.try_set(false);
@@ -89,16 +112,23 @@ impl Changer {
 pub(super) fn AiCard() -> impl IntoView {
     let status: Status = RwSignal::new(None);
     let error = RwSignal::new(None::<String>);
+    let generation = StoredValue::new(0_u64);
     // Polls while the card is on the page: often during a download or
-    // start-up, otherwise every 15 s.
+    // start-up, otherwise every 15 s. A look sent before a change and
+    // answered after it is dropped, as it doesn't know of the change.
     spawn_local(async move {
         loop {
+            let Some(at) = generation.try_get_value() else {
+                return;
+            };
             match api::call(|c| async move { c.admin_ai().await }).await {
                 Ok(found) => {
-                    if status.try_set(Some(found)).is_some() {
-                        return;
+                    if generation.try_get_value() == Some(at) {
+                        if status.try_set(Some(found)).is_some() {
+                            return;
+                        }
+                        error.try_set(None);
                     }
-                    error.try_set(None);
                 }
                 Err(message) => {
                     // A later look may work; what's on screen stays.
@@ -155,7 +185,9 @@ pub(super) fn AiCard() -> impl IntoView {
                 <For
                     each=move || tools.get()
                     key=|tool| *tool
-                    children=move |tool| view! { <ToolBlock tool=tool status=status ready=ready /> }
+                    children=move |tool| {
+                        view! { <ToolBlock tool=tool status=status generation=generation ready=ready /> }
+                    }
                 />
             </Show>
         </section>
@@ -163,7 +195,12 @@ pub(super) fn AiCard() -> impl IntoView {
 }
 
 #[component]
-fn ToolBlock(tool: AiTool, status: Status, ready: Memo<bool>) -> impl IntoView {
+fn ToolBlock(
+    tool: AiTool,
+    status: Status,
+    generation: StoredValue<u64>,
+    ready: Memo<bool>,
+) -> impl IntoView {
     let info = Memo::new(move |_| {
         status.with(|s| {
             s.iter()
@@ -184,6 +221,7 @@ fn ToolBlock(tool: AiTool, status: Status, ready: Memo<bool>) -> impl IntoView {
     });
     let changer = Changer {
         status,
+        generation,
         problem: RwSignal::new(None),
         working: RwSignal::new(false),
     };
@@ -259,12 +297,17 @@ fn ToolBlock(tool: AiTool, status: Status, ready: Memo<bool>) -> impl IntoView {
             }.into_any()),
         }
     };
-    let set_autotag = move |on: bool| {
+    // The box ticks before the server answers; a refusal unticks it.
+    let set_autotag = move |box_: web_sys::HtmlInputElement| {
+        let on = box_.checked();
         let update = starbooru_core::AiGeneralUpdate {
             autotag: on,
             auto_translate: auto_translate.get_untracked(),
         };
-        changer.run(move |c| async move { c.set_ai_general(&update).await });
+        changer.run_or(
+            move |c| async move { c.set_ai_general(&update).await },
+            move || box_.set_checked(!on),
+        );
     };
     let set_language = move |typed: String| match translate_request(autotag.get_untracked(), &typed)
     {
@@ -296,7 +339,7 @@ fn ToolBlock(tool: AiTool, status: Status, ready: Memo<bool>) -> impl IntoView {
                         type="checkbox"
                         prop:checked=move || autotag.get()
                         disabled=move || changer.working.get()
-                        on:change=move |e| set_autotag(event_target_checked(&e))
+                        on:change=move |e| set_autotag(event_target::<web_sys::HtmlInputElement>(&e))
                     />
                     <span>{move || t!("admin-ai-autotag")}</span>
                 </label>
@@ -328,37 +371,34 @@ fn LocalSetup(
     settings: Memo<AiToolSettings>,
     changer: Changer,
 ) -> impl IntoView {
-    let presets = move || {
-        info.with(|t| {
-            let preset = effective_preset(t);
-            let by_hand = !t.settings.model.is_empty();
-            t.presets
-                .iter()
-                .map(|option| {
-                    let on = !by_hand && preset == option.preset;
-                    let choice = option.preset;
-                    let budget = choice.budget_ms() / 1000;
-                    let available = option.available;
-                    view! {
-                        <button
-                            type="button"
-                            role="radio"
-                            class="seg"
-                            class:on=on
-                            aria-checked=if on { "true" } else { "false" }
-                            disabled=move || !available || changer.working.get()
-                            on:click=move |_| {
-                                let update = preset_request(&settings.get_untracked(), choice);
-                                changer.run(move |c| async move { c.set_ai_tool(tool, &update).await });
-                            }
-                        >
-                            {move || preset_label(choice)}
-                            <small>{format!("{budget} s")}</small>
-                        </button>
-                    }
-                })
-                .collect_view()
-        })
+    // Each button stays as the panel is read again, so the focus stays on it.
+    let preset_list =
+        Memo::new(move |_| info.with(|t| t.presets.iter().map(|p| p.preset).collect::<Vec<_>>()));
+    let preset_button = move |choice: AiPreset| {
+        let on = Memo::new(move |_| {
+            info.with(|t| t.settings.model.is_empty() && effective_preset(t) == choice)
+        });
+        let available = Memo::new(move |_| {
+            info.with(|t| t.presets.iter().any(|p| p.preset == choice && p.available))
+        });
+        let budget = choice.budget_ms() / 1000;
+        view! {
+            <button
+                type="button"
+                role="radio"
+                class="seg"
+                class:on=move || on.get()
+                aria-checked=move || if on.get() { "true" } else { "false" }
+                disabled=move || !available.get() || changer.working.get()
+                on:click=move |_| {
+                    let update = preset_request(&settings.get_untracked(), choice);
+                    changer.run(move |c| async move { c.set_ai_tool(tool, &update).await });
+                }
+            >
+                {move || preset_label(choice)}
+                <small>{format!("{budget} s")}</small>
+            </button>
+        }
     };
     let unavailable = move || {
         let names: Vec<String> = info.with(|t| {
@@ -408,21 +448,13 @@ fn LocalSetup(
             }
         })
     };
-    let rows = move || {
-        info.with(|t| {
-            t.models
-                .iter()
-                .map(|m| {
-                    let in_use = t.active.as_deref() == Some(m.id.as_str());
-                    model_row(tool, m.clone(), in_use, settings, changer)
-                })
-                .collect_view()
-        })
-    };
+    let model_ids = Memo::new(move |_| {
+        info.with(|t| t.models.iter().map(|m| m.id.clone()).collect::<Vec<_>>())
+    });
 
     view! {
         <div class="segmented" role="radiogroup" aria-label=move || t!("admin-ai-speed")>
-            {presets}
+            <For each=move || preset_list.get() key=|p| p.as_str() children=preset_button />
         </div>
         {unavailable}
         {wanted}
@@ -431,95 +463,138 @@ fn LocalSetup(
         // close by itself.
         <details class="ai-models">
             <summary>{move || t!("admin-ai-models")}</summary>
-            {rows}
+            <For
+                each=move || model_ids.get()
+                key=|id| id.clone()
+                children=move |id| {
+                    view! { <ModelRow tool=tool id=id info=info settings=settings changer=changer /> }
+                }
+            />
         </details>
     }
 }
 
-/// What a model's buttons do.
-#[derive(Clone, Copy)]
-enum Act {
-    Use,
-    Uninstall,
-    Install,
-}
-
-fn model_row(
+/// One model of the catalogue. The row stays as the panel is read again, and
+/// its buttons are built anew only when what it offers changes, so the focus
+/// stays where it was.
+#[component]
+fn ModelRow(
     tool: AiTool,
-    model: AiModelOption,
-    in_use: bool,
+    id: String,
+    info: Memo<AiToolStatus>,
     settings: Memo<AiToolSettings>,
     changer: Changer,
 ) -> impl IntoView {
-    let details = if model.fits {
-        format!("{} · {}", size(model.size), model_time(&model))
-    } else {
-        format!("{} · {}", size(model.size), t!("admin-ai-no-memory"))
-    };
-    let id = model.id.clone();
-    let action = move |act: Act| {
+    let model = Memo::new({
         let id = id.clone();
-        move |_: MouseEvent| {
+        move |_| {
+            info.with(|t| t.models.iter().find(|m| m.id == id).cloned())
+                .unwrap_or_default()
+        }
+    });
+    let state = Memo::new({
+        let id = id.clone();
+        move |_| {
+            let in_use = info.with(|t| t.active.as_deref() == Some(id.as_str()));
+            model.with(|m| model_state(m, in_use))
+        }
+    });
+    let name = Memo::new(move |_| model.with(|m| m.name.clone()));
+    let done =
+        Memo::new(move |_| model.with(|m| m.progress.map_or(0, |p| percent(p.done, p.total))));
+    let details = move || {
+        model.with(|m| {
+            let fit = if m.fits {
+                model_time(m)
+            } else {
+                t!("admin-ai-no-memory")
+            };
+            format!("{} · {fit}", human_size(m.size))
+        })
+    };
+    let install = {
+        let id = id.clone();
+        move || {
             let id = id.clone();
-            match act {
-                Act::Use => {
-                    let update = model_request(&settings.get_untracked(), &id);
-                    changer.run(move |c| async move { c.set_ai_tool(tool, &update).await });
-                }
-                Act::Uninstall => {
-                    changer.run(move |c| async move { c.uninstall_ai_model(&id).await })
-                }
-                Act::Install => changer.run(move |c| async move { c.install_ai_model(&id).await }),
-            }
+            changer.run(move |c| async move { c.install_ai_model(&id).await });
         }
     };
-    let actions = if let Some(p) = model.progress {
-        let done = percent(p.done, p.total);
-        view! {
+    let uninstall = {
+        let id = id.clone();
+        move || {
+            let id = id.clone();
+            changer.run(move |c| async move { c.uninstall_ai_model(&id).await });
+        }
+    };
+    let use_it = {
+        let id = id.clone();
+        move || {
+            let update = model_request(&settings.get_untracked(), &id);
+            changer.run(move |c| async move { c.set_ai_tool(tool, &update).await });
+        }
+    };
+    let actions = move || match state.get() {
+        ModelState::Downloading => view! {
             <span
                 class="meter ai-meter"
                 role="progressbar"
-                aria-valuenow=done
+                aria-label=move || t!("admin-ai-downloading-named", name = name.get())
+                aria-valuenow=move || done.get()
                 aria-valuemin="0"
                 aria-valuemax="100"
             >
-                <span style=format!("width: {done}%")></span>
+                <span style=move || format!("width: {}%", done.get())></span>
             </span>
-            <span class="muted">{format!("{done}%")}</span>
+            <span class="muted" aria-hidden="true">{move || format!("{}%", done.get())}</span>
         }
-        .into_any()
-    } else if model.installed && in_use {
-        view! { <span class="pill ok">{move || t!("admin-ai-in-use")}</span> }.into_any()
-    } else if model.installed {
-        view! {
-            <button class="btn tonal small" type="button" on:click=action(Act::Use)>
-                {move || t!("admin-ai-use")}
-            </button>
-            <button class="btn text small" type="button" on:click=action(Act::Uninstall)>
-                {move || t!("admin-ai-uninstall")}
-            </button>
+        .into_any(),
+        ModelState::InUse => {
+            view! { <span class="pill ok">{move || t!("admin-ai-in-use")}</span> }.into_any()
         }
-        .into_any()
-    } else if model.fits {
-        let failed = model.error.is_some();
-        view! {
-            <button class="btn tonal small" type="button" on:click=action(Act::Install)>
-                {move || if failed { t!("retry") } else { t!("admin-ai-install") }}
-            </button>
+        ModelState::Installed => {
+            let (use_it, uninstall) = (use_it.clone(), uninstall.clone());
+            view! {
+                <button class="btn tonal small" type="button" on:click=move |_| use_it()>
+                    {move || t!("admin-ai-use")}
+                </button>
+                <ConfirmButton
+                    icon=Icon::Delete
+                    title=Signal::derive(|| t!("admin-ai-uninstall"))
+                    label=Signal::derive(move || t!("admin-ai-uninstall-named", name = name.get()))
+                    text=Signal::derive(|| t!("admin-ai-uninstall"))
+                    small=true
+                    disabled=changer.working
+                    on_confirm=Callback::new(move |()| uninstall())
+                />
+            }
+            .into_any()
         }
-        .into_any()
-    } else {
-        ().into_any()
+        ModelState::Installable { failed } => {
+            let install = install.clone();
+            view! {
+                <button class="btn tonal small" type="button" on:click=move |_| install()>
+                    {move || if failed { t!("retry") } else { t!("admin-ai-install") }}
+                </button>
+            }
+            .into_any()
+        }
+        ModelState::TooBig => ().into_any(),
     };
-    let (accurate, gpu) = (model.high_accuracy, model.gpu);
+    let accurate = move || model.with(|m| m.high_accuracy);
+    let gpu = move || model.with(|m| m.gpu);
+    let error = move || model.with(|m| m.error.as_deref().map(sentence));
     view! {
         <div class="ai-model">
             <div class="ai-model-text">
-                <strong>{model.name}</strong>
+                <strong>{move || name.get()}</strong>
                 <span class="muted">{details}</span>
-                {accurate.then(|| view! { <span class="pill">{move || t!("admin-ai-high-accuracy")}</span> })}
-                {gpu.then(|| view! { <span class="pill">{move || t!("admin-ai-gpu")}</span> })}
-                {model.error.map(|reason| view! { <span class="ai-model-error">{sentence(&reason)}</span> })}
+                <Show when=accurate>
+                    <span class="pill">{move || t!("admin-ai-high-accuracy")}</span>
+                </Show>
+                <Show when=gpu>
+                    <span class="pill">{move || t!("admin-ai-gpu")}</span>
+                </Show>
+                {move || error().map(|reason| view! { <span class="ai-model-error">{reason}</span> })}
             </div>
             <div class="ai-model-actions">{actions}</div>
         </div>
@@ -631,9 +706,12 @@ fn ApiSetup(
             </label>
             <label class="field">
                 <span>{move || t!("admin-ai-key")}</span>
+                // The API's key: the browser mustn't fill in the StarBooru
+                // password it keeps.
                 <input
                     type="password"
-                    autocomplete="off"
+                    name="ai-api-key"
+                    autocomplete="new-password"
                     maxlength=MAX_AI_FIELD_CHARS
                     placeholder=move || {
                         if key_set.get() { t!("admin-ai-key-set") } else { t!("admin-ai-key-none") }

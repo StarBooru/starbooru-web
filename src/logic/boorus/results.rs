@@ -110,6 +110,20 @@ pub fn status_of(post: &RemotePost, jobs: &HashMap<String, ImportJob>) -> Option
     }
 }
 
+/// How saving a post stands, in full words: what a screen reader hears with
+/// its tile, which only shows a short mark.
+pub fn status_note(status: &Status) -> String {
+    match status {
+        Status::Busy(Some(percent)) => format!("{} {percent}%", t!("upload-job-running")),
+        Status::Busy(None) => t!("upload-job-running"),
+        Status::Saved(Some(id), _) => t!("boorus-saved-as", id = *id),
+        Status::Saved(None, note) if note.trim().is_empty() => t!("boorus-known"),
+        Status::Saved(None, note) => format!("{}: {}", t!("boorus-known"), note.trim()),
+        Status::Failed(reason) if reason.trim().is_empty() => t!("upload-failed"),
+        Status::Failed(reason) => t!("boorus-save-failed", reason = reason.trim().to_owned()),
+    }
+}
+
 /// The post here that `post` has become since it was listed, by its import.
 fn newly_saved(post: &RemotePost, jobs: &HashMap<String, ImportJob>) -> Option<i64> {
     jobs.get(&post.page_url)
@@ -135,15 +149,28 @@ pub fn mark_saved(all: &mut [Arc<RemotePost>], jobs: &HashMap<String, ImportJob>
     changed
 }
 
-/// The address to show one of a post's pictures from. The server's own
-/// (`/api/v1/remote/media…`, for sites that refuse other pages) come without
-/// its address, which `absolute` puts in front.
-pub fn picture_src(url: &str, absolute: impl FnOnce(&str) -> String) -> String {
-    if url.starts_with('/') {
-        absolute(url)
-    } else {
-        url.to_owned()
+/// Where the server passes on the pictures of sites that refuse other pages.
+pub const RELAY_PATH: &str = "/api/v1/remote/media?";
+
+/// The address to show one of a post's pictures from, or `None` for the
+/// tile's colour instead. The server decides which pictures it passes on:
+/// those come as `RELAY_PATH…` without its address, which `server` (the
+/// server's base address) goes in front of, or already on it. Any other
+/// picture comes straight from its site, so it must be `https:`.
+pub fn picture_src(url: &str, server: &str) -> Option<String> {
+    let url = url.trim();
+    let server = server.trim_end_matches('/');
+    if url.starts_with(RELAY_PATH) {
+        return Some(format!("{server}{url}"));
     }
+    let relayed = !server.is_empty()
+        && url
+            .strip_prefix(server)
+            .is_some_and(|rest| rest.starts_with(RELAY_PATH));
+    let https = url.split_once("://").is_some_and(|(scheme, rest)| {
+        scheme.eq_ignore_ascii_case("https") && !rest.is_empty() && !rest.starts_with('/')
+    });
+    (relayed || https).then(|| url.to_owned())
 }
 
 /// A picture's size for the layout. A site that doesn't say gives 0.
@@ -247,37 +274,40 @@ pub fn around(
     })
 }
 
-/// The posts picked to save, by their page, and the place of the last one
+/// The posts picked to save, by their page, and the page of the last one
 /// clicked, where a Shift-click's range starts.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct Picks {
     pages: HashSet<String>,
-    anchor: Option<usize>,
+    anchor: Option<String>,
 }
 
 impl Picks {
-    pub fn len(&self) -> usize {
-        self.pages.len()
-    }
-
-    pub fn is_empty(&self) -> bool {
-        self.pages.is_empty()
-    }
-
     pub fn contains(&self, page: &str) -> bool {
         self.pages.contains(page)
+    }
+
+    /// How many of `pages` are picked. The grid can change under a
+    /// selection, so what it no longer shows doesn't count.
+    pub fn count_in(&self, pages: &[String]) -> usize {
+        pages.iter().filter(|p| self.pages.contains(*p)).count()
     }
 
     /// A click on the post at `index` of `list`, each post's page with
     /// whether it can be picked (not saved, nor on its way). With `shift`,
     /// every free post from the one clicked last to this one takes this
-    /// one's new state.
+    /// one's new state. A last one the list no longer has starts no range.
     pub fn toggle(&mut self, list: &[(String, bool)], index: usize, shift: bool) {
         let Some((page, true)) = list.get(index) else {
             return;
         };
         let on = !self.pages.contains(page);
-        match self.anchor.filter(|_| shift) {
+        let anchor = self
+            .anchor
+            .as_ref()
+            .filter(|_| shift)
+            .and_then(|last| list.iter().position(|(p, _)| p == last));
+        match anchor {
             Some(anchor) => {
                 let range = list
                     .get(anchor.min(index)..=anchor.max(index))
@@ -298,7 +328,7 @@ impl Picks {
                 }
             }
         }
-        self.anchor = Some(index);
+        self.anchor = Some(page.clone());
     }
 
     /// Whether every one of `free` is picked.
@@ -516,16 +546,78 @@ pub(super) mod tests {
     }
 
     #[test]
-    fn pictures_behind_the_server_get_its_address() {
-        let absolute = |path: &str| format!("https://my.example{path}");
+    fn a_tile_says_in_words_how_saving_it_stands() {
+        assert_eq!(status_note(&Status::Busy(None)), "Importing");
+        assert_eq!(status_note(&Status::Busy(Some(42))), "Importing 42%");
         assert_eq!(
-            picture_src("/api/v1/remote/media?u=x&exp=1&sig=ab", absolute),
-            "https://my.example/api/v1/remote/media?u=x&exp=1&sig=ab"
+            status_note(&Status::Saved(Some(12), String::new())),
+            "Saved here as post #12"
         );
         assert_eq!(
-            picture_src("https://cdn.d.org/360x360/a.jpg", absolute),
-            "https://cdn.d.org/360x360/a.jpg"
+            status_note(&Status::Saved(None, " ".into())),
+            "Already here"
         );
+        assert_eq!(
+            status_note(&Status::Saved(None, "already here as post 5".into())),
+            "Already here: already here as post 5"
+        );
+        assert_eq!(status_note(&Status::Failed(String::new())), "Failed");
+        assert_eq!(
+            status_note(&Status::Failed("the site answered 404 ".into())),
+            "Couldn't save it: the site answered 404"
+        );
+    }
+
+    #[test]
+    fn pictures_come_from_the_server_or_over_https() {
+        let relayed = "/api/v1/remote/media?u=x&exp=1&sig=ab";
+        // The server's relay gets its address in front, under a path too.
+        assert_eq!(
+            picture_src(relayed, "https://my.example").as_deref(),
+            Some("https://my.example/api/v1/remote/media?u=x&exp=1&sig=ab")
+        );
+        assert_eq!(
+            picture_src(relayed, "http://nas:8080/booru/").as_deref(),
+            Some("http://nas:8080/booru/api/v1/remote/media?u=x&exp=1&sig=ab")
+        );
+        assert_eq!(picture_src(relayed, "").as_deref(), Some(relayed));
+        // Already on the server's address, plain http included.
+        let local = "http://127.0.0.1:8088/api/v1/remote/media?u=x";
+        assert_eq!(
+            picture_src(local, "http://127.0.0.1:8088").as_deref(),
+            Some(local)
+        );
+        // Straight from the site, over https only.
+        for open in [
+            "https://cdn.d.org/360x360/a.jpg",
+            " HTTPS://cdn.d.org/a.jpg ",
+        ] {
+            assert_eq!(
+                picture_src(open, "http://127.0.0.1:8088").as_deref(),
+                Some(open.trim())
+            );
+        }
+        for refused in [
+            "http://cdn.d.org/a.jpg",
+            "//cdn.d.org/a.jpg",
+            "data:image/png;base64,AAAA",
+            "javascript:alert(1)",
+            "/media/1.jpg?exp=1&sig=ab",
+            "/api/v1/remote/mediax",
+            "https:///a.jpg",
+            "https://",
+            "cdn.d.org/a.jpg",
+            // The server's relay path, but on another host.
+            "http://127.0.0.1:80889/api/v1/remote/media?u=x",
+            "http://evil.example/api/v1/remote/media?u=x",
+            "",
+        ] {
+            assert_eq!(
+                picture_src(refused, "http://127.0.0.1:8088"),
+                None,
+                "{refused}"
+            );
+        }
     }
 
     #[test]
@@ -609,19 +701,21 @@ pub(super) mod tests {
     #[test]
     fn picks_take_ranges_and_leave_out_what_is_saved() {
         let list: Vec<(String, bool)> = (0..6).map(|i| (format!("p{i}"), i != 3)).collect();
+        let pages: Vec<String> = list.iter().map(|(p, _)| p.clone()).collect();
+        let count = |picks: &Picks| picks.count_in(&pages);
         let mut picks = Picks::default();
         picks.toggle(&list, 1, false);
         assert!(picks.contains("p1"));
         // Shift picks the range, but not the one already saved.
         picks.toggle(&list, 5, true);
-        assert_eq!(picks.len(), 4);
+        assert_eq!(count(&picks), 4);
         assert!(!picks.contains("p3"));
         // A saved one can't be clicked.
         picks.toggle(&list, 3, false);
-        assert_eq!(picks.len(), 4);
+        assert_eq!(count(&picks), 4);
         // Shift on a picked one takes the range off.
         picks.toggle(&list, 4, true);
-        assert_eq!(picks.len(), 2);
+        assert_eq!(count(&picks), 2);
         assert!(picks.contains("p1") && picks.contains("p2"));
         picks.toggle(&list, 0, false);
         let free: Vec<String> = list
@@ -634,12 +728,37 @@ pub(super) mod tests {
         picks.toggle(&list, 5, true);
         assert!(picks.all_of(&free));
         picks.toggle_all(&free);
-        assert!(picks.is_empty());
+        assert_eq!(count(&picks), 0);
         picks.toggle_all(&free);
         assert!(picks.all_of(&free));
         picks.clear();
         assert!(!picks.all_of(&[]));
         picks.toggle(&list, 9, false);
-        assert!(picks.is_empty());
+        assert_eq!(count(&picks), 0);
+    }
+
+    #[test]
+    fn a_range_starts_at_the_post_clicked_last_wherever_it_went() {
+        let list = |pages: &[&str]| -> Vec<(String, bool)> {
+            pages.iter().map(|p| ((*p).to_owned(), true)).collect()
+        };
+        let before = list(&["a", "b", "c", "d", "e"]);
+        let mut picks = Picks::default();
+        picks.toggle(&before, 3, false);
+        // A twin hidden above it moves "d" up one place.
+        let after = list(&["a", "c", "d", "e"]);
+        picks.toggle(&after, 0, true);
+        let pages: Vec<String> = after.iter().map(|(p, _)| p.clone()).collect();
+        assert_eq!(picks.count_in(&pages), 3);
+        assert!(["a", "c", "d"].iter().all(|p| picks.contains(p)));
+        assert!(!picks.contains("e"));
+        // The last one left the list: Shift picks just the one clicked.
+        let mut picks = Picks::default();
+        picks.toggle(&before, 1, false);
+        picks.toggle(&after, 3, true);
+        assert!(picks.contains("e") && !picks.contains("c") && !picks.contains("d"));
+        // Picks the list no longer shows don't count.
+        assert_eq!(picks.count_in(&pages), 1);
+        assert_eq!(picks.count_in(&[]), 0);
     }
 }

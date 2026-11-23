@@ -6,7 +6,7 @@
 use std::collections::BTreeMap;
 use std::sync::Arc;
 
-use leptos::ev::SubmitEvent;
+use leptos::ev::{MouseEvent, SubmitEvent};
 use leptos::prelude::*;
 use leptos::task::spawn_local;
 use starbooru_core::{
@@ -21,7 +21,8 @@ use crate::components::icons::{Ico, Icon};
 use crate::components::select::{Choice, Select};
 use crate::components::tag_box::TagBox;
 use crate::logic::people::{
-    Draft, Field, PeopleError, SlotGroup, figures_update, numbers, people_known, slot_groups,
+    Draft, Field, PeopleError, SlotGroup, figures_update, numbers, people_changed, people_known,
+    slot_groups,
 };
 use crate::pages::{bad_tag_text, figure_kind_label};
 use crate::route;
@@ -108,12 +109,16 @@ fn focus_box(id: String) {
 }
 
 /// The people of the post on the page, and the way to change them for
-/// whoever `editable` says may. `editing` says the editor is open.
+/// whoever `editable` says may. `editing` says the editor is open, which
+/// `on_edit` asks for; `unsaved`, whether closing it would lose changes.
 #[component]
 pub fn PeopleCard(
     #[prop(into)] post: Signal<Option<Arc<Post>>>,
     #[prop(into)] editable: Signal<bool>,
-    editing: RwSignal<bool>,
+    #[prop(into)] editing: Signal<bool>,
+    unsaved: RwSignal<bool>,
+    on_edit: Callback<()>,
+    on_cancel: Callback<()>,
     on_saved: Callback<Post>,
 ) -> impl IntoView {
     // A post from a list leaves its people out: nothing to edit until the
@@ -124,7 +129,7 @@ pub fn PeopleCard(
     });
     let start = move |_| {
         if editable.get_untracked() && known.get_untracked() {
-            editing.set(true);
+            on_edit.run(());
         }
     };
 
@@ -192,7 +197,8 @@ pub fn PeopleCard(
                     <PeopleEditor
                         id=id
                         figures=figures
-                        on_cancel=Callback::new(move |()| editing.set(false))
+                        unsaved=unsaved
+                        on_cancel=on_cancel
                         on_saved=on_saved
                     />
                 }
@@ -291,6 +297,16 @@ impl Row {
                 .collect(),
         }
     }
+
+    /// Makes what's reading this follow every box of the row.
+    fn track(&self) {
+        self.kind.track();
+        self.character.track();
+        self.cosplay.track();
+        for text in self.slots.values() {
+            text.track();
+        }
+    }
 }
 
 /// The editor, in the card's place, for the post `id` whose people were
@@ -300,22 +316,39 @@ impl Row {
 fn PeopleEditor(
     id: i64,
     figures: Vec<Figure>,
+    unsaved: RwSignal<bool>,
     on_cancel: Callback<()>,
     on_saved: Callback<Post>,
 ) -> impl IntoView {
     let next_key = StoredValue::new(0_u64);
+    // `None` once the editor has gone, as it may have by an answer.
     let make = move |draft: Draft| {
-        let key = next_key.get_value();
-        next_key.set_value(key.wrapping_add(1));
-        Row::new(key, draft)
+        let key = next_key.try_get_value()?;
+        next_key.try_set_value(key.wrapping_add(1));
+        Some(Row::new(key, draft))
     };
     // Someone to fill in at once when there's no one yet.
     let first: Vec<Row> = if figures.is_empty() {
-        vec![make(Draft::default())]
+        make(Draft::default()).into_iter().collect()
     } else {
-        figures.iter().map(Draft::of).map(make).collect()
+        figures.iter().map(Draft::of).filter_map(make).collect()
     };
     let rows = RwSignal::new(first);
+    let saved = StoredValue::new(figures);
+    let changed = Memo::new(move |_| {
+        rows.with(|r| {
+            r.iter().for_each(Row::track);
+            let drafts: Vec<Draft> = r.iter().map(Row::draft).collect();
+            saved.with_value(|s| people_changed(&drafts, s))
+        })
+    });
+    Effect::new(move |_| {
+        let now = changed.get();
+        if unsaved.get_untracked() != now {
+            unsaved.set(now);
+        }
+    });
+    on_cleanup(move || unsaved.set(false));
     let busy = RwSignal::new(false);
     let error = RwSignal::new(None::<String>);
     // What can't be saved as typed, and the box it's in.
@@ -381,7 +414,10 @@ fn PeopleEditor(
                 api::call(move |c| async move { c.set_figures(id, update.figures).await }).await;
             busy.try_set(false);
             match result {
-                Ok(saved) => on_saved.run(saved),
+                Ok(saved) => {
+                    // Gone with its card if the page moved on meanwhile.
+                    on_saved.try_run(saved);
+                }
                 Err(message) => {
                     error.try_set(Some(message));
                 }
@@ -397,7 +433,9 @@ fn PeopleEditor(
     };
 
     let add = move |_| {
-        let row = make(Draft::default());
+        let Some(row) = make(Draft::default()) else {
+            return;
+        };
         let key = row.key;
         let mut added = false;
         rows.update(|r| {
@@ -418,9 +456,21 @@ fn PeopleEditor(
         }
     });
 
-    // The AI's people take the place of those typed.
-    let suggest = move |_| {
+    // The AI's people take the place of those typed. Over changes not yet
+    // saved, a first press asks and a second replaces them.
+    let replacing = RwSignal::new(false);
+    let suggest = move |e: MouseEvent| {
         if asking.get_untracked() {
+            return;
+        }
+        if replacing.get_untracked() {
+            // The second click of a double click is still the first press.
+            if e.detail() > 1 {
+                return;
+            }
+            replacing.set(false);
+        } else if changed.get_untracked() {
+            replacing.set(true);
             return;
         }
         asking.set(true);
@@ -434,7 +484,15 @@ fn PeopleEditor(
                     none_found.try_set(true);
                 }
                 Ok(TagSuggestions { figures, .. }) => {
-                    let found: Vec<Row> = figures.iter().map(Draft::of).map(make).collect();
+                    // Cancelled while it asked: no editor to fill.
+                    let Some(found) = figures
+                        .iter()
+                        .map(Draft::of)
+                        .map(make)
+                        .collect::<Option<Vec<Row>>>()
+                    else {
+                        return;
+                    };
                     invalid.try_set(None);
                     problem.try_set(None);
                     rows.try_set(found);
@@ -480,12 +538,19 @@ fn PeopleEditor(
                 <Show when=ai>
                     <button
                         type="button"
-                        class="btn text"
+                        class=move || if replacing.get() { "btn danger" } else { "btn text" }
                         disabled=move || asking.get()
                         on:click=suggest
+                        on:blur=move |_| replacing.set(false)
                     >
                         {move || {
-                            if asking.get() { t!("ai-suggesting") } else { t!("ai-suggest-people") }
+                            if asking.get() {
+                                t!("ai-suggesting")
+                            } else if replacing.get() {
+                                t!("ai-suggest-people-replace")
+                            } else {
+                                t!("ai-suggest-people")
+                            }
                         }}
                     </button>
                 </Show>
@@ -589,7 +654,7 @@ fn PersonFields(
                     type="button"
                     class="icon-btn danger"
                     title=move || t!("people-remove")
-                    aria-label=move || t!("people-remove")
+                    aria-label=move || t!("people-remove-named", person = label.get())
                     on:click=move |_| on_remove.run(key)
                 >
                     <Ico icon=Icon::Delete />

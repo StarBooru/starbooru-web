@@ -18,6 +18,8 @@ thread_local! {
     // push the grid down when they load. Reference counted, as it outlives
     // any one page.
     static SAVED: ArcRwSignal<Option<(String, Vec<SavedRemoteSearch>)>> = ArcRwSignal::new(None);
+    // Why they couldn't be read, and for whom.
+    static FAILED: ArcRwSignal<Option<(String, String)>> = ArcRwSignal::new(None);
 }
 
 /// This account's saved searches, `None` until they're known.
@@ -28,6 +30,18 @@ fn current() -> Option<Vec<SavedRemoteSearch>> {
             s.as_ref()
                 .filter(|(whose, _)| *whose == owner)
                 .map(|(_, list)| list.clone())
+        })
+    })
+}
+
+/// Why this account's saved searches couldn't be read, while they couldn't.
+fn failure() -> Option<String> {
+    let owner = store::owner();
+    FAILED.with(|f| {
+        f.with(|f| {
+            f.as_ref()
+                .filter(|(whose, _)| *whose == owner)
+                .map(|(_, why)| why.clone())
         })
     })
 }
@@ -46,14 +60,23 @@ fn update(change: impl FnOnce(&mut Vec<SavedRemoteSearch>)) {
     });
 }
 
-/// Asks the server for them; the ones kept from before show meanwhile.
+/// Asks the server for them; the ones kept from before show meanwhile. A
+/// failure is kept, so the star can say why and ask again.
 pub(super) fn load() {
     let owner = store::owner();
+    FAILED.with(|f| {
+        if f.with_untracked(Option::is_some) {
+            f.set(None);
+        }
+    });
     spawn_local(async move {
-        if let Ok(list) = api::call(|c| async move { c.remote_searches().await }).await
-            && store::owner() == owner
-        {
-            SAVED.with(|s| s.set(Some((owner, list))));
+        let answer = api::call(|c| async move { c.remote_searches().await }).await;
+        if store::owner() != owner {
+            return;
+        }
+        match answer {
+            Ok(list) => SAVED.with(|s| s.set(Some((owner, list)))),
+            Err(why) => FAILED.with(|f| f.set(Some((owner, why)))),
         }
     });
 }
@@ -76,8 +99,12 @@ pub(super) fn SaveSearch(q: Memo<String>, sites: Memo<Vec<RemoteSite>>) -> impl 
             })
         })
     });
+    // Unread, the star says why and a press reads them again.
+    let failed = Memo::new(move |_| list.with(Option::is_none).then(failure).flatten());
     let label = move || {
-        if existing.get().is_some() {
+        if let Some(why) = failed.get() {
+            t!("search-list-failed", reason = why)
+        } else if existing.get().is_some() {
             t!("search-forget")
         } else {
             t!("search-save")
@@ -85,6 +112,10 @@ pub(super) fn SaveSearch(q: Memo<String>, sites: Memo<Vec<RemoteSite>>) -> impl 
     };
     let toggle = move |_| {
         if busy.get_untracked() {
+            return;
+        }
+        if list.with_untracked(Option::is_none) {
+            load();
             return;
         }
         let (q, sites) = (q.get_untracked(), sites.get_untracked());
@@ -137,7 +168,7 @@ pub(super) fn SaveSearch(q: Memo<String>, sites: Memo<Vec<RemoteSite>>) -> impl 
             title=label
             aria-label=label
             aria-pressed=move || existing.get().is_some().to_string()
-            disabled=move || busy.get() || list.with(Option::is_none)
+            disabled=move || busy.get() || (list.with(Option::is_none) && failed.with(Option::is_none))
             on:click=toggle
         >
             {move || {

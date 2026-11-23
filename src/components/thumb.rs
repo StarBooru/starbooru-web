@@ -17,9 +17,10 @@ use send_wrapper::SendWrapper;
 use starbooru_core::{MediaKind, Post};
 
 use super::icons::{Ico, Icon};
-use crate::logic::gallery::{PAGE_SIZE, format_duration, tint};
+use crate::logic::gallery::{PAGE_SIZE, tint};
 use crate::logic::layout::Place;
 use crate::logic::swipe::Side;
+use crate::logic::viewer::format_duration;
 use crate::store::SwipeAction;
 use crate::{api, dom, power};
 

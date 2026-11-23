@@ -14,20 +14,53 @@ use crate::route;
 
 // ---------- the details card ----------
 
-/// `1536` → `1.5 KB`.
-pub fn human_size(bytes: i64) -> String {
-    const UNITS: [&str; 5] = ["B", "KB", "MB", "GB", "TB"];
-    let mut value = bytes.max(0) as f64;
+/// The unit a size reads in.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum SizeUnit {
+    B,
+    Kb,
+    Mb,
+    Gb,
+    Tb,
+}
+
+/// A size's number and unit: `1536` → `("1.5", Kb)`, with `mark` before the
+/// tenths. Bytes have no tenths.
+pub fn size_parts(bytes: u64, mark: char) -> (String, SizeUnit) {
+    const UNITS: [SizeUnit; 5] = [
+        SizeUnit::B,
+        SizeUnit::Kb,
+        SizeUnit::Mb,
+        SizeUnit::Gb,
+        SizeUnit::Tb,
+    ];
+    let mut value = bytes as f64;
     let mut unit = 0;
     while value >= 1024.0 && unit + 1 < UNITS.len() {
         value /= 1024.0;
         unit += 1;
     }
-    let name = UNITS.get(unit).copied().unwrap_or("B");
-    if unit == 0 {
-        format!("{value:.0} {name}")
+    let name = UNITS.get(unit).copied().unwrap_or(SizeUnit::B);
+    let number = if unit == 0 {
+        format!("{value:.0}")
     } else {
-        format!("{value:.1} {name}")
+        format!("{value:.1}").replace('.', mark.encode_utf8(&mut [0; 4]))
+    };
+    (number, name)
+}
+
+/// `1536` → `1.5 KB`, in the language in use. Below zero reads as nothing.
+pub fn human_size(bytes: impl TryInto<u64>) -> String {
+    let (size, unit) = size_parts(
+        bytes.try_into().unwrap_or(0),
+        crate::i18n::lang().decimal_mark(),
+    );
+    match unit {
+        SizeUnit::B => t!("size-b", size = size),
+        SizeUnit::Kb => t!("size-kb", size = size),
+        SizeUnit::Mb => t!("size-mb", size = size),
+        SizeUnit::Gb => t!("size-gb", size = size),
+        SizeUnit::Tb => t!("size-tb", size = size),
     }
 }
 
@@ -84,9 +117,8 @@ where
 /// The source to link to, when it is a web address and nothing else.
 pub fn source_link(source: &str) -> Option<&str> {
     let s = source.trim();
-    let lower = s.get(..8).map(str::to_ascii_lowercase).unwrap_or_default();
-    let web = lower.starts_with("http://") || lower.starts_with("https://");
-    let rest = s.split_once("://").map_or("", |(_, rest)| rest);
+    let (scheme, rest) = s.split_once("://")?;
+    let web = scheme.eq_ignore_ascii_case("http") || scheme.eq_ignore_ascii_case("https");
     (web && !rest.is_empty() && !s.contains(char::is_whitespace)).then_some(s)
 }
 
@@ -414,10 +446,32 @@ mod tests {
         assert_eq!(human_size(5 * 1024 * 1024), "5.0 MB");
         assert_eq!(human_size(1_336_381), "1.3 MB");
         assert_eq!(human_size(-4), "0 B");
+        assert_eq!(human_size(3_u64 << 30), "3.0 GB");
         assert!(human_size(i64::MAX).ends_with(" TB"));
+        assert!(human_size(u64::MAX).ends_with(" TB"));
         assert_eq!(dimensions(Some(1400), Some(900)), "1400 × 900");
         assert_eq!(dimensions(None, Some(900)), "—");
         assert_eq!(dimensions(Some(0), Some(900)), "—");
+    }
+
+    #[test]
+    fn a_size_has_the_languages_decimal_mark() {
+        assert_eq!(size_parts(1536, ','), ("1,5".to_owned(), SizeUnit::Kb));
+        assert_eq!(size_parts(1536, '.'), ("1.5".to_owned(), SizeUnit::Kb));
+        // Whole bytes have no mark to put.
+        assert_eq!(size_parts(999, ','), ("999".to_owned(), SizeUnit::B));
+        assert_eq!(size_parts(1024, ','), ("1,0".to_owned(), SizeUnit::Kb));
+        assert_eq!(size_parts(5 << 20, ','), ("5,0".to_owned(), SizeUnit::Mb));
+        assert_eq!(size_parts(1 << 40, '.'), ("1.0".to_owned(), SizeUnit::Tb));
+        // Past terabytes it stays in them.
+        assert_eq!(
+            size_parts(1 << 50, '.'),
+            ("1024.0".to_owned(), SizeUnit::Tb)
+        );
+        crate::i18n::set_lang(crate::i18n::Lang::Italian);
+        assert_eq!(human_size(1536), "1,5 KB");
+        assert_eq!(human_size(12), "12 B");
+        assert_eq!(human_size(1_336_381), "1,3 MB");
     }
 
     #[test]
@@ -425,9 +479,14 @@ mod tests {
         assert_eq!(format_duration(6000).as_deref(), Some("0:06"));
         assert_eq!(format_duration(0).as_deref(), Some("0:00"));
         // Rounded to the nearest second.
+        assert_eq!(format_duration(1_499).as_deref(), Some("0:01"));
+        assert_eq!(format_duration(1_500).as_deref(), Some("0:02"));
         assert_eq!(format_duration(59_499).as_deref(), Some("0:59"));
         assert_eq!(format_duration(59_500).as_deref(), Some("1:00"));
+        assert_eq!(format_duration(65_000).as_deref(), Some("1:05"));
+        assert_eq!(format_duration(599_000).as_deref(), Some("9:59"));
         assert_eq!(format_duration(754_000).as_deref(), Some("12:34"));
+        assert_eq!(format_duration(3_600_000).as_deref(), Some("1:00:00"));
         assert_eq!(format_duration(3_723_000).as_deref(), Some("1:02:03"));
         assert_eq!(format_duration(-1), None);
         assert!(format_duration(i64::MAX).is_some());
@@ -468,6 +527,9 @@ mod tests {
             source_link("HTTP://Example.com"),
             Some("HTTP://Example.com")
         );
+        // A letter of more than one byte early on is no trouble.
+        assert_eq!(source_link("http://é.example"), Some("http://é.example"));
+        assert_eq!(source_link("hTTpS://é"), Some("hTTpS://é"));
         for not_one in [
             "",
             "my camera",
@@ -477,6 +539,10 @@ mod tests {
             "https://a b",
             "data:text/html,x",
             "//example.com",
+            "é://example.com",
+            "httpé://example.com",
+            "xhttp://example.com",
+            "http:/example.com",
         ] {
             assert_eq!(source_link(not_one), None, "{not_one}");
         }

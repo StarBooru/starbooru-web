@@ -11,10 +11,11 @@ use starbooru_core::{AdminUser, Role, UserUpdate};
 use super::Waiting;
 use crate::api;
 use crate::components::banner::ErrorBanner;
+use crate::components::confirm::ConfirmButton;
 use crate::components::icons::{Ico, Icon};
 use crate::components::snackbar::notify;
 use crate::components::strength::StrengthField;
-use crate::logic::admin::{account_parts, parse_quota, quota_text};
+use crate::logic::admin::{account_parts, quota_change, quota_text};
 use crate::logic::settings::{MIN_PASSWORD_CHARS, role_label};
 use crate::store;
 
@@ -146,10 +147,15 @@ fn AccountTools(
             .unwrap_or_default(),
     );
     let password = RwSignal::new(String::new());
-    let confirm_delete = RwSignal::new(false);
     let role = Memo::new(move |_| user.with(|u| u.as_ref().map_or(Role::User, |u| u.role)));
     let disabled = Memo::new(move |_| user.with(|u| u.as_ref().is_some_and(|u| u.disabled)));
-    let quota_ok = Memo::new(move |_| quota.with(|q| parse_quota(q).is_ok()));
+    // The limit to send: only one that differs from the account's.
+    let limit = Memo::new(move |_| {
+        let saved = user.with(|u| u.as_ref().and_then(|u| u.quota_bytes));
+        quota.with(|q| quota_change(q, saved))
+    });
+    let quota_ok = Memo::new(move |_| limit.with(Result::is_ok));
+    let quota_new = Memo::new(move |_| limit.with(|l| matches!(l, Ok(Some(_)))));
     let password_ok =
         Memo::new(move |_| password.with(|p| p.chars().count() >= MIN_PASSWORD_CHARS));
 
@@ -183,9 +189,9 @@ fn AccountTools(
     };
     let save_quota = move |e: SubmitEvent| {
         e.prevent_default();
-        if let Ok(limit) = quota.with_untracked(|q| parse_quota(q)) {
+        if let Ok(Some(new)) = limit.get_untracked() {
             let change = UserUpdate {
-                quota_bytes: Some(limit),
+                quota_bytes: Some(new),
                 ..UserUpdate::default()
             };
             update(change, || t!("admin-limit-saved"));
@@ -225,15 +231,10 @@ fn AccountTools(
             update(change, || t!("admin-disabled-done"));
         }
     };
-    let remove = move |_| {
+    let remove = Callback::new(move |()| {
         if busy.get_untracked() {
             return;
         }
-        if !confirm_delete.get_untracked() {
-            confirm_delete.set(true);
-            return;
-        }
-        confirm_delete.set(false);
         busy.set(true);
         error.set(None);
         done.set(None);
@@ -255,7 +256,7 @@ fn AccountTools(
                 }
             }
         });
-    };
+    });
 
     let roles = [Role::User, Role::Admin]
         .into_iter()
@@ -318,7 +319,7 @@ fn AccountTools(
                         aria-invalid=move || invalid(!quota_ok.get())
                         bind:value=quota
                     />
-                    <button class="btn tonal" type="submit" disabled=move || busy.get() || !quota_ok.get()>
+                    <button class="btn tonal" type="submit" disabled=move || busy.get() || !quota_new.get()>
                         {move || t!("admin-limit-save")}
                     </button>
                 </div>
@@ -369,22 +370,16 @@ fn AccountTools(
                 <button class="btn tonal small" type="button" disabled=move || busy.get() on:click=switch_off>
                     {move || if disabled.get() { t!("admin-enable") } else { t!("admin-disable") }}
                 </button>
-                <button
-                    class="btn danger small"
-                    type="button"
-                    disabled=move || busy.get()
-                    on:blur=move |_| confirm_delete.set(false)
-                    on:click=remove
-                >
-                    <Ico icon=Icon::Delete />
-                    {move || {
-                        if confirm_delete.get() {
-                            t!("admin-delete-confirm", name = name.get())
-                        } else {
-                            t!("admin-delete")
-                        }
-                    }}
-                </button>
+                <ConfirmButton
+                    icon=Icon::Delete
+                    title=Signal::derive(|| t!("admin-delete"))
+                    label=Signal::derive(move || t!("admin-delete-named", name = name.get()))
+                    text=Signal::derive(|| t!("admin-delete"))
+                    sure=Signal::derive(move || t!("admin-delete-confirm", name = name.get()))
+                    small=true
+                    disabled=busy
+                    on_confirm=remove
+                />
             </div>
             <p class="muted field-hint">{move || t!("admin-delete-note")}</p>
         </div>

@@ -856,9 +856,61 @@ impl Layout {
     }
 }
 
+/// Where a strip scrolled `by` pixels from `left` ends up, in whole pixels.
+/// A move that isn't a number moves nothing, and none goes past what an
+/// `i32` holds.
+pub fn scrolled(left: i32, by: f64) -> i32 {
+    if !by.is_finite() {
+        return left;
+    }
+    let by = by.round().clamp(f64::from(i32::MIN), f64::from(i32::MAX)) as i32;
+    left.saturating_add(by)
+}
+
+/// The item after or before `at` among `count`, round from either end.
+/// From none, forwards starts at the first and backwards at the last.
+pub fn step_round(at: Option<usize>, count: usize, forward: bool) -> Option<usize> {
+    let last = count.checked_sub(1)?;
+    Some(match (at.filter(|&i| i <= last), forward) {
+        (None, true) => 0,
+        (None, false) => last,
+        (Some(i), true) if i == last => 0,
+        (Some(i), true) => i + 1,
+        (Some(0), false) => last,
+        (Some(i), false) => i - 1,
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_scroll_never_overflows() {
+        assert_eq!(scrolled(100, 20.4), 120);
+        assert_eq!(scrolled(100, -20.6), 79);
+        assert_eq!(scrolled(i32::MAX - 1, 10.0), i32::MAX);
+        assert_eq!(scrolled(i32::MIN + 1, -10.0), i32::MIN);
+        assert_eq!(scrolled(0, 1e300), i32::MAX);
+        assert_eq!(scrolled(-5, -1e300), i32::MIN);
+        assert_eq!(scrolled(5, f64::NAN), 5);
+        assert_eq!(scrolled(5, f64::INFINITY), 5);
+    }
+
+    #[test]
+    fn menu_keys_go_round() {
+        assert_eq!(step_round(None, 2, true), Some(0));
+        assert_eq!(step_round(None, 2, false), Some(1));
+        assert_eq!(step_round(Some(0), 2, true), Some(1));
+        assert_eq!(step_round(Some(1), 2, true), Some(0));
+        assert_eq!(step_round(Some(0), 2, false), Some(1));
+        assert_eq!(step_round(Some(1), 3, false), Some(0));
+        assert_eq!(step_round(Some(0), 1, true), Some(0));
+        // Out of range counts as none; nothing to step through, nowhere.
+        assert_eq!(step_round(Some(7), 2, true), Some(0));
+        assert_eq!(step_round(None, 0, true), None);
+        assert_eq!(step_round(Some(0), 0, false), None);
+    }
 
     fn close(a: CropBox, b: CropBox) -> bool {
         [(a.x, b.x), (a.y, b.y), (a.w, b.w), (a.h, b.h)]

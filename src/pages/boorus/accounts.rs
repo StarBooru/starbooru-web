@@ -3,6 +3,9 @@
 //! holds one past the form it was typed in. What an older app kept on this
 //! device moves to the server the first time the browser opens.
 
+use std::cell::RefCell;
+use std::collections::HashSet;
+
 use leptos::ev::SubmitEvent;
 use leptos::prelude::*;
 use leptos::task::spawn_local;
@@ -11,26 +14,61 @@ use starbooru_core::{BooruAccount, RemoteSite, SaveBooruAccount};
 use crate::api;
 use crate::components::icons::{Ico, Icon};
 use crate::logic::boorus::{
-    Site, forget_on_device, kept_on_device, key_label, login_label, remote_error_text, tidy,
+    Site, drop_moved_key, forget_on_device, kept_on_device, key_label, login_label,
+    remote_error_text, tidy,
 };
 use crate::store;
 
-/// Moves the accounts kept on this device to the server, then reads the
-/// server's list into `accounts`. One the server refuses stays on the
-/// device for the next time.
+thread_local! {
+    // Whose keys from this device were offered to the server in this run.
+    static MOVED: RefCell<HashSet<String>> = RefCell::new(HashSet::new());
+}
+
+/// Moves the accounts kept on this device to the server, once for each
+/// account signed in, then reads the server's list into `accounts`. A key
+/// stays on the device only when the trouble may pass (`drop_moved_key`).
 pub(super) fn load_accounts(accounts: RwSignal<Vec<BooruAccount>>) {
+    let owner = store::owner();
+    let first = MOVED.with_borrow_mut(|moved| moved.insert(owner.clone()));
     spawn_local(async move {
-        let moving = kept_on_device(&store::prefs_untracked().boorus);
+        let moving = if first {
+            kept_on_device(&store::prefs_untracked().boorus)
+        } else {
+            Vec::new()
+        };
         for account in moving {
             let base = account.base.clone();
-            let saved =
-                api::call(move |c| async move { c.save_booru_account(&account).await }).await;
-            if saved.is_ok() {
+            let answer =
+                api::attempt(move |c| async move { c.save_booru_account(&account).await }).await;
+            // Signed out, or in as someone else, meanwhile.
+            if store::owner() != owner {
+                return;
+            }
+            if drop_moved_key(answer.err().map(|refused| refused.status)) {
                 store::update_prefs(|p| forget_on_device(&mut p.boorus, &base));
             }
         }
         if let Ok(list) = api::call(|c| async move { c.booru_accounts().await }).await {
             accounts.try_set(list);
+        }
+    });
+}
+
+/// Forgets the account `id` saved on the server, taking it off `accounts`,
+/// or puts why it couldn't in `error`.
+pub(super) fn forget_account(
+    id: i64,
+    accounts: RwSignal<Vec<BooruAccount>>,
+    error: RwSignal<Option<String>>,
+) {
+    spawn_local(async move {
+        match api::call(move |c| async move { c.delete_booru_account(id).await }).await {
+            Ok(()) => {
+                accounts.try_update(|list| list.retain(|a| a.id != id));
+            }
+            Err(message) => {
+                error.try_set(Some(message));
+            }
         }
     });
 }
@@ -51,8 +89,6 @@ pub(super) fn SiteRow(
     let login = RwSignal::new(String::new());
     let secret = RwSignal::new(String::new());
     let busy = RwSignal::new(false);
-    let usable = move || account.get().filter(|a| a.usable);
-    let stale = move || account.with(|a| a.as_ref().is_some_and(|a| !a.usable));
 
     let save = {
         let site = site.site.clone();
@@ -97,18 +133,7 @@ pub(super) fn SiteRow(
             });
         }
     };
-    let forget = move |id: i64| {
-        spawn_local(async move {
-            match api::call(move |c| async move { c.delete_booru_account(id).await }).await {
-                Ok(()) => {
-                    accounts.try_update(|list| list.retain(|a| a.id != id));
-                }
-                Err(message) => {
-                    error.try_set(Some(message));
-                }
-            }
-        });
-    };
+    let forget = move |id: i64| forget_account(id, accounts, error);
     let base = site.site.base.clone();
     let edit = move |_| {
         login.set(String::new());
@@ -139,36 +164,48 @@ pub(super) fn SiteRow(
             </button>
         }
     });
-    let account_line = move || match usable() {
-        Some(account) => {
+    // Every saved account can be forgotten, one that no longer opens too.
+    let forget_button = move |id: i64| {
+        view! {
+            <button type="button" class="btn text small" on:click=move |_| forget(id)>
+                {move || t!("boorus-account-forget")}
+            </button>
+        }
+    };
+    let account_line = move || match account.get() {
+        Some(account) if account.usable => {
             let id = account.id;
             view! {
                 <span class="site-login">
                     <Ico icon=Icon::Check size=16 />
                     <span>{account.login}</span>
                 </span>
-                <button type="button" class="btn text small" on:click=move |_| forget(id)>
-                    {move || t!("boorus-account-forget")}
-                </button>
+                {forget_button(id)}
             }
             .into_any()
         }
-        None => view! {
-            <span class="site-login">
-                <Show when=stale>
-                    <span class="pill bad" role="status">{move || t!("boorus-account-again")}</span>
-                </Show>
-            </span>
-            <button
-                type="button"
-                class="btn text small"
-                aria-expanded=move || if open.get() { "true" } else { "false" }
-                on:click=edit.clone()
-            >
-                {move || t!("boorus-account")}
-            </button>
+        stale => {
+            let id = stale.as_ref().map(|a| a.id);
+            view! {
+                <span class="site-login">
+                    {id.map(|_| {
+                        view! {
+                            <span class="pill bad" role="status">{move || t!("boorus-account-again")}</span>
+                        }
+                    })}
+                </span>
+                <button
+                    type="button"
+                    class="btn text small"
+                    aria-expanded=move || if open.get() { "true" } else { "false" }
+                    on:click=edit.clone()
+                >
+                    {move || t!("boorus-account")}
+                </button>
+                {id.map(forget_button)}
+            }
+            .into_any()
         }
-        .into_any(),
     };
     let login_name = Signal::derive(move || login_label(api));
     let key_name = Signal::derive(move || key_label(api));
@@ -181,8 +218,11 @@ pub(super) fn SiteRow(
                 {remove}
             </div>
             <Show when=move || open.get()>
-                <form class="site-account" on:submit=save.clone()>
+                // Another site's account: the browser mustn't fill in the
+                // StarBooru sign-in it keeps, which would go to that site.
+                <form class="site-account" autocomplete="off" on:submit=save.clone()>
                     <input
+                        name="booru-login"
                         placeholder=login_name
                         aria-label=login_name
                         autocomplete="off"
@@ -193,9 +233,10 @@ pub(super) fn SiteRow(
                     />
                     <input
                         type="password"
+                        name="booru-key"
                         placeholder=key_name
                         aria-label=key_name
-                        autocomplete="off"
+                        autocomplete="new-password"
                         spellcheck="false"
                         prop:value=move || secret.get()
                         on:input=move |e| secret.set(event_target_value(&e))

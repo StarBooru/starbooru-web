@@ -13,6 +13,8 @@ use super::icons::{Ico, Icon};
 const NOTICE_MS: u32 = 6000;
 /// How long an undo is offered.
 const UNDO_MS: u32 = 8000;
+/// How often the time a notice has left is counted down.
+const TICK_MS: u32 = 200;
 
 /// What the snackbar shows, numbered so a new one restarts its timer.
 #[derive(Clone)]
@@ -35,6 +37,9 @@ thread_local! {
     // Reference counted: an arena signal would belong to whichever component
     // touched it first and go when that one does.
     static NOTICE: ArcRwSignal<Option<Notice>> = ArcRwSignal::new(None);
+    /// The pointer is over the notice, and the focus is in it. Either holds
+    /// its time, so it doesn't go while being read or reached for.
+    static HELD: ArcRwSignal<(bool, bool)> = ArcRwSignal::new((false, false));
 }
 
 /// Shows `message` for a few seconds.
@@ -63,20 +68,61 @@ fn show(message: String, action: Option<Action>, ms: u32) {
         }));
         n
     });
+    // The pointer or the focus on the one before says nothing of this one.
+    release();
+    tick(n, ms, js_sys::Date::now());
+}
+
+/// Counts down the time notice `n` has left, a tick at a time. By the clock,
+/// as a tab out of sight runs its timers late.
+fn tick(n: u64, left: u32, at: f64) {
     set_timeout(
         move || {
-            // Only this notice: a newer one has its own timer.
-            if NOTICE.with(|notice| notice.with_untracked(|m| m.as_ref().is_some_and(|m| m.n == n)))
+            // Only this notice: a newer one has its own count.
+            if !NOTICE
+                .with(|notice| notice.with_untracked(|m| m.as_ref().is_some_and(|m| m.n == n)))
             {
-                dismiss();
+                return;
+            }
+            let held = HELD.with(|h| h.with_untracked(|(pointer, focus)| *pointer || *focus));
+            let now = js_sys::Date::now();
+            match countdown(left, now - at, held) {
+                0 => dismiss(),
+                left => tick(n, left, now),
             }
         },
-        Duration::from_millis(u64::from(ms)),
+        Duration::from_millis(u64::from(TICK_MS)),
     );
+}
+
+/// The time left after `passed` milliseconds. None passes while the notice
+/// is held, or when the clock was set back.
+fn countdown(left: u32, passed: f64, held: bool) -> u32 {
+    if held || passed.is_nan() || passed <= 0.0 {
+        return left;
+    }
+    // Saturates: a passing larger than any notice ends it.
+    let passed = passed.min(f64::from(u32::MAX)) as u32;
+    left.saturating_sub(passed)
+}
+
+fn hold(pointer: Option<bool>, focus: Option<bool>) {
+    HELD.with(|h| {
+        let (p, f) = h.get_untracked();
+        let now = (pointer.unwrap_or(p), focus.unwrap_or(f));
+        if now != (p, f) {
+            h.set(now);
+        }
+    });
+}
+
+fn release() {
+    hold(Some(false), Some(false));
 }
 
 fn dismiss() {
     NOTICE.with(|notice| notice.set(None));
+    release();
 }
 
 fn current() -> Option<Notice> {
@@ -85,6 +131,7 @@ fn current() -> Option<Notice> {
 
 #[component]
 pub fn Snackbar() -> impl IntoView {
+    let held = Memo::new(|_| HELD.with(|h| h.with(|(pointer, focus)| *pointer || *focus)));
     view! {
         <div class="snackbar-slot" role="status" aria-live="polite">
             {move || {
@@ -110,7 +157,12 @@ pub fn Snackbar() -> impl IntoView {
                             <div
                                 class="snackbar"
                                 class:timed=timed
+                                class:held=move || held.get()
                                 style=format!("--notice-ms: {ms}ms")
+                                on:pointerenter=|_| hold(Some(true), None)
+                                on:pointerleave=|_| hold(Some(false), None)
+                                on:focusin=|_| hold(None, Some(true))
+                                on:focusout=|_| hold(None, Some(false))
                             >
                                 <span class="break">{message}</span>
                                 {action}
@@ -128,5 +180,27 @@ pub fn Snackbar() -> impl IntoView {
                     })
             }}
         </div>
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn a_notice_waits_while_it_is_held() {
+        assert_eq!(countdown(6000, 200.0, false), 5800);
+        assert_eq!(countdown(6000, 200.0, true), 6000);
+        assert_eq!(countdown(100, 200.0, false), 0);
+        // A tab out of sight, whose timer came late.
+        assert_eq!(countdown(6000, 4000.4, false), 2000);
+        assert_eq!(countdown(6000, 1e30, false), 0);
+        // A clock set back, or nonsense.
+        assert_eq!(countdown(6000, -50.0, false), 6000);
+        assert_eq!(countdown(6000, f64::NAN, false), 6000);
+        const { assert!(TICK_MS < NOTICE_MS && TICK_MS < UNDO_MS) };
+        // The line under an undo stops with it.
+        let css = include_str!("../../style/base.css");
+        assert!(css.contains(".snackbar.held::after { animation-play-state: paused; }"));
     }
 }

@@ -36,12 +36,10 @@ use crate::{activity, api, route, store};
 /// Posts asked of their sites are kept, a handful at most.
 const MAX_LOOKED: usize = 64;
 
-/// What a site said of a post asked for by itself.
-type Answer = Result<Arc<RemotePost>, String>;
-
 thread_local! {
-    // Each answer by whose it was and the post's page.
-    static LOOKED: RefCell<HashMap<(String, String), Answer>> = RefCell::new(HashMap::new());
+    // Each post a site gave, by whose it was and the post's page. A refusal
+    // isn't kept: the next visit asks again.
+    static LOOKED: RefCell<HashMap<(String, String), Arc<RemotePost>>> = RefCell::new(HashMap::new());
     // The grid's search a post was opened from, for its Back.
     static OPENED_FROM: RefCell<Option<String>> = const { RefCell::new(None) };
 }
@@ -51,12 +49,12 @@ pub(super) fn opening(q: &str, s: &str) {
     OPENED_FROM.with_borrow_mut(|from| *from = Some(route::boorus(q, s)));
 }
 
-fn looked(page: &str) -> Option<Answer> {
+fn looked(page: &str) -> Option<Arc<RemotePost>> {
     let whose = (store::owner(), page.to_owned());
     LOOKED.with_borrow(|l| l.get(&whose).cloned())
 }
 
-fn look(page: String, answer: Answer) {
+fn look(page: String, answer: Arc<RemotePost>) {
     let whose = (store::owner(), page);
     LOOKED.with_borrow_mut(|l| {
         if l.len() >= MAX_LOOKED {
@@ -106,9 +104,10 @@ pub fn BooruPost() -> impl IntoView {
     });
     let post = Memo::new(move |_| {
         let kept = around.with(|a| a.as_ref().map(|a| Arc::clone(&a.found.post)));
-        let answer = answer.with(|a| a.as_ref().and_then(|a| a.as_ref().ok().cloned()));
-        merged(kept.as_deref(), answer.as_deref()).map(Arc::new)
+        answer.with(|answer| merged(kept.as_deref(), answer.as_deref()).map(Arc::new))
     });
+    // Why the site didn't give the post, and which post that was.
+    let refused = RwSignal::new(None::<(String, String)>);
     let jobs = Memo::new(|_| activity::with_jobs(by_source));
     let status =
         Memo::new(move |_| post.with(|p| p.as_ref().and_then(|p| jobs.with(|j| status_of(p, j)))));
@@ -118,7 +117,23 @@ pub fn BooruPost() -> impl IntoView {
     let full = RwSignal::new(false);
     let enter = RwSignal::new(None::<bool>);
 
-    // Asks the site for the post by itself, when the search left something out.
+    // Asks the site for the post by itself.
+    let ask = move |page: String| {
+        refused.set(None);
+        spawn_local(async move {
+            let url = page.clone();
+            match api::call(move |c| async move { c.remote_post(&url).await }).await {
+                Ok(found) => {
+                    look(page, Arc::new(found));
+                    answered.try_update(|n| *n = n.wrapping_add(1));
+                }
+                Err(message) => {
+                    refused.try_set(Some((page, message)));
+                }
+            }
+        });
+    };
+    // When the search left something out, or the post wasn't in it.
     Effect::watch(
         move || page.get(),
         move |page, _, _| {
@@ -132,16 +147,11 @@ pub fn BooruPost() -> impl IntoView {
             if page.is_empty() || looked(page).is_some() || !missing {
                 return;
             }
-            let page = page.clone();
-            spawn_local(async move {
-                let url = page.clone();
-                let result = api::call(move |c| async move { c.remote_post(&url).await }).await;
-                look(page, result.map(Arc::new));
-                answered.try_update(|n| *n = n.wrapping_add(1));
-            });
+            ask(page.clone());
         },
         true,
     );
+    let ask_again = Callback::new(move |()| ask(page.get_untracked()));
     // A post saved from here stays marked in the results it came from.
     Effect::new(move |_| note_saved(&jobs.get()));
 
@@ -311,15 +321,34 @@ pub fn BooruPost() -> impl IntoView {
         }
     };
     let waiting = move || {
-        let failed = answer.with(|a| a.as_ref().and_then(|a| a.as_ref().err().cloned()));
+        let back = move || {
+            view! {
+                <a class="btn tonal" href=move || route::boorus(&q.get(), &s.get())>
+                    <Ico icon=Icon::ArrowBack />
+                    {move || t!("post-back")}
+                </a>
+            }
+        };
+        // An address without its post's page names nothing to ask for.
+        if page.with(String::is_empty) {
+            return view! {
+                <div class="page narrow">
+                    <ErrorBanner message=Signal::derive(|| t!("boorus-post-missing")) />
+                    {back()}
+                </div>
+            }
+            .into_any();
+        }
+        let failed = refused.with(|r| {
+            r.as_ref()
+                .filter(|(at, _)| page.with(|p| p == at))
+                .map(|(_, message)| message.clone())
+        });
         match failed {
             Some(message) => view! {
                 <div class="page narrow">
-                    <ErrorBanner message=message />
-                    <a class="btn tonal" href=move || route::boorus(&q.get(), &s.get())>
-                        <Ico icon=Icon::ArrowBack />
-                        {move || t!("post-back")}
-                    </a>
+                    <ErrorBanner message=message on_retry=ask_again />
+                    {back()}
                 </div>
             }
             .into_any(),
@@ -405,7 +434,7 @@ fn DetailsCard(post: Memo<Option<Arc<RemotePost>>>, around: Memo<Option<Around>>
             }
         });
         let size = p.file_size.map(|bytes| {
-            let shown = human_size(i64::try_from(bytes).unwrap_or(i64::MAX));
+            let shown = human_size(bytes);
             view! {
                 <dt>{move || t!("post-size")}</dt>
                 <dd>{shown}</dd>

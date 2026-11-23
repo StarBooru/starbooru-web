@@ -381,6 +381,8 @@ button.chip:disabled:hover { background: var(--surface-2); color: var(--on-surfa
   content: ""; position: absolute; left: 0; right: 0; bottom: 0; height: 3px; background: var(--primary-container);
   transform-origin: left; animation: run-out var(--notice-ms, 6s) linear forwards;
 }
+/* Its time stands still while the pointer or the focus is on it. */
+.snackbar.held::after { animation-play-state: paused; }
 
 /* ---------- menus (components/menu.rs) ---------- */
 

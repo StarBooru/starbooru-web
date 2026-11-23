@@ -14,7 +14,7 @@ use crate::components::icons::{Ico, Icon};
 use crate::components::strength::StrengthField;
 use crate::logic::settings::{
     MIN_PASSWORD_CHARS, check_password, identity_name, identity_times, last_way_in, role_label,
-    usage_text,
+    usage_text, wrong_current,
 };
 use crate::{api, oidc, store};
 
@@ -251,6 +251,7 @@ pub(super) fn PasswordCard(
             return;
         }
         let (old, fresh) = (current.get_untracked(), new.get_untracked());
+        let had_password = has_password.get_untracked();
         busy.set(true);
         error.set(None);
         done.set(false);
@@ -270,10 +271,10 @@ pub(super) fn PasswordCard(
                     });
                     on_changed.try_run(());
                 }
-                // The form checks the new one, so a refusal is about the old.
-                Err(e) if e.status == Some(400) => {
+                Err(e) if wrong_current(had_password, e.status, e.code.as_deref(), &e.message) => {
                     error.try_set(Some(untrack(|| t!("password-wrong-current"))));
                 }
+                // Anything else in the server's words.
                 Err(e) => {
                     error.try_set(Some(e.message));
                 }

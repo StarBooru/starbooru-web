@@ -11,8 +11,10 @@ use starbooru_core::admin::{MAX_INSTANCE_NAME_CHARS, MAX_TRASH_DAYS};
 use super::Waiting;
 use crate::api;
 use crate::components::banner::ErrorBanner;
+use crate::components::confirm::ConfirmButton;
 use crate::components::icons::{Ico, Icon};
-use crate::logic::admin::{check_settings, size};
+use crate::logic::admin::check_settings;
+use crate::logic::viewer::human_size;
 use crate::pages::trash::empty_whole_bin;
 use crate::route;
 
@@ -162,7 +164,6 @@ pub(super) fn ServerCard() -> impl IntoView {
 pub(super) fn BinCard() -> impl IntoView {
     let stats = LocalResource::new(|| api::call(|c| async move { c.admin_stats().await }));
     let busy = RwSignal::new(false);
-    let confirm = RwSignal::new(false);
     let notice = RwSignal::new(None::<String>);
     let problem = RwSignal::new(None::<String>);
     let held = Memo::new(move |_| {
@@ -172,15 +173,10 @@ pub(super) fn BinCard() -> impl IntoView {
             .map(|s| (s.bin_posts, s.bin_bytes))
     });
     let count = move || held.get().map_or(0, |(posts, _)| posts);
-    let press = move |_| {
+    let empty = Callback::new(move |()| {
         if busy.get_untracked() {
             return;
         }
-        if !confirm.get_untracked() {
-            confirm.set(true);
-            return;
-        }
-        confirm.set(false);
         busy.set(true);
         notice.set(None);
         problem.set(None);
@@ -195,7 +191,7 @@ pub(super) fn BinCard() -> impl IntoView {
             }
             stats.refetch();
         });
-    };
+    });
     let summary = move || match stats.get() {
         None => String::new(),
         Some(Err(_)) => String::new(),
@@ -203,7 +199,7 @@ pub(super) fn BinCard() -> impl IntoView {
         Some(Ok(s)) => format!(
             "{} · {}",
             t!("posts-count", count = s.bin_posts),
-            size(s.bin_bytes)
+            human_size(s.bin_bytes)
         ),
     };
     let load_error = move || match stats.get() {
@@ -235,22 +231,15 @@ pub(super) fn BinCard() -> impl IntoView {
                     <Ico icon=Icon::Delete />
                     {move || t!("admin-bin-open")}
                 </a>
-                <button
-                    type="button"
-                    class=move || if confirm.get() { "btn danger" } else { "btn tonal" }
-                    disabled=move || busy.get() || count() == 0
-                    on:click=press
-                    on:blur=move |_| confirm.set(false)
-                >
-                    <Ico icon=Icon::DeleteForever />
-                    {move || {
-                        if confirm.get() {
-                            t!("admin-bin-empty-confirm", count = count())
-                        } else {
-                            t!("trash-empty")
-                        }
-                    }}
-                </button>
+                <ConfirmButton
+                    icon=Icon::DeleteForever
+                    title=Signal::derive(|| t!("trash-empty"))
+                    label=Signal::derive(|| t!("trash-empty"))
+                    text=Signal::derive(|| t!("trash-empty"))
+                    sure=Signal::derive(move || t!("admin-bin-empty-confirm", count = count()))
+                    disabled=Signal::derive(move || busy.get() || count() == 0)
+                    on_confirm=empty
+                />
             </div>
         </section>
     }

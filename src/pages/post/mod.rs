@@ -179,9 +179,12 @@ pub fn PostView() -> impl IntoView {
     let enter = RwSignal::new(None::<bool>);
     let busy = RwSignal::new(false);
     let action_error = RwSignal::new(None::<String>);
-    // The tags card is the tag editor, and the people card theirs.
+    // The tags card is the tag editor, and the people card theirs, each
+    // with whether leaving now would lose what it holds.
     let editing = RwSignal::new(false);
     let people_editing = RwSignal::new(false);
+    let tags_unsaved = RwSignal::new(false);
+    let people_unsaved = RwSignal::new(false);
     // The media editor is open, and whether it's fading out, when the stage
     // under it takes keys again.
     let media_editing = RwSignal::new(false);
@@ -194,6 +197,9 @@ pub fn PostView() -> impl IntoView {
         Signal::derive(move || info.get().flatten().is_some_and(|i| i.video_editing));
     let steps = StoredValue::new(0_i32);
     let generation = StoredValue::new(0_u64);
+    // The post whose neighbours are being asked for, so a press doesn't ask
+    // twice.
+    let asking = StoredValue::new(None::<i64>);
     // Votes show at once and go to the server one at a time, the latest
     // press winning. `vote_before` is the post's score and vote before the first
     // press the server hasn't answered, to put back if it fails.
@@ -261,8 +267,54 @@ pub fn PostView() -> impl IntoView {
             None => steps.set_value(0),
         }
     };
+    // Asks for post `id`'s neighbours. Not knowing them leaves both ways
+    // open, and the next press asks again; a press waiting on them hears why
+    // they didn't come.
+    let ask_neighbours = move |id: i64| {
+        let at = generation.get_value();
+        asking.set_value(Some(id));
+        let (search, shuffle) = (q.get_untracked(), seed.get_untracked());
+        spawn_local(async move {
+            let result =
+                api::call(move |c| async move { c.neighbors(id, &search, shuffle).await }).await;
+            if generation.try_get_value() != Some(at) {
+                return;
+            }
+            asking.set_value(None);
+            match result {
+                Ok(n) => {
+                    neighbours.set(Some((id, n)));
+                    drain();
+                    fetch_ahead(n);
+                }
+                Err(message) => {
+                    if steps.get_value() != 0 {
+                        steps.set_value(0);
+                        action_error.set(Some(t!("post-neighbours-failed", reason = message)));
+                    }
+                }
+            }
+        });
+    };
+    // An editor's changes would go with the post: they're saved or
+    // cancelled first.
+    let unsaved = move || {
+        (editing.get_untracked() && tags_unsaved.get_untracked())
+            || (people_editing.get_untracked() && people_unsaved.get_untracked())
+    };
     let press = Callback::new(move |forward: bool| {
+        if unsaved() {
+            notify(t!("post-unsaved"));
+            return;
+        }
         steps.update_value(|s| *s = queued(*s, forward));
+        if let Some(current) = id.get_untracked() {
+            let known = neighbours.with_untracked(|n| n.is_some_and(|(of, _)| of == current));
+            if !known && asking.get_value() != Some(current) {
+                action_error.set(None);
+                ask_neighbours(current);
+            }
+        }
         drain();
     });
 
@@ -297,20 +349,31 @@ pub fn PostView() -> impl IntoView {
                 Err(failure) => problem.set(Some(failure)),
             }
         });
-        let (search, shuffle) = (q.get_untracked(), seed.get_untracked());
+        ask_neighbours(id);
+    };
+    // The post again, for fresh addresses when its file didn't load, and
+    // then `reload` loads the file. The editors stay as they are.
+    let refetch = Callback::new(move |reload: Callback<()>| {
+        let Some(id) = id.get_untracked() else {
+            return;
+        };
+        let at = generation.get_value();
         spawn_local(async move {
-            let result =
-                api::call(move |c| async move { c.neighbors(id, &search, shuffle).await }).await;
+            let result = api::fetch(move |c| async move { c.post(id).await }).await;
             if generation.try_get_value() != Some(at) {
                 return;
             }
-            // Without them, there's nowhere to step to.
-            let n = result.unwrap_or_default();
-            neighbours.set(Some((id, n)));
-            drain();
-            fetch_ahead(n);
+            match result {
+                Ok(p) => {
+                    let p = Arc::new(p);
+                    keep(Arc::clone(&p));
+                    post.set(Some(p));
+                    reload.try_run(());
+                }
+                Err(failure) => problem.set(Some(failure)),
+            }
         });
-    };
+    });
     Effect::watch(
         move || id.get(),
         move |id, _, _| match id {
@@ -390,7 +453,8 @@ pub fn PostView() -> impl IntoView {
         let Some(p) = post.get_untracked() else {
             return;
         };
-        if busy.get_untracked() {
+        // Not while the page still shows the post before.
+        if busy.get_untracked() || Some(p.id) != id.get_untracked() {
             return;
         }
         busy.set(true);
@@ -538,11 +602,16 @@ pub fn PostView() -> impl IntoView {
                 .is_some_and(|p| may_edit_post(user.as_ref(), p.deleted))
         })
     });
+    // Not while the page still shows the post before.
+    let here = move || post.with_untracked(|p| p.as_ref().map(|p| p.id)) == id.get_untracked();
     let start_edit = Callback::new(move |()| {
-        // Not while the page still shows the post before.
-        let here = post.with_untracked(|p| p.as_ref().map(|p| p.id)) == id.get_untracked();
-        if here && editable.get_untracked() {
+        if here() && editable.get_untracked() {
             editing.set(true);
+        }
+    });
+    let start_people = Callback::new(move |()| {
+        if here() && editable.get_untracked() {
+            people_editing.set(true);
         }
     });
     // The post as an editor saved it. Whether the page is still on it.
@@ -578,12 +647,11 @@ pub fn PostView() -> impl IntoView {
     });
 
     let open_editor = Callback::new(move |()| {
-        let here = post.with_untracked(|p| p.as_ref().map(|p| p.id)) == id.get_untracked();
         let offered = post.with_untracked(|p| {
             p.as_ref()
                 .and_then(|p| offer(p, video_editing.get_untracked()))
         });
-        if here && offered.is_some() && !media_editing.get_untracked() {
+        if here() && offered.is_some() && !media_editing.get_untracked() {
             pause_stage_video();
             editor_leaving.set(false);
             media_editing.set(true);
@@ -679,6 +747,7 @@ pub fn PostView() -> impl IntoView {
                         on_step=press
                         on_back=Callback::new(move |()| back())
                         on_edit=start_edit
+                        on_retry=refetch
                     />
                     <PostBar
                         post=post
@@ -718,6 +787,10 @@ pub fn PostView() -> impl IntoView {
                     </Show>
                     <Related
                         id=id
+                        held=Signal::derive(move || {
+                            editing.get() && tags_unsaved.get()
+                                || people_editing.get() && people_unsaved.get()
+                        })
                         on_open=Callback::new(move |p: Arc<Post>| {
                             keep(p);
                             enter.set(None);
@@ -733,6 +806,7 @@ pub fn PostView() -> impl IntoView {
                                         <EditCard
                                             post=p
                                             current=post
+                                            unsaved=tags_unsaved
                                             on_cancel=Callback::new(move |()| editing.set(false))
                                             on_saved=saved
                                         />
@@ -750,6 +824,9 @@ pub fn PostView() -> impl IntoView {
                         post=post
                         editable=editable
                         editing=people_editing
+                        unsaved=people_unsaved
+                        on_edit=start_people
+                        on_cancel=Callback::new(move |()| people_editing.set(false))
                         on_saved=people_saved
                     />
                     <DetailsCard
@@ -950,7 +1027,11 @@ fn undo_edit(saved: Saved, q: String, navigate: impl Fn(&str, NavigateOptions) +
             Ok(()) => {
                 let _ = api::call(move |c| async move { c.purge_post(copy).await }).await;
             }
-            Err(message) => notify(message),
+            // The copy is still there, and still shown.
+            Err(message) => {
+                notify(message);
+                return;
+            }
         }
         forget(copy);
         gallery::forget_post(copy);

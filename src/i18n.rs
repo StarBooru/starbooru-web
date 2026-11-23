@@ -31,6 +31,15 @@ impl Lang {
         }
     }
 
+    /// The mark before a number's fraction: `1.5` in English, `1,5` in
+    /// Italian.
+    pub fn decimal_mark(self) -> char {
+        match self {
+            Lang::English => '.',
+            Lang::Italian => ',',
+        }
+    }
+
     fn source(self) -> &'static str {
         match self {
             Lang::English => include_str!("../locales/en.ftl"),

@@ -5,6 +5,7 @@
 use starbooru_core::tag::MAX_TAGS_PER_POST;
 use starbooru_core::{BooruApi, ImportRequest, RemotePost, TagCategory, guarded_by};
 
+use super::results::size_of;
 use crate::logic::tags::{BadTag, parse_tags};
 
 /// A post's own tags with the user's extra ones first, so they survive the
@@ -112,10 +113,10 @@ pub fn grouped(post: &RemotePost) -> Vec<(TagCategory, Vec<String>)> {
         .collect()
 }
 
-/// The picture's size for the stage, when the site gave one.
+/// The picture's size for the stage, when the site gave both sides.
 pub fn stage_size(post: &RemotePost) -> Option<(i32, i32)> {
-    let side = |n: u32| i32::try_from(n).ok().filter(|n| *n > 0);
-    side(post.width).zip(side(post.height))
+    let (width, height) = size_of(post);
+    width.zip(height)
 }
 
 #[cfg(test)]

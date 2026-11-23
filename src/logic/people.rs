@@ -34,6 +34,33 @@ impl Draft {
                 .collect(),
         }
     }
+
+    /// As typed, without the spaces that say nothing: names trimmed, one
+    /// space between words, empty slots left out.
+    fn tidy(&self) -> Self {
+        Self {
+            kind: self.kind,
+            character: self.character.trim().to_owned(),
+            cosplay: self.cosplay.trim().to_owned(),
+            slots: self
+                .slots
+                .iter()
+                .map(|(slot, text)| (*slot, text.split_whitespace().collect::<Vec<_>>().join(" ")))
+                .filter(|(_, text)| !text.is_empty())
+                .collect(),
+        }
+    }
+}
+
+/// Whether the people typed differ from the `saved` ones, so leaving would
+/// lose them. The empty person the editor starts with, when there's no one
+/// yet, isn't a change.
+pub fn people_changed(drafts: &[Draft], saved: &[Figure]) -> bool {
+    let typed: Vec<Draft> = drafts.iter().map(Draft::tidy).collect();
+    let before: Vec<Draft> = saved.iter().map(|f| Draft::of(f).tidy()).collect();
+    let untouched =
+        saved.is_empty() && matches!(typed.as_slice(), [only] if *only == Draft::default());
+    typed != before && !untouched
 }
 
 /// One of a person's boxes.
@@ -303,6 +330,49 @@ mod tests {
             figures_update(&vec![ok; MAX_FIGURES + 1]),
             Err(PeopleError::TooMany)
         );
+    }
+
+    #[test]
+    fn only_other_people_are_unsaved_changes() {
+        let link = Figure {
+            kind: FigureKind::Boy,
+            character: Some("link".into()),
+            cosplay: None,
+            tags: BTreeMap::from([(Slot::Hair, vec!["blonde_hair".into(), "ponytail".into()])]),
+        };
+        let saved = [link.clone()];
+        // As the editor holds them: every slot, most of them empty.
+        let mut typed = Draft::of(&link);
+        for slot in Slot::ALL {
+            typed.slots.entry(slot).or_default();
+        }
+        assert!(!people_changed(std::slice::from_ref(&typed), &saved));
+        // Spaces that say nothing.
+        typed.character = " link ".into();
+        typed
+            .slots
+            .insert(Slot::Hair, " blonde_hair\n ponytail ".into());
+        assert!(!people_changed(std::slice::from_ref(&typed), &saved));
+        // A tag, a name, a kind, or a person more or fewer.
+        let mut more = typed.clone();
+        more.slots.insert(Slot::Eyes, "blue_eyes".into());
+        assert!(people_changed(&[more], &saved));
+        let mut named = typed.clone();
+        named.cosplay = "zelda".into();
+        assert!(people_changed(&[named], &saved));
+        let mut girl = typed.clone();
+        girl.kind = FigureKind::Girl;
+        assert!(people_changed(&[girl], &saved));
+        assert!(people_changed(&[typed.clone(), Draft::default()], &saved));
+        assert!(people_changed(&[], &saved));
+        // No one yet: the empty person the editor starts with is no change.
+        assert!(!people_changed(&[Draft::default()], &[]));
+        assert!(!people_changed(&[], &[]));
+        assert!(people_changed(&[typed], &[]));
+        assert!(people_changed(
+            &[draft(FigureKind::Girl, &[(Slot::Hair, "red_hair")])],
+            &[]
+        ));
     }
 
     #[test]

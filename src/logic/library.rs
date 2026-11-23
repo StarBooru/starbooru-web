@@ -177,6 +177,35 @@ mod tests {
     }
 
     #[test]
+    fn one_of_anything_reads_in_the_singular() {
+        // One already here is also the one done.
+        let mut i = import(LibraryState::Done, LibraryPhase::Groups);
+        i.merged = 1;
+        i.rules = 1;
+        assert_eq!(
+            counts(&i),
+            "1 done · 1 already here · 1 alias or implication"
+        );
+        assert_eq!(t!("library-found", count = 1), "Found 1 post.");
+        assert_eq!(t!("library-found", count = 2), "Found 2 posts.");
+        assert_eq!(t!("admin-ai-hw-threads", count = 1), "1 thread");
+        crate::i18n::set_lang(crate::i18n::Lang::Italian);
+        assert_eq!(
+            counts(&i),
+            "1 fatto · 1 già presente · 1 alias o implicazione"
+        );
+        i.imported = 4;
+        i.failed = 1;
+        i.rules = 7;
+        assert_eq!(
+            counts(&i),
+            "6 fatti · 1 già presente · 1 non riuscito · 7 alias e implicazioni"
+        );
+        assert_eq!(t!("library-found", count = 1), "Trovato 1 post.");
+        assert_eq!(t!("ago-days", count = 1), "1 giorno fa");
+    }
+
+    #[test]
     fn the_form_says_what_is_missing() {
         assert_eq!(
             form_error(&LibraryError::Base(RemoteError::BadBase)),

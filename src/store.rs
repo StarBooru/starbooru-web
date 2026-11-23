@@ -450,27 +450,128 @@ thread_local! {
     static MEMORY: ArcRwSignal<GalleryMemory> = ArcRwSignal::new(GalleryMemory::default());
     static OTHER: RefCell<Map<String, Value>> = RefCell::new(Map::new());
     static SIGN_IN_NOTE: RefCell<Option<String>> = const { RefCell::new(None) };
+    /// The state as this tab and the browser's storage last agreed on it, to
+    /// tell what this tab changed since from what another tab did.
+    static SYNCED: RefCell<Stored> = RefCell::new(Stored::default());
 }
 
-/// Reads what the browser kept. Called once, before the app is mounted.
+/// Reads what the browser kept, and follows what other tabs keep there.
+/// Called once, before the app is mounted.
 pub fn load() {
     let stored = backend::read().map(|json| parse(&json)).unwrap_or_default();
-    SESSION.with(|s| s.set(stored.session));
-    PREFS.with(|p| p.set(stored.prefs));
-    MEMORY.with(|m| m.set(stored.memory));
-    OTHER.with_borrow_mut(|o| *o = stored.other);
+    SESSION.with(|s| s.set(stored.session.clone()));
+    PREFS.with(|p| p.set(stored.prefs.clone()));
+    MEMORY.with(|m| m.set(stored.memory.clone()));
+    OTHER.with_borrow_mut(|o| o.clone_from(&stored.other));
+    SYNCED.with_borrow_mut(|s| *s = stored);
+    backend::watch(take_in);
 }
 
-/// Writes the current state back to the browser.
-fn save() {
-    let stored = Stored {
+/// Everything as this tab has it.
+fn current() -> Stored {
+    Stored {
         session: SESSION.with(|s| s.get_untracked()),
         prefs: PREFS.with(|p| p.get_untracked()),
         memory: MEMORY.with(|m| m.get_untracked()),
         other: OTHER.with_borrow(Clone::clone),
+    }
+}
+
+/// What to write back: each part as this tab has it if it changed it since
+/// `synced`, or else as it's stored now, which another tab may have changed.
+/// So a tab that only moved in the gallery doesn't bring back the session
+/// another tab signed out of.
+fn merge(synced: &Stored, ours: Stored, theirs: Stored) -> Stored {
+    fn pick<T: PartialEq>(synced: &T, ours: T, theirs: T) -> T {
+        if ours == *synced { theirs } else { ours }
+    }
+    Stored {
+        session: pick(&synced.session, ours.session, theirs.session),
+        prefs: pick(&synced.prefs, ours.prefs, theirs.prefs),
+        memory: pick(&synced.memory, ours.memory, theirs.memory),
+        other: pick(&synced.other, ours.other, theirs.other),
+    }
+}
+
+/// Writes the current state back to the browser, keeping what other tabs
+/// changed meanwhile, and taking that in here too.
+fn save() {
+    let ours = current();
+    let merged = match backend::read() {
+        Some(json) => SYNCED.with_borrow(|synced| merge(synced, ours, parse(&json))),
+        None => ours,
     };
-    if let Some(json) = to_json(&stored) {
+    if let Some(json) = to_json(&merged) {
         backend::write(&json);
+    }
+    take(merged);
+}
+
+/// Takes in what another tab stored.
+fn take_in() {
+    take(backend::read().map(|json| parse(&json)).unwrap_or_default());
+}
+
+/// Puts each part of `stored` that this tab has otherwise in its place.
+fn take(stored: Stored) {
+    let Stored {
+        session,
+        prefs,
+        memory,
+        other,
+    } = stored;
+    OTHER.with_borrow_mut(|o| {
+        if *o != other {
+            *o = other;
+        }
+    });
+    PREFS.with(|p| {
+        if p.with_untracked(|p| *p != prefs) {
+            p.set(prefs);
+        }
+    });
+    MEMORY.with(|m| {
+        if m.with_untracked(|m| *m != memory) {
+            m.set(memory);
+        }
+    });
+    let ours = session_untracked();
+    match follow(ours.as_ref(), session.as_ref()) {
+        Follow::Stay => {}
+        Follow::Take => {
+            if session.is_none() {
+                crate::api::forget();
+            } else {
+                SIGN_IN_NOTE.with_borrow_mut(|note| *note = None);
+            }
+            SESSION.with(|s| s.set(session));
+        }
+        Follow::SignOutFirst => {
+            crate::api::forget();
+            SESSION.with(|s| s.set(None));
+            backend::soon(take_in);
+        }
+    }
+    SYNCED.with_borrow_mut(|s| *s = current());
+}
+
+/// How this tab follows the session another tab stored.
+#[derive(Debug, PartialEq, Eq)]
+enum Follow {
+    Stay,
+    Take,
+    /// Another account: this one's pages go first, with what they hold
+    /// (uploads on their way, say), and the other's come a moment later.
+    SignOutFirst,
+}
+
+fn follow(ours: Option<&Session>, theirs: Option<&Session>) -> Follow {
+    match (ours, theirs) {
+        (a, b) if a == b => Follow::Stay,
+        // The same sign-in, its account renamed or given another role.
+        (Some(a), Some(b)) if a.token == b.token && a.server == b.server => Follow::Take,
+        (Some(_), Some(_)) => Follow::SignOutFirst,
+        _ => Follow::Take,
     }
 }
 
@@ -505,10 +606,15 @@ pub fn sign_in(server: String, auth: AuthResponse) {
     save();
 }
 
-/// The account as the server has it now, after a rename or a new role.
+/// The account as the server has it now, after a rename or a new role. Only
+/// for the account signed in: an answer about another comes too late.
 pub fn update_user(user: User) {
-    let changed =
-        SESSION.with(|s| s.with_untracked(|s| s.as_ref().is_some_and(|s| s.user != user)));
+    let changed = SESSION.with(|s| {
+        s.with_untracked(|s| {
+            s.as_ref()
+                .is_some_and(|s| s.user.id == user.id && s.user != user)
+        })
+    });
     if changed {
         SESSION.with(|s| {
             s.update(|s| {
@@ -525,7 +631,11 @@ pub fn update_user(user: User) {
 /// token is forgotten either way.
 pub fn sign_out() {
     if let Some(client) = crate::api::client() {
+        // Files on their way first tell the server to drop what it has of
+        // them, which takes the session.
+        let wound_down = crate::activity::wind_down();
         leptos::task::spawn_local(async move {
+            wound_down.await;
             let _ = client.logout().await;
         });
     }
@@ -621,10 +731,43 @@ pub fn last_search_untracked() -> String {
 
 #[cfg(target_arch = "wasm32")]
 mod backend {
+    use std::cell::RefCell;
+    use std::time::Duration;
+
+    use wasm_bindgen::JsCast;
+
+    use crate::dom::{self, Watch};
+
     const KEY: &str = "starbooru";
+
+    thread_local! {
+        static WATCH: RefCell<Option<Watch>> = const { RefCell::new(None) };
+    }
 
     fn storage() -> Option<web_sys::Storage> {
         web_sys::window()?.local_storage().ok()?
+    }
+
+    /// Calls `changed` when another tab writes the key, or clears the
+    /// storage. The browser doesn't tell the tab that wrote.
+    pub fn watch(changed: fn()) {
+        let Some(window) = web_sys::window() else {
+            return;
+        };
+        let watch = dom::listen(&window, "storage", true, move |e| {
+            let ours = e
+                .dyn_ref::<web_sys::StorageEvent>()
+                .is_some_and(|e| e.key().is_none_or(|k| k == KEY));
+            if ours {
+                changed();
+            }
+        });
+        WATCH.with_borrow_mut(|w| *w = Some(watch));
+    }
+
+    /// Calls `f` a moment from now, once the page has followed this change.
+    pub fn soon(f: fn()) {
+        leptos::prelude::set_timeout(f, Duration::ZERO);
     }
 
     pub fn read() -> Option<String> {
@@ -639,10 +782,7 @@ mod backend {
         }
     }
 
-    /// The page's own address, `https://host[:port]`.
-    pub fn origin() -> Option<String> {
-        web_sys::window()?.location().origin().ok()
-    }
+    pub use crate::dom::origin;
 }
 
 /// The host, where the tests run, has no browser storage.
@@ -657,6 +797,10 @@ mod backend {
     pub fn origin() -> Option<String> {
         None
     }
+
+    pub fn watch(_changed: fn()) {}
+
+    pub fn soon(_f: fn()) {}
 }
 
 #[cfg(test)]
@@ -846,6 +990,102 @@ mod tests {
         assert!(!signed_in());
         // The next sign-in starts from the same server.
         assert_eq!(prefs_untracked().last_server, "https://booru.example");
+    }
+
+    fn session(token: &str) -> Session {
+        Session {
+            server: "https://booru.example".into(),
+            token: token.into(),
+            user: user(),
+        }
+    }
+
+    #[test]
+    fn a_tab_keeps_what_another_changed_and_what_it_changed_itself() {
+        let synced = Stored {
+            session: Some(session("t1")),
+            ..Stored::default()
+        };
+        let dark = Prefs {
+            theme: Theme::Dark,
+            ..Prefs::default()
+        };
+        // Another tab signed out; this one only changed the theme.
+        let ours = Stored {
+            prefs: dark.clone(),
+            ..synced.clone()
+        };
+        let theirs = Stored {
+            session: None,
+            ..synced.clone()
+        };
+        let merged = merge(&synced, ours, theirs);
+        assert_eq!(merged.session, None, "the signed-out session stays out");
+        assert_eq!(merged.prefs, dark);
+        // This tab signed out, another moved in the gallery.
+        let mut moved = GalleryMemory::default();
+        moved.visit("cat");
+        let ours = Stored {
+            session: None,
+            ..synced.clone()
+        };
+        let theirs = Stored {
+            memory: moved.clone(),
+            ..synced.clone()
+        };
+        let merged = merge(&synced, ours, theirs);
+        assert_eq!((merged.session, merged.memory), (None, moved));
+        // Both changed the same part: this tab's, the latest, wins.
+        let light = Prefs {
+            theme: Theme::Light,
+            ..Prefs::default()
+        };
+        let ours = Stored {
+            prefs: light.clone(),
+            ..synced.clone()
+        };
+        let theirs = Stored {
+            prefs: dark,
+            ..synced.clone()
+        };
+        assert_eq!(merge(&synced, ours, theirs).prefs, light);
+        // Nothing changed anywhere: the same again.
+        assert_eq!(merge(&synced, synced.clone(), synced.clone()), synced);
+    }
+
+    #[test]
+    fn a_tab_follows_the_sessions_of_the_others() {
+        let (a, b) = (session("t1"), session("t2"));
+        assert_eq!(follow(Some(&a), Some(&a)), Follow::Stay);
+        assert_eq!(follow(None, None), Follow::Stay);
+        assert_eq!(follow(Some(&a), None), Follow::Take, "signed out there");
+        assert_eq!(follow(None, Some(&a)), Follow::Take, "signed in there");
+        let mut renamed = a.clone();
+        renamed.user.username = "ada2".into();
+        assert_eq!(follow(Some(&a), Some(&renamed)), Follow::Take);
+        // Another sign-in: this tab's pages go first.
+        assert_eq!(follow(Some(&a), Some(&b)), Follow::SignOutFirst);
+        let elsewhere = Session {
+            server: "https://other.example".into(),
+            ..a.clone()
+        };
+        assert_eq!(follow(Some(&a), Some(&elsewhere)), Follow::SignOutFirst);
+    }
+
+    #[test]
+    fn a_late_answer_about_another_account_changes_nothing() {
+        sign_in(
+            "https://booru.example".into(),
+            AuthResponse {
+                token: "t0k3n".into(),
+                user: user(),
+            },
+        );
+        let mut other = user();
+        other.id = 8;
+        other.username = "bob".into();
+        update_user(other);
+        assert_eq!(session_untracked().unwrap().user.username, "ada");
     }
 
     #[test]

@@ -21,10 +21,10 @@ use web_sys::KeyboardEvent;
 use crate::api;
 use crate::components::banner::{ErrorBanner, Spinner};
 use crate::components::brand::{Mark, Wordmark};
+use crate::components::focus::hold_focus;
 use crate::components::icons::{Ico, Icon};
-use crate::logic::gallery::format_duration;
 use crate::logic::share::{Item, Layout, heading, items, layout, step};
-use crate::logic::viewer::when;
+use crate::logic::viewer::{format_duration, when};
 use crate::logic::zoom::Zoom;
 use crate::pages::post::glow::PostGlow;
 use crate::pages::post::stage::{Shown, Stage};
@@ -141,7 +141,12 @@ pub fn SharedPage() -> impl IntoView {
             }
             .into_any()
         }
-        State::Ready(found) => ready(found).into_any(),
+        State::Ready(found) => {
+            // A file that didn't load comes again with the link's fresh
+            // addresses, in a page made anew.
+            let again = Callback::new(move |_: Callback<()>| load(token.get_untracked()));
+            ready(found, again).into_any()
+        }
     };
 
     view! {
@@ -156,7 +161,8 @@ pub fn SharedPage() -> impl IntoView {
 }
 
 /// The heading, where the link comes from and until when, and the posts.
-fn ready(found: Found) -> impl IntoView {
+/// `again` asks for the link anew.
+fn ready(found: Found, again: Callback<Callback<()>>) -> impl IntoView {
     let Found {
         title,
         server,
@@ -178,7 +184,7 @@ fn ready(found: Found) -> impl IntoView {
     let posts = match layout(count) {
         Layout::Empty => empty(),
         Layout::One => match items.into_iter().next() {
-            Some(item) => view! { <SharedOne item=item label=named /> }.into_any(),
+            Some(item) => view! { <SharedOne item=item label=named on_retry=again /> }.into_any(),
             None => empty(),
         },
         Layout::Many => view! { <SharedGrid items=items /> }.into_any(),
@@ -195,7 +201,7 @@ fn ready(found: Found) -> impl IntoView {
 /// One post, on the viewer's stage: zoom, fullscreen and the light around
 /// it, with no way back or to a neighbour.
 #[component]
-fn SharedOne(item: Item, label: Signal<String>) -> impl IntoView {
+fn SharedOne(item: Item, label: Signal<String>, on_retry: Callback<Callback<()>>) -> impl IntoView {
     let zoom = RwSignal::new(Zoom::default());
     let full = RwSignal::new(false);
     let enter = RwSignal::new(None::<bool>);
@@ -241,6 +247,7 @@ fn SharedOne(item: Item, label: Signal<String>) -> impl IntoView {
                 editing=false
                 on_step=Callback::new(|_: bool| {})
                 on_edit=Callback::new(|()| {})
+                on_retry=on_retry
             />
         </div>
     }
@@ -353,6 +360,8 @@ fn Lightbox(
             let _ = el.focus();
         });
     });
+    // Closing puts the focus on the tile last shown, not the one opened.
+    hold_focus(root, false);
     let at = move || open.get().unwrap_or(0);
     let close = move || {
         let from = open.get_untracked();

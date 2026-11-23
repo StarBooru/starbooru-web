@@ -7,6 +7,7 @@ mod brand_paths;
 pub mod color_picker;
 pub mod confirm;
 pub mod download;
+pub mod focus;
 pub mod icons;
 pub mod legal;
 pub mod menu;

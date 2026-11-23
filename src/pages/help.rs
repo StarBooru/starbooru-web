@@ -9,7 +9,7 @@ use leptos_router::hooks::use_navigate;
 use starbooru_core::filter::SizeField;
 use starbooru_core::{FigureTerm, MediaKind, Order, Rating, SortKey, parse_query};
 
-use super::{figure_kind_label, rating_label};
+use super::{figure_kind_label, query_error_text, rating_label};
 use crate::components::icons::{Ico, Icon};
 use crate::route;
 
@@ -179,17 +179,12 @@ pub fn Help() -> impl IntoView {
     };
     let reading = move || match explained.get() {
         Ok(lines) => view! {
-            <ul class="explain" aria-live="polite">
+            <ul class="explain">
                 {lines.into_iter().map(|line| view! { <li>{line}</li> }).collect_view()}
             </ul>
         }
         .into_any(),
-        Err(message) => view! {
-            <p class="field-error" role="alert">
-                {message}
-            </p>
-        }
-        .into_any(),
+        Err(message) => view! { <p class="field-error">{message}</p> }.into_any(),
     };
     let cards = move || {
         sections()
@@ -258,7 +253,11 @@ pub fn Help() -> impl IntoView {
                         {move || t!("help-search")}
                     </button>
                 </form>
-                {reading}
+                // Always on the page, so a screen reader reads each change
+                // once it's idle.
+                <div class="explained" aria-live="polite">
+                    {reading}
+                </div>
             </section>
             {cards}
             <section class="card">
@@ -279,7 +278,7 @@ pub fn Help() -> impl IntoView {
 
 /// A query in plain words, one line per kind of term, or the parser's error.
 pub fn explain(text: &str) -> Result<Vec<String>, String> {
-    let q = parse_query(text).map_err(|e| e.to_string())?;
+    let q = parse_query(text).map_err(|e| query_error_text(&e))?;
     let mut lines = Vec::new();
     if q.deleted {
         lines.push(t!("explain-deleted"));
@@ -541,7 +540,19 @@ mod tests {
         assert!(explain("width:wide").unwrap_err().contains("width:wide"));
         let three = explain("rating:g rating:s rating:q").unwrap();
         assert_eq!(three[0], "Rated safe, sensitive or questionable");
-        assert!(explain("rating:z").unwrap_err().contains("unknown rating"));
+        assert!(
+            explain("rating:z")
+                .unwrap_err()
+                .starts_with("Unknown rating")
+        );
+    }
+
+    #[test]
+    fn the_reading_is_a_live_region_that_doesnt_shout() {
+        let source = include_str!("help.rs");
+        assert!(source.contains(r#"<div class="explained" aria-live="polite">"#));
+        // Split so this line doesn't match itself.
+        assert!(!source.contains(concat!(r#"role=""#, r#"alert""#)));
     }
 
     #[test]

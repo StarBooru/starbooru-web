@@ -7,9 +7,10 @@ use leptos::prelude::*;
 use starbooru_core::remote::clean_base;
 use starbooru_core::{BooruAccount, BooruApi, MAX_SEARCH_SITES, RemoteSite};
 
-use super::accounts::SiteRow;
+use super::accounts::{SiteRow, forget_account};
 use wasm_bindgen::JsCast;
 
+use crate::components::focus::hold_focus;
 use crate::components::icons::{Ico, Icon};
 use crate::components::select::{Choice, Select};
 use crate::dom;
@@ -58,8 +59,9 @@ pub(super) fn SiteChips(
     Effect::watch(
         move || sites.get(),
         move |_, _, _| {
+            // The page may be gone by the next frame.
             request_animation_frame(move || {
-                if let Some(row) = row.get_untracked() {
+                if let Some(row) = row.try_get_untracked().flatten() {
                     show_chosen(&row);
                 }
             });
@@ -151,11 +153,14 @@ pub(super) fn SitesSheet(
     let address = RwSignal::new(String::new());
     let kind = RwSignal::new(BooruApi::Danbooru);
     let shut: NodeRef<html::Button> = NodeRef::new();
+    let dialog: NodeRef<html::Div> = NodeRef::new();
     Effect::new(move |_| {
         if let Some(el) = shut.get() {
             let _ = el.focus();
         }
     });
+    // Tab stays in the sheet while it's open, and goes back after.
+    hold_focus(dialog, true);
     // Escape closes it wherever the focus is, unless an open list has it.
     let keys = web_sys::window().map(|window| {
         dom::listen(&window, "keydown", false, move |e| {
@@ -229,6 +234,32 @@ pub(super) fn SitesSheet(
             on_go.run(rest);
         }
     });
+    // Accounts saved for a site with no row here, such as one removed from
+    // the list. Nothing else would show them.
+    let left_behind = Memo::new(move |_| {
+        chips.with(|chips| {
+            accounts.with(|list| {
+                list.iter()
+                    .filter(|a| !chips.iter().any(|c| tidy(&c.site.base) == tidy(&a.base)))
+                    .cloned()
+                    .collect::<Vec<_>>()
+            })
+        })
+    });
+    let left_row = move |account: BooruAccount| {
+        let id = account.id;
+        let (login, site) = (account.login, host_of(&account.base));
+        view! {
+            <div class="banner info site-left" role="status">
+                <span class="break">
+                    {move || t!("boorus-account-left", login = login.clone(), site = site.clone())}
+                </span>
+                <button type="button" class="btn text small" on:click=move |_| forget_account(id, accounts, error)>
+                    {move || t!("boorus-account-forget")}
+                </button>
+            </div>
+        }
+    };
     let kinds = Signal::derive(|| {
         BooruApi::ALL
             .into_iter()
@@ -263,6 +294,7 @@ pub(super) fn SitesSheet(
                 role="dialog"
                 aria-modal="true"
                 aria-labelledby="sites-sheet-title"
+                node_ref=dialog
                 on:click=|e| e.stop_propagation()
             >
                 <div class="sheet-head">
@@ -282,6 +314,7 @@ pub(super) fn SitesSheet(
                 <ul class="site-list">
                     <For each=move || chips.get() key=|c| (site_key(&c.site), c.custom) children=row />
                 </ul>
+                <For each=move || left_behind.get() key=|a| a.id children=left_row />
                 // Our own words for a bad address, not the browser's.
                 <form class="site-add" novalidate=true on:submit=add>
                     <input

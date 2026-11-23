@@ -17,7 +17,7 @@ use crate::components::icons::{Ico, Icon};
 use crate::components::rating::RatingPicker;
 use crate::components::tag_box::TagBox;
 use crate::logic::tags::{
-    new_words, parse_tags, rebase, replace_tag, shown_fixes, untyped, with_tag,
+    new_words, parse_tags, rebase, replace_tag, shown_fixes, tags_changed, untyped, with_tag,
 };
 use crate::pages::{bad_tag_text, rating_label};
 
@@ -26,11 +26,13 @@ const TAG_BOX: &str = "post-tags";
 
 /// The editor for `post` as it was when editing began. `current` is the post
 /// on the page, whose tags saving its people may change meanwhile.
-/// `on_saved` gets the post as the server has it after saving.
+/// `unsaved` says whether leaving now would lose changes. `on_saved` gets
+/// the post as the server has it after saving.
 #[component]
 pub fn EditCard(
     post: Arc<Post>,
     #[prop(into)] current: Signal<Option<Arc<Post>>>,
+    unsaved: RwSignal<bool>,
     on_cancel: Callback<()>,
     on_saved: Callback<Post>,
 ) -> impl IntoView {
@@ -56,6 +58,16 @@ pub fn EditCard(
     // The text as of the last finished word, for "did you mean".
     let check = RwSignal::new(String::new());
     let rating = RwSignal::new(post.rating);
+    let first_rating = post.rating;
+    // `base` changes only with `text`, so following the text is enough.
+    Effect::new(move |_| {
+        let changed =
+            text.with(|t| base.with_value(|b| tags_changed(t, b))) || rating.get() != first_rating;
+        if unsaved.get_untracked() != changed {
+            unsaved.set(changed);
+        }
+    });
+    on_cleanup(move || unsaved.set(false));
     let busy = RwSignal::new(false);
     let error = RwSignal::new(None::<String>);
     let invalid = RwSignal::new(None::<String>);
@@ -106,7 +118,10 @@ pub fn EditCard(
             let result = api::call(move |c| async move { c.update_post(id, &update).await }).await;
             busy.try_set(false);
             match result {
-                Ok(saved) => on_saved.run(saved),
+                Ok(saved) => {
+                    // Gone with its card if the page moved on meanwhile.
+                    on_saved.try_run(saved);
+                }
                 Err(message) => {
                     error.try_set(Some(message));
                 }

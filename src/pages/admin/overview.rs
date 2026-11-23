@@ -8,7 +8,9 @@ use starbooru_core::ServerStats;
 use super::Waiting;
 use crate::api;
 use crate::components::banner::ErrorBanner;
-use crate::logic::admin::{chart, size, started};
+use crate::logic::admin::chart;
+use crate::logic::library::ago;
+use crate::logic::viewer::human_size;
 
 #[component]
 pub(super) fn Overview() -> impl IntoView {
@@ -32,7 +34,7 @@ fn Stats(stats: ServerStats) -> impl IntoView {
         (|| t!("admin-bin"), s.bin_posts.to_string()),
         (|| t!("admin-tags"), s.tags.to_string()),
         (|| t!("admin-accounts"), s.users.to_string()),
-        (|| t!("admin-media"), size(s.media_bytes)),
+        (|| t!("admin-media"), human_size(s.media_bytes)),
     ];
     let tiles = tiles
         .into_iter()
@@ -63,7 +65,7 @@ fn Stats(stats: ServerStats) -> impl IntoView {
         .collect_view();
     let on_off = |on: bool| if on { t!("admin-on") } else { t!("admin-off") };
     let (thumbs, import, since) = (s.video_thumbnails, s.url_import, s.started_at);
-    let running = move || started(since, Utc::now());
+    let running = move || ago(since, Utc::now());
     view! {
         <div class="stat-grid">{tiles}</div>
         <section class="card">
@@ -85,11 +87,11 @@ fn Stats(stats: ServerStats) -> impl IntoView {
                 <dt>{move || t!("admin-running")}</dt>
                 <dd>{running}</dd>
                 <dt>{move || t!("admin-upload-limit")}</dt>
-                <dd>{size(s.max_upload_bytes)}</dd>
+                <dd>{human_size(s.max_upload_bytes)}</dd>
                 <dt>{move || t!("admin-database")}</dt>
-                <dd>{size(s.database_bytes)}</dd>
+                <dd>{human_size(s.database_bytes)}</dd>
                 <dt>{move || t!("admin-bin-size")}</dt>
-                <dd>{size(s.bin_bytes)}</dd>
+                <dd>{human_size(s.bin_bytes)}</dd>
                 <dt>{move || t!("admin-disabled-accounts")}</dt>
                 <dd>{s.disabled_users}</dd>
                 <dt>{move || t!("admin-video-thumbs")}</dt>

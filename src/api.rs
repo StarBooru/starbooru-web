@@ -11,6 +11,7 @@ use starbooru_client::{Client, ClientError};
 use starbooru_core::{AiStatus, RemoteSite, RemoteTagQuery, ServerInfo};
 
 use crate::logic::search::{Answers, Hint, SUGGESTIONS};
+use crate::logic::upload::human_size;
 use crate::store::{self, Session};
 
 thread_local! {
@@ -166,22 +167,37 @@ enum Trouble<'a> {
     /// The server's own words.
     Said(&'a str),
     /// A file to upload that the browser couldn't read, and why.
-    Unreadable(&'a str),
-    Other,
+    Unreadable(String),
+    /// The server failed on its side; its log has why.
+    ServerFault,
+    /// The server's disk is full.
+    StorageFull,
+    /// A web server in front of the server turned the request away as too
+    /// large.
+    ProxyTooLarge,
+    /// Some other answer without the server's JSON, with its status.
+    Unexpected(u16),
+    /// A file bigger than the limit, in bytes.
+    TooLarge(u64),
 }
+
+/// What the client calls an answer without the server's JSON.
+const NOT_JSON: &str = "http_error";
 
 fn trouble(e: &ClientError) -> Trouble<'_> {
     match e {
         ClientError::Api { status: 401, .. } => Trouble::SignedOut,
-        // No JSON in the answer: a proxy in front of a server that's down,
-        // or some other site at that address.
-        ClientError::Api {
-            status: 502..=504,
-            error,
-        } if error.code == "http_error" => Trouble::Unreachable,
-        ClientError::Api { status: 404, error } if error.code == "http_error" => {
-            Trouble::NotAServer
-        }
+        ClientError::Api { error, .. } if error.code == "storage_full" => Trouble::StorageFull,
+        ClientError::Api { status, error } if error.code == NOT_JSON => match status {
+            // A proxy in front of a server that's down.
+            502..=504 => Trouble::Unreachable,
+            // Some other site at that address.
+            404 => Trouble::NotAServer,
+            413 => Trouble::ProxyTooLarge,
+            500.. => Trouble::ServerFault,
+            other => Trouble::Unexpected(*other),
+        },
+        ClientError::Api { status: 500.., .. } => Trouble::ServerFault,
         ClientError::Api { error, .. } => Trouble::Said(&error.message),
         ClientError::Http(e) if e.is_decode() => Trouble::NotAServer,
         ClientError::Http(_) => Trouble::Unreachable,
@@ -190,8 +206,10 @@ fn trouble(e: &ClientError) -> Trouble<'_> {
         ClientError::RateLimited { retry_after } => {
             Trouble::RateLimited(retry_after.map(|s| s.div_ceil(60).max(1)))
         }
-        ClientError::Read(why) => Trouble::Unreadable(why),
-        ClientError::TooLarge { .. } | ClientError::Io(_) => Trouble::Other,
+        ClientError::Read(why) => Trouble::Unreadable(why.clone()),
+        // Only when writing to disk, which the browser doesn't.
+        ClientError::Io(why) => Trouble::Unreadable(why.to_string()),
+        ClientError::TooLarge { limit } => Trouble::TooLarge(*limit),
     }
 }
 
@@ -207,8 +225,14 @@ pub fn error_text(e: &ClientError, server: &str) -> String {
         Trouble::RateLimited(None) => t!("error-rate-limited"),
         Trouble::RateLimited(Some(minutes)) => t!("error-rate-limited-minutes", minutes = minutes),
         Trouble::Said(message) => message.to_owned(),
-        Trouble::Unreadable(why) => t!("upload-unreadable", error = why.to_owned()),
-        Trouble::Other => e.to_string(),
+        Trouble::Unreadable(why) => t!("upload-unreadable", error = why),
+        Trouble::ServerFault => t!("error-server-fault", server = server),
+        Trouble::StorageFull => t!("error-storage-full", server = server),
+        Trouble::ProxyTooLarge => t!("error-proxy-too-large", server = server),
+        Trouble::Unexpected(status) => {
+            t!("error-unexpected-answer", server = server, status = status)
+        }
+        Trouble::TooLarge(limit) => t!("upload-too-big", max = human_size(limit)),
     }
 }
 
@@ -376,21 +400,80 @@ mod tests {
             Trouble::Said("no such post")
         );
         assert_eq!(
-            trouble(&api(503, "storage_full", "disk full")),
-            Trouble::Said("disk full")
-        );
-        assert_eq!(
             trouble(&api(409, "username_taken", "username taken")),
             Trouble::Said("username taken")
         );
         assert_eq!(
+            trouble(&api(413, "too_large", "file too large")),
+            Trouble::Said("file too large")
+        );
+        assert_eq!(
             trouble(&ClientError::Read("the file changed".into())),
-            Trouble::Unreadable("the file changed")
+            Trouble::Unreadable("the file changed".into())
         );
         assert_eq!(
             error_text(&ClientError::Read("gone".into()), "x"),
             "Can't read the file: gone"
         );
+    }
+
+    #[test]
+    fn a_failure_on_the_servers_side_says_so_in_words() {
+        // Its own JSON or not, past the proxies that mean it's down.
+        for e in [
+            api(500, "internal", "internal server error"),
+            api(500, "http_error", "server answered 500"),
+            api(501, "http_error", "server answered 501"),
+            api(503, "internal", "x"),
+            api(522, "http_error", "server answered 522"),
+        ] {
+            assert_eq!(trouble(&e), Trouble::ServerFault, "{e}");
+        }
+        for status in [502, 503, 504] {
+            let e = api(status, "http_error", "x");
+            assert_eq!(trouble(&e), Trouble::Unreachable, "{status}");
+        }
+        assert_eq!(
+            trouble(&api(507, "storage_full", "the server's disk is full")),
+            Trouble::StorageFull
+        );
+        assert_eq!(
+            error_text(
+                &api(500, "internal", "internal server error"),
+                "https://b.example"
+            ),
+            "Something went wrong on https://b.example. Try again in a minute. If it keeps happening, tell whoever runs the server; it has the details in its log."
+        );
+    }
+
+    #[test]
+    fn an_answer_from_something_else_says_what_came_back() {
+        assert_eq!(
+            trouble(&api(413, "http_error", "server answered 413")),
+            Trouble::ProxyTooLarge
+        );
+        assert!(
+            error_text(&api(413, "http_error", "x"), "https://b.example")
+                .starts_with("https://b.example turned this away as too large")
+        );
+        for status in [400, 403, 405, 418] {
+            let e = api(status, "http_error", "x");
+            assert_eq!(trouble(&e), Trouble::Unexpected(status));
+        }
+        assert_eq!(
+            error_text(&api(405, "http_error", "x"), "https://b.example"),
+            "https://b.example gave an answer StarBooru didn't expect (405). Check the address, or try again later."
+        );
+    }
+
+    #[test]
+    fn a_file_too_big_or_unwritable_is_in_words() {
+        let big = ClientError::TooLarge { limit: 1 << 20 };
+        assert_eq!(trouble(&big), Trouble::TooLarge(1 << 20));
+        assert!(error_text(&big, "x").starts_with("Bigger than this server takes"));
+        let io = ClientError::Io(std::io::Error::other("disk full"));
+        assert_eq!(trouble(&io), Trouble::Unreadable("disk full".into()));
+        assert_eq!(error_text(&io, "x"), "Can't read the file: disk full");
     }
 
     #[test]

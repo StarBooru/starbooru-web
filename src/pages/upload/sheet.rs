@@ -86,7 +86,8 @@ pub(super) fn ItemSheet(
         closing.set(true);
         spawn_local(async move {
             dom::sleep(LEAVE.as_millis().try_into().unwrap_or(250)).await;
-            on_close.run(());
+            // The page may have gone meanwhile.
+            on_close.try_run(());
         });
     };
     // Sent, or gone some other way: nothing left to change.

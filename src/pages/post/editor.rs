@@ -21,12 +21,14 @@ use wasm_bindgen::JsCast;
 
 use crate::api;
 use crate::components::banner::ErrorBanner;
+use crate::components::focus::hold_focus;
 use crate::components::icons::{Ico, Icon};
 use crate::dom;
 use crate::logic::editor::{
     Aspect, Command, CropBox, Handle, History, Layout, MAX_RATIO_SIDE, Problem, RATIOS, Shape,
     TrimEnd, arrow, command, frame_size, moved_trim, oriented, parse_seconds, picture_style,
-    ratio_side, request, seconds_text, share, spun, time_at, trim_key, trim_of, trim_shown,
+    ratio_side, request, scrolled, seconds_text, share, spun, step_round, time_at, trim_key,
+    trim_of, trim_shown,
 };
 use crate::logic::viewer::format_duration;
 use crate::store;
@@ -250,21 +252,24 @@ pub fn EditorSheet(
             }
         });
     };
+    // The menu by Save goes, and the focus back to the button that opened it.
+    let more: NodeRef<html::Button> = NodeRef::new();
+    let close_menu = Callback::new(move |()| {
+        menu.set(false);
+        if let Some(button) = more.get_untracked() {
+            let _ = button.focus();
+        }
+    });
     let keep_original = Callback::new(move |keeps: bool| {
         store::update_prefs(|p| p.keep_original = keeps);
-        menu.set(false);
+        close_menu.run(());
     });
 
     // The keys, the window's shape, and the focus: in the editor while it's
-    // open, and back where it was after.
+    // open, Tab going round inside it, and back where it was after.
     let root: NodeRef<html::Div> = NodeRef::new();
     let watches = StoredValue::new_local(Vec::<dom::Watch>::new());
-    let before = StoredValue::new_local(
-        web_sys::window()
-            .and_then(|w| w.document())
-            .and_then(|d| d.active_element())
-            .and_then(|el| el.dyn_into::<web_sys::HtmlElement>().ok()),
-    );
+    hold_focus(root, true);
     root.on_load(move |el| {
         let _ = el.focus();
         let Some(window) = web_sys::window() else {
@@ -297,7 +302,7 @@ pub fn EditorSheet(
                 Command::Undo => undo(),
                 Command::Redo => redo(),
                 Command::Save => save(),
-                Command::Close if menu.get_untracked() => menu.set(false),
+                Command::Close if menu.get_untracked() => close_menu.run(()),
                 Command::Close => close(),
             }
         }));
@@ -311,18 +316,12 @@ pub fn EditorSheet(
         watches.update_value(|w| w.extend(all));
     });
     on_cleanup({
-        let kept = SendWrapper::new((watches, before));
+        let watches = SendWrapper::new(watches);
         move || {
-            let (watches, before) = &*kept;
             if let Some(all) = watches.try_update_value(std::mem::take) {
                 for watch in all {
                     watch.stop();
                 }
-            }
-            if let Some(el) = before.try_update_value(Option::take).flatten()
-                && el.is_connected()
-            {
-                let _ = el.focus();
             }
         }
     });
@@ -406,6 +405,7 @@ pub fn EditorSheet(
                     </span>
                 </button>
                 <button
+                    node_ref=more
                     type="button"
                     class="btn editor-save-more"
                     disabled=move || busy.get()
@@ -419,25 +419,7 @@ pub fn EditorSheet(
                 </button>
             </div>
             <Show when=move || menu.get()>
-                <div class="save-backdrop" on:click=move |_| menu.set(false)></div>
-                <div class="save-menu" role="menu" aria-label=move || t!("editor-save-options")>
-                    <SaveOption
-                        keeps=false
-                        icon=Icon::Delete
-                        label=Signal::derive(|| t!("editor-save-replace"))
-                        hint=Signal::derive(|| t!("editor-save-replace-hint"))
-                        keep=keep
-                        on_pick=keep_original
-                    />
-                    <SaveOption
-                        keeps=true
-                        icon=Icon::Copy
-                        label=Signal::derive(|| t!("editor-keep-original"))
-                        hint=Signal::derive(|| t!("editor-keep-original-hint"))
-                        keep=keep
-                        on_pick=keep_original
-                    />
-                </div>
+                <SaveMenu keep=keep on_pick=keep_original on_close=close_menu />
             </Show>
         </div>
     };
@@ -572,6 +554,81 @@ pub fn EditorSheet(
     }
 }
 
+/// The menu by the Save button, over a backdrop that closes it. It opens on
+/// the way chosen, and Up and Down go between the two. Escape is the
+/// editor's, which closes the menu first.
+#[component]
+fn SaveMenu(keep: Memo<bool>, on_pick: Callback<bool>, on_close: Callback<()>) -> impl IntoView {
+    let list: NodeRef<html::Div> = NodeRef::new();
+    list.on_load(|el| {
+        request_animation_frame(move || {
+            if let Some(on) = el
+                .query_selector(r#".save-option[aria-checked="true"]"#)
+                .ok()
+                .flatten()
+                .and_then(|on| on.dyn_into::<web_sys::HtmlElement>().ok())
+            {
+                let _ = on.focus();
+            }
+        });
+    });
+    let keys = move |e: KeyboardEvent| {
+        let forward = match e.key().as_str() {
+            "ArrowDown" => true,
+            "ArrowUp" => false,
+            _ => return,
+        };
+        e.prevent_default();
+        let Some(el) = list.get_untracked() else {
+            return;
+        };
+        let Ok(found) = el.query_selector_all(".save-option") else {
+            return;
+        };
+        let items: Vec<web_sys::HtmlElement> = (0..found.length())
+            .filter_map(|i| found.item(i)?.dyn_into::<web_sys::HtmlElement>().ok())
+            .collect();
+        let active = web_sys::window()
+            .and_then(|w| w.document())
+            .and_then(|d| d.active_element());
+        let at = items.iter().position(|item| {
+            active
+                .as_ref()
+                .is_some_and(|a| a == AsRef::<web_sys::Element>::as_ref(item))
+        });
+        if let Some(next) = step_round(at, items.len(), forward).and_then(|i| items.get(i)) {
+            let _ = next.focus();
+        }
+    };
+    view! {
+        <div class="save-backdrop" on:click=move |_| on_close.run(())></div>
+        <div
+            node_ref=list
+            class="save-menu"
+            role="menu"
+            aria-label=move || t!("editor-save-options")
+            on:keydown=keys
+        >
+            <SaveOption
+                keeps=false
+                icon=Icon::Delete
+                label=Signal::derive(|| t!("editor-save-replace"))
+                hint=Signal::derive(|| t!("editor-save-replace-hint"))
+                keep=keep
+                on_pick=on_pick
+            />
+            <SaveOption
+                keeps=true
+                icon=Icon::Copy
+                label=Signal::derive(|| t!("editor-keep-original"))
+                hint=Signal::derive(|| t!("editor-keep-original-hint"))
+                keep=keep
+                on_pick=on_pick
+            />
+        </div>
+    }
+}
+
 /// One way to save in the menu by the Save button: replace the original, or
 /// keep it.
 #[component]
@@ -667,7 +724,7 @@ fn scroll_sideways(strip: &web_sys::HtmlElement) -> Vec<dom::Watch> {
             2 => f64::from(el.client_width()),
             _ => 1.0,
         };
-        el.set_scroll_left(el.scroll_left() + (d * unit).round() as i32);
+        el.set_scroll_left(scrolled(el.scroll_left(), d * unit));
     }));
     // Where a mouse drag started, the scroll then, and whether it has moved.
     let drag = Rc::new(Cell::new(None::<(f64, i32, bool)>));
@@ -702,7 +759,7 @@ fn scroll_sideways(strip: &web_sys::HtmlElement) -> Vec<dom::Watch> {
                 return;
             }
             drag.set(Some((x, left, true)));
-            el.set_scroll_left(left - dx.round() as i32);
+            el.set_scroll_left(scrolled(left, -dx));
         }));
     }
     {
@@ -965,14 +1022,18 @@ fn CropTools(
     }
 }
 
-/// A drag of the crop in progress: what is dragged, from where, and the box
-/// it started with.
+/// A drag of the crop in progress: by which pointer, what is dragged, from
+/// where, and the box it started with.
 #[derive(Clone, Copy)]
 struct Drag {
+    pointer: i32,
     handle: Handle,
     from: (f64, f64),
     start: CropBox,
 }
+
+/// The keys a crop handle takes, for a screen reader to say.
+const ARROW_KEYS: &str = "ArrowUp ArrowDown ArrowLeft ArrowRight Shift+ArrowUp Shift+ArrowDown Shift+ArrowLeft Shift+ArrowRight";
 
 /// The picture as it will be saved, with the crop box over it. The room
 /// around it takes the pointer too, so a drag can go past the picture.
@@ -1023,6 +1084,7 @@ fn ImageCanvas(
             return;
         }
         drag.set_value(Some(Drag {
+            pointer: e.pointer_id(),
             handle,
             from: (f64::from(e.client_x()), f64::from(e.client_y())),
             start: shape.with_untracked(|s| s.crop),
@@ -1036,7 +1098,7 @@ fn ImageCanvas(
         let (Some(d), Some((w, h))) = (drag.get_value(), size.get_untracked()) else {
             return;
         };
-        if !e.is_primary() {
+        if e.pointer_id() != d.pointer {
             return;
         }
         let (fw, fh) = frame.get_untracked();
@@ -1047,8 +1109,12 @@ fn ImageCanvas(
         next.crop = d.start.dragged(d.handle, dx, dy, fw, fh, ratio());
         on_live.run(next);
     };
-    let end_drag = move || {
-        if drag.get_value().is_some() {
+    // Only the pointer dragging ends the drag: another finger lifting doesn't.
+    let end_drag = move |e: PointerEvent| {
+        if drag
+            .get_value()
+            .is_some_and(|d| d.pointer == e.pointer_id())
+        {
             drag.set_value(None);
             dragging.set(false);
             on_settle.run(());
@@ -1081,8 +1147,10 @@ fn ImageCanvas(
             view! {
                 <span
                     class=format!("crop-handle {name}")
+                    role="button"
                     tabindex="0"
                     aria-label=move || handle_label(handle)
+                    aria-keyshortcuts=ARROW_KEYS
                     on:pointerdown=move |e| begin(handle, e)
                     on:keydown=move |e| key(handle, e)
                     on:keyup=key_up
@@ -1098,9 +1166,9 @@ fn ImageCanvas(
             class="editor-canvas"
             class:dragging=move || dragging.get()
             on:pointermove=moved
-            on:pointerup=move |_| end_drag()
-            on:pointercancel=move |_| end_drag()
-            on:lostpointercapture=move |_| end_drag()
+            on:pointerup=end_drag
+            on:pointercancel=end_drag
+            on:lostpointercapture=end_drag
         >
             <div
                 class="editor-frame"
@@ -1121,11 +1189,15 @@ fn ImageCanvas(
                     />
                     <div class="crop-shade" style=move || crop.get().style()></div>
                 </div>
+                // A group, not a button: a button's insides, the handles,
+                // would be hidden from a screen reader.
                 <div
                     class="crop-box"
                     style=move || crop.get().style()
+                    role="group"
                     tabindex="0"
                     aria-label=move || handle_label(Handle::Move)
+                    aria-keyshortcuts=ARROW_KEYS
                     on:pointerdown=move |e| begin(Handle::Move, e)
                     on:keydown=move |e| key(Handle::Move, e)
                     on:keyup=key_up
@@ -1165,7 +1237,8 @@ fn TrimTools(
     on_seek: Callback<i64>,
 ) -> impl IntoView {
     let track: NodeRef<html::Div> = NodeRef::new();
-    let grab = StoredValue::new(None::<Grab>);
+    // What is held, and by which pointer.
+    let grab = StoredValue::new(None::<(Grab, i32)>);
     let shown = Memo::new(move |_| start.with(|s| end.with(|e| trim_shown(s, e, duration))));
     let time_of = move |e: &PointerEvent| -> i64 {
         track.get_untracked().map_or(0, |el| {
@@ -1201,7 +1274,7 @@ fn TrimTools(
             return;
         }
         e.prevent_default();
-        grab.set_value(Some(g));
+        grab.set_value(Some((g, e.pointer_id())));
         sliding.set(true);
         if let Some(el) = track.get_untracked() {
             let _ = el.set_pointer_capture(e.pointer_id());
@@ -1212,12 +1285,15 @@ fn TrimTools(
         }
     };
     let moved = move |e: PointerEvent| {
-        if let Some(g) = grab.get_value() {
+        if let Some((g, by)) = grab.get_value()
+            && by == e.pointer_id()
+        {
             follow(g, &e);
         }
     };
-    let release = move || {
-        if grab.get_value().is_some() {
+    // Only the pointer holding lets go: another finger lifting doesn't.
+    let release = move |e: PointerEvent| {
+        if grab.get_value().is_some_and(|(_, by)| by == e.pointer_id()) {
             grab.set_value(None);
             sliding.set(false);
         }
@@ -1291,9 +1367,9 @@ fn TrimTools(
                 class="timeline"
                 on:pointerdown=move |e: PointerEvent| begin(Grab::Playhead, &e)
                 on:pointermove=moved
-                on:pointerup=move |_| release()
-                on:pointercancel=move |_| release()
-                on:lostpointercapture=move |_| release()
+                on:pointerup=release
+                on:pointercancel=release
+                on:lostpointercapture=release
             >
                 <div class="timeline-track">
                     <div

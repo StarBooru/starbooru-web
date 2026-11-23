@@ -10,6 +10,7 @@ use starbooru_core::Share;
 use super::LinkField;
 use crate::api;
 use crate::components::banner::{ErrorBanner, Spinner};
+use crate::components::confirm::ConfirmButton;
 use crate::components::icons::{Ico, Icon};
 use crate::logic::share::{expired, share_name, share_status, share_url};
 
@@ -82,17 +83,28 @@ pub fn SharesCard() -> impl IntoView {
                 });
                 let posts = s.posts;
                 let status = share_status(&s, now);
+                let id = s.id;
+                let label = {
+                    let name = name.clone();
+                    Signal::derive(move || t!("shares-delete-named", name = name.clone()))
+                };
                 view! {
                     <li class="session share">
                         <div class="share-cover">{cover}</div>
                         <div class="session-main">
-                            <strong class="break">{name.clone()}</strong>
+                            <strong class="break">{name}</strong>
                             <span class="pill">{move || t!("share-posts", count = posts)}</span>
                             {gone}
                             <span class="muted">{status}</span>
                             {url.map(|url| view! { <LinkField url=url /> })}
                         </div>
-                        <ShareDelete id=s.id name=name busy=busy on_delete=remove />
+                        <ConfirmButton
+                            icon=Icon::Delete
+                            title=Signal::derive(|| t!("shares-delete"))
+                            label=label
+                            disabled=busy
+                            on_confirm=Callback::new(move |()| remove.run(id))
+                        />
                     </li>
                 }
             })
@@ -123,37 +135,5 @@ pub fn SharesCard() -> impl IntoView {
             </Show>
             {rows}
         </section>
-    }
-}
-
-/// Removes one link, after a second press that says "Sure?".
-#[component]
-fn ShareDelete(
-    id: i64,
-    name: String,
-    busy: RwSignal<bool>,
-    on_delete: Callback<i64>,
-) -> impl IntoView {
-    let confirm = RwSignal::new(false);
-    view! {
-        <button
-            type="button"
-            class=move || if confirm.get() { "btn danger small" } else { "icon-btn danger" }
-            title=move || t!("shares-delete")
-            aria-label=move || t!("shares-delete-named", name = name.clone())
-            disabled=move || busy.get()
-            on:blur=move |_| confirm.set(false)
-            on:click=move |_| {
-                if confirm.get_untracked() {
-                    confirm.set(false);
-                    on_delete.run(id);
-                } else {
-                    confirm.set(true);
-                }
-            }
-        >
-            <Ico icon=Icon::Delete />
-            <Show when=move || confirm.get()>{move || t!("sure")}</Show>
-        </button>
     }
 }

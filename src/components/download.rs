@@ -7,11 +7,12 @@ use std::time::Duration;
 use leptos::ev::MouseEvent;
 use leptos::prelude::*;
 use leptos::task::spawn_local;
-use wasm_bindgen::{JsCast, JsValue};
+use wasm_bindgen::JsCast;
 use wasm_bindgen_futures::JsFuture;
 
 use super::icons::{Ico, Icon};
 use super::snackbar::notify;
+use crate::dom;
 use crate::logic::viewer::same_origin;
 
 /// A button that saves `href`, a signed media address, as `name`. `label`
@@ -36,8 +37,8 @@ pub fn DownloadLink(
         e.prevent_default();
         let (href, name) = (target.clone(), file.clone());
         spawn_local(async move {
-            if let Err(reason) = save(&href, &name).await {
-                notify(t!("download-failed", reason = reason));
+            if let Err(failed) = save(&href, &name).await {
+                notify(failed.text());
             }
         });
     };
@@ -57,40 +58,62 @@ pub fn start(href: String, name: String) {
         return;
     }
     spawn_local(async move {
-        if let Err(reason) = save(&href, &name).await {
-            notify(t!("download-failed", reason = reason));
+        if let Err(failed) = save(&href, &name).await {
+            notify(failed.text());
         }
     });
 }
 
 fn page_origin() -> String {
-    web_sys::window()
-        .and_then(|w| w.location().origin().ok())
-        .unwrap_or_default()
+    dom::origin().unwrap_or_default()
 }
 
-/// What went wrong, as the browser put it.
-fn reason(e: JsValue) -> String {
-    e.dyn_ref::<js_sys::Error>()
-        .map(|e| String::from(e.message()))
-        .or_else(|| e.as_string())
-        .unwrap_or_default()
+/// Why a download failed.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum Failed {
+    /// The signed link ran out, or the file has gone since the page loaded.
+    Expired,
+    /// The network, the server, or the browser: trying again may work.
+    Other,
 }
 
-async fn save(href: &str, name: &str) -> Result<(), String> {
-    let window = web_sys::window().ok_or_else(String::new)?;
+impl Failed {
+    /// From the status the media server answered with.
+    fn of_status(status: u16) -> Self {
+        match status {
+            403 | 404 | 410 => Failed::Expired,
+            _ => Failed::Other,
+        }
+    }
+
+    fn text(self) -> String {
+        match self {
+            Failed::Expired => t!("download-expired"),
+            Failed::Other => t!("download-failed"),
+        }
+    }
+}
+
+/// The browser's words for what went wrong aren't the user's language, and
+/// say nothing to act on.
+fn other<T>(_: T) -> Failed {
+    Failed::Other
+}
+
+async fn save(href: &str, name: &str) -> Result<(), Failed> {
+    let window = web_sys::window().ok_or(Failed::Other)?;
     let answer = JsFuture::from(window.fetch_with_str(href))
         .await
-        .map_err(reason)?;
-    let response: web_sys::Response = answer.dyn_into().map_err(reason)?;
+        .map_err(other)?;
+    let response: web_sys::Response = answer.dyn_into().map_err(other)?;
     if !response.ok() {
-        return Err(format!("HTTP {}", response.status()));
+        return Err(Failed::of_status(response.status()));
     }
-    let body = JsFuture::from(response.blob().map_err(reason)?)
+    let body = JsFuture::from(response.blob().map_err(other)?)
         .await
-        .map_err(reason)?;
-    let blob: web_sys::Blob = body.dyn_into().map_err(reason)?;
-    let url = web_sys::Url::create_object_url_with_blob(&blob).map_err(reason)?;
+        .map_err(other)?;
+    let blob: web_sys::Blob = body.dyn_into().map_err(other)?;
+    let url = web_sys::Url::create_object_url_with_blob(&blob).map_err(other)?;
     click_link(&url, name);
     // Long enough for the browser to have taken the file.
     set_timeout(
@@ -122,5 +145,25 @@ fn click_link(href: &str, name: &str) {
         let _ = body.append_child(&link);
         link.click();
         link.remove();
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn a_link_run_out_says_to_reload() {
+        for status in [403, 404, 410] {
+            assert_eq!(Failed::of_status(status), Failed::Expired, "{status}");
+        }
+        for status in [400, 429, 500, 502, 503] {
+            assert_eq!(Failed::of_status(status), Failed::Other, "{status}");
+        }
+        assert_eq!(
+            Failed::Expired.text(),
+            "The link to this file has expired. Reload the page and try again."
+        );
+        assert!(!Failed::Other.text().contains("HTTP"));
     }
 }

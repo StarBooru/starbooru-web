@@ -62,16 +62,6 @@ impl Tab {
 
 // ---------- the overview ----------
 
-/// A size from the server, which counts in `u64`.
-pub fn size(bytes: u64) -> String {
-    human_size(bytes)
-}
-
-/// When the server started: "3 minutes ago", "yesterday", or its date.
-pub fn started(at: DateTime<Utc>, now: DateTime<Utc>) -> String {
-    ago(at, now)
-}
-
 /// A day of the chart, as its axis and tooltips show it: `22/11`.
 pub fn day_label(day: &DayCount) -> String {
     day.day.format("%d/%m").to_string()
@@ -141,6 +131,7 @@ pub fn parse_quota(text: &str) -> Result<Option<u64>, BadQuota> {
         "" | "g" | "gb" | "gib" => 1.0,
         "m" | "mb" | "mib" => 1.0 / 1024.0,
         "k" | "kb" | "kib" => 1.0 / (1024.0 * 1024.0),
+        "b" => 1.0 / GIB,
         "t" | "tb" | "tib" => 1024.0,
         _ => return Err(BadQuota),
     };
@@ -155,17 +146,51 @@ pub fn parse_quota(text: &str) -> Result<Option<u64>, BadQuota> {
     Ok(Some((gb * GIB).round() as u64))
 }
 
-/// A limit in GB for the field: `1.5 GB`, `10 GB`, `0.25 GB`.
+/// A limit for the field, in the largest unit that gives back the very same
+/// bytes once saved: `1.5 TB`, `10 GB`, `500 MB`. Under a gigabyte that's MB
+/// or smaller, never a rounded share of a GB.
 pub fn quota_text(bytes: u64) -> String {
-    let text = format!("{:.2}", bytes as f64 / GIB);
-    format!("{} GB", text.trim_end_matches('0').trim_end_matches('.'))
+    const UNITS: [(u64, &str); 4] = [
+        (1 << 40, "TB"),
+        (1 << 30, "GB"),
+        (1 << 20, "MB"),
+        (1 << 10, "KB"),
+    ];
+    if bytes == 0 {
+        return "0 GB".to_owned();
+    }
+    UNITS
+        .into_iter()
+        .filter(|(unit, _)| bytes >= *unit)
+        .map(|(unit, name)| {
+            let number = format!("{:.2}", bytes as f64 / unit as f64);
+            let number = number.trim_end_matches('0').trim_end_matches('.');
+            format!("{number} {name}")
+        })
+        .find(|text| parse_quota(text) == Ok(Some(bytes)))
+        .unwrap_or_else(|| format!("{bytes} B"))
+}
+
+/// What saving the limit field sends: `Some` with the new limit only when
+/// it differs from `saved`, so a limit read back and left alone is never
+/// sent again.
+pub fn quota_change(typed: &str, saved: Option<u64>) -> Result<Option<Option<u64>>, BadQuota> {
+    if typed.trim() == saved.map(quota_text).unwrap_or_default() {
+        return Ok(None);
+    }
+    let limit = parse_quota(typed)?;
+    Ok((limit != saved).then_some(limit))
 }
 
 /// "3 posts · 1.5 KB of 1.0 GB", or without the limit when there is none.
 pub fn usage_line(user: &AdminUser) -> String {
     let used = match user.quota_bytes {
-        Some(quota) => t!("usage-of", used = size(user.bytes), quota = size(quota)),
-        None => size(user.bytes),
+        Some(quota) => t!(
+            "usage-of",
+            used = human_size(user.bytes),
+            quota = human_size(quota)
+        ),
+        None => human_size(user.bytes),
     };
     format!("{} · {used}", t!("posts-count", count = user.posts))
 }
@@ -228,6 +253,10 @@ pub fn check_settings(
 
 // ---------- backups ----------
 
+/// How often the list is read again while a backup is being made, in
+/// milliseconds.
+pub const BACKUP_POLL_MS: i32 = 3000;
+
 /// The command shown under "Restoring".
 pub const RESTORE_COMMAND: &str =
     "pg_restore --clean --if-exists --no-owner -d \"$DATABASE_URL\" starbooru-….dump";
@@ -242,7 +271,7 @@ where
 
 /// "80.0 KB · starbooru-auto-20261122-233957.dump".
 pub fn backup_line(backup: &Backup) -> String {
-    format!("{} · {}", size(backup.bytes), backup.name)
+    format!("{} · {}", human_size(backup.bytes), backup.name)
 }
 
 /// What the schedule's form says of what's typed.
@@ -316,7 +345,7 @@ pub fn hardware_line(hw: &Hardware) -> String {
     }
     parts.push(t!("admin-ai-hw-threads", count = hw.threads));
     if hw.ram_total > 0 {
-        parts.push(t!("admin-ai-hw-memory", total = size(hw.ram_total)));
+        parts.push(t!("admin-ai-hw-memory", total = human_size(hw.ram_total)));
     }
     parts.extend(hw.gpus.iter().map(|gpu| gpu.name.clone()));
     parts.join(" · ")
@@ -376,6 +405,33 @@ pub fn wanted_model(tool: &AiToolStatus) -> Option<&AiModelOption> {
         tool.settings.model.as_str()
     };
     tool.models.iter().find(|m| m.id == id)
+}
+
+/// What a model's row offers.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ModelState {
+    /// Downloading, or waiting to.
+    Downloading,
+    /// Installed and answering for its tool.
+    InUse,
+    /// Installed: to use, or to uninstall.
+    Installed,
+    /// To install, or to try again after a download that `failed`.
+    Installable { failed: bool },
+    /// Too big for this machine's memory.
+    TooBig,
+}
+
+pub fn model_state(m: &AiModelOption, in_use: bool) -> ModelState {
+    match (m.progress.is_some(), m.installed, m.fits) {
+        (true, _, _) => ModelState::Downloading,
+        (false, true, _) if in_use => ModelState::InUse,
+        (false, true, _) => ModelState::Installed,
+        (false, false, true) => ModelState::Installable {
+            failed: m.error.is_some(),
+        },
+        (false, false, false) => ModelState::TooBig,
+    }
 }
 
 /// Whether something in the panel is about to change by itself: the
@@ -546,15 +602,57 @@ mod tests {
             assert_eq!(parse_quota(bad), Err(BadQuota), "{bad}");
         }
         assert_eq!(parse_quota("1000001"), Err(BadQuota));
+        assert_eq!(parse_quota("1536 B"), Ok(Some(1536)));
+    }
+
+    #[test]
+    fn a_limit_reads_back_exactly_as_it_was_set() {
         assert_eq!(quota_text(1 << 30), "1 GB");
         assert_eq!(quota_text(3 << 29), "1.5 GB");
         assert_eq!(quota_text(10 << 30), "10 GB");
-        assert_eq!(quota_text(1 << 28), "0.25 GB");
         assert_eq!(quota_text(0), "0 GB");
-        for text in ["2.5 GB", "0.25 GB", "100 GB"] {
+        // Under a gigabyte, megabytes: never 0.49 GB, nor 0 for a small one.
+        assert_eq!(quota_text(500 << 20), "500 MB");
+        assert_eq!(quota_text(5 << 20), "5 MB");
+        assert_eq!(quota_text(1 << 28), "256 MB");
+        assert_eq!(quota_text(3 << 39), "1.5 TB");
+        // What no short number gives back exactly goes down a unit, as far
+        // as bytes.
+        assert_eq!(quota_text(5_000_000_000), "4882812.5 KB");
+        assert_eq!(quota_text(1001), "1001 B");
+        for bytes in [
+            500 << 20,
+            5 << 20,
+            1 << 30,
+            3 << 39,
+            1,
+            1023,
+            (1 << 30) - 1,
+            5_000_000_000,
+            123_456_789_012,
+        ] {
+            let text = quota_text(bytes);
+            assert_eq!(parse_quota(&text), Ok(Some(bytes)), "{text}");
+        }
+        for text in ["2.5 GB", "100 GB", "500 MB", "5 MB", "1 GB", "1.5 TB"] {
             let bytes = parse_quota(text).unwrap().unwrap();
             assert_eq!(quota_text(bytes), text);
         }
+    }
+
+    #[test]
+    fn a_limit_is_sent_only_when_it_changes() {
+        let half = Some(500 << 20);
+        // Left as it was read back, or typed again another way.
+        assert_eq!(quota_change("500 MB", half), Ok(None));
+        assert_eq!(quota_change(" 500 MB ", half), Ok(None));
+        assert_eq!(quota_change("0,48828125 GB", half), Ok(None));
+        assert_eq!(quota_change("", None), Ok(None));
+        // A new one, or none at all.
+        assert_eq!(quota_change("1", half), Ok(Some(Some(1 << 30))));
+        assert_eq!(quota_change("", half), Ok(Some(None)));
+        assert_eq!(quota_change("5 MB", None), Ok(Some(Some(5 << 20))));
+        assert_eq!(quota_change("lots", half), Err(BadQuota));
     }
 
     #[test]
@@ -577,17 +675,6 @@ mod tests {
         let tokyo = FixedOffset::east_opt(9 * 3600).unwrap();
         let text = line(&user, &tokyo);
         assert!(text.ends_with("joined 2027-01-15"), "{text}");
-    }
-
-    #[test]
-    fn the_start_reads_as_a_time_ago() {
-        let start = |minutes| now() - TimeDelta::minutes(minutes);
-        assert_eq!(started(start(3), now()), "3 minutes ago");
-        assert_eq!(started(start(11 * 60 + 40), now()), "11 hours ago");
-        assert_eq!(started(start(36 * 60), now()), "yesterday");
-        assert_eq!(started(start(3 * 24 * 60), now()), "3 days ago");
-        // A clock a little ahead of the server's.
-        assert_eq!(started(now() + TimeDelta::seconds(20), now()), "just now");
     }
 
     #[test]
@@ -730,6 +817,31 @@ mod tests {
         assert_eq!(sentence(" Done. "), "Done.");
         assert_eq!(sentence("è già spento"), "È già spento.");
         assert_eq!(sentence(""), "");
+    }
+
+    #[test]
+    fn a_models_row_offers_what_fits_its_state() {
+        let mut m = AiModelOption {
+            fits: true,
+            ..AiModelOption::default()
+        };
+        assert_eq!(
+            model_state(&m, false),
+            ModelState::Installable { failed: false }
+        );
+        m.error = Some("the download stopped".into());
+        assert_eq!(
+            model_state(&m, false),
+            ModelState::Installable { failed: true }
+        );
+        m.fits = false;
+        assert_eq!(model_state(&m, false), ModelState::TooBig);
+        m.installed = true;
+        assert_eq!(model_state(&m, false), ModelState::Installed);
+        assert_eq!(model_state(&m, true), ModelState::InUse);
+        // A download, an update say, comes before the rest.
+        m.progress = Some(starbooru_core::AiInstallProgress { done: 1, total: 2 });
+        assert_eq!(model_state(&m, true), ModelState::Downloading);
     }
 
     #[test]
