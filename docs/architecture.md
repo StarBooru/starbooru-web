@@ -35,9 +35,10 @@ src/
   store.rs      session and preferences in localStorage
   theme.rs      the browser's bar colour (theme-color) from the seed hue
   i18n.rs       t!() over the Fluent catalogues
-  pages/        one module per page; shell.rs is the frame, soon.rs the placeholder
-  components/   icons, brand, snackbar; later tiles, chips, menus, the tag box, the viewer stage
-  logic/        pure Rust with unit tests: server addresses; later tile layout, zoom, the word at the caret, file names
+  pages/        one module per page; shell.rs is the frame, soon.rs the placeholder, post/ the viewer
+  components/   icons, brand, snackbar, tiles, downloads; later chips, menus, the tag box
+  logic/        pure Rust with unit tests: server addresses, the gallery's lists and layout, zoom, the viewer's
+                tags, details and file names; later the word at the caret
 locales/        en.ftl, it.ftl
 style/          tokens.css, base.css, shell.css, pages/<page>.css
 index.html      Trunk's entry, with the loading screen

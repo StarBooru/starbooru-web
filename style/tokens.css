@@ -42,6 +42,12 @@
   /* the third light of the sign-in screen's aurora, after --primary and
      --tertiary: the same in both themes */
   --aurora: oklch(0.75 0.14 calc(var(--h) - 60) / 0.35);
+  /* the viewer in fullscreen: dark in both themes, whatever the picture */
+  --stage-glass: oklch(0.2 0.015 var(--h) / 0.62);
+  --stage-glass-edge: oklch(1 0 0 / 0.14);
+  --stage-glass-line: oklch(1 0 0 / 0.08);
+  --on-stage: oklch(0.96 0.01 var(--h));
+  --on-stage-2: oklch(0.86 0.015 var(--h));
   /* controls over media: the stage is dark in both themes */
   --scrim: oklch(0.12 0.01 var(--h) / 0.55);
   --on-scrim: oklch(0.97 0.01 var(--h));

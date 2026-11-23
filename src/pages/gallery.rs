@@ -30,8 +30,8 @@ use crate::components::thumb::Thumb;
 use crate::dom;
 use crate::logic::gallery::{
     List, Lists, MAX_RESTORE, PAGE_SIZE, SORTS, Seeds, colored, current_color, current_sort,
-    is_random, merge_head, mix_seed, page_after_restore, rest, restore_request, single_tag, sorted,
-    title,
+    is_random, merge_head, mix_seed, mostly_hidden, page_after_restore, rest, restore_request,
+    single_tag, sorted, title, to_middle,
 };
 use crate::logic::layout::{self, Layout, TILE_GAP};
 use crate::route;
@@ -42,6 +42,34 @@ thread_local! {
     static SEEDS: RefCell<Seeds> = RefCell::new(Seeds::default());
     /// The grid's width, kept so coming back lays it out at once.
     static GRID_WIDTH: Cell<f64> = const { Cell::new(0.0) };
+    /// The post the viewer showed last, and for which account and search.
+    static VIEWED: RefCell<Option<(String, String, i64)>> = const { RefCell::new(None) };
+}
+
+/// The viewer is showing post `id` of search `q`. Back in the gallery, that
+/// post's tile is brought into sight, wherever previous and next led.
+pub fn viewed(q: &str, id: i64) {
+    VIEWED.with_borrow_mut(|v| *v = Some((store::owner(), q.trim().to_owned(), id)));
+}
+
+/// The post the viewer showed last for search `q`, once.
+fn take_viewed(q: &str) -> Option<i64> {
+    let owner = store::owner();
+    VIEWED
+        .with_borrow_mut(Option::take)
+        .filter(|(whose, of, _)| *whose == owner && of == q.trim())
+        .map(|(_, _, id)| id)
+}
+
+/// Pages of results the gallery loads, at most, to find the viewer's last post.
+const SEEK_PAGES: u8 = 5;
+
+/// Bringing the viewer's last post into sight: waiting for the spot to be put
+/// back first, or for more results to look in.
+#[derive(Clone, Copy, Debug, PartialEq)]
+enum Seek {
+    Landing(i64, u8),
+    Loading(i64, u8),
 }
 
 /// The seed to shuffle search `q` with, picking one the first time. `None`
@@ -71,11 +99,21 @@ fn keep_list(list: List) {
     LISTS.with_borrow_mut(|l| l.keep(list));
 }
 
+thread_local! {
+    // Reference counted, as it outlives any one gallery.
+    static CHANGED: ArcRwSignal<u32> = ArcRwSignal::new(0);
+}
+
 /// Drops the kept results, after a change that can move posts in or out of
-/// any of them.
-#[allow(dead_code, reason = "editing and deleting posts call it")]
+/// any of them. A gallery on the page loads its results again.
 pub fn forget_lists() {
     LISTS.with_borrow_mut(Lists::clear);
+    CHANGED.with(|c| c.update(|n| *n = n.wrapping_add(1)));
+}
+
+/// Takes a post that went to the recycle bin out of the kept results.
+pub fn forget_post(id: i64) {
+    LISTS.with_borrow_mut(|l| l.drop_post(id));
 }
 
 /// The grid's measurements as they are now.
@@ -304,6 +342,9 @@ pub fn Gallery() -> impl IntoView {
     ));
     let masonry: NodeRef<html::Div> = NodeRef::new();
     let alive = Arc::new(AtomicBool::new(true));
+    // Bumped each time the spot has been put back.
+    let landed = RwSignal::new(0_u32);
+    let seek = StoredValue::new(None::<Seek>);
 
     // The part of the grid near the screen, a quarter of a screen at a time.
     let check_near = move |force: bool| {
@@ -329,7 +370,10 @@ pub fn Gallery() -> impl IntoView {
             tiles.with_untracked(|t| posts.with_untracked(|p| g.tile_top(t, p, id)))
         });
         request_animation_frame(move || {
-            put_back(5, top, offset, y, masonry, move || check_near(true));
+            put_back(5, top, offset, y, masonry, move || {
+                check_near(true);
+                landed.try_update(|n| *n = n.wrapping_add(1));
+            });
         });
     };
 
@@ -478,6 +522,7 @@ pub fn Gallery() -> impl IntoView {
         if parse_query(&q).is_ok() {
             store::visit_search(&q);
         }
+        seek.set_value(take_viewed(&q).map(|id| Seek::Landing(id, SEEK_PAGES)));
         shown_q.set(q.clone());
         loading.set(false);
         error.set(None);
@@ -512,12 +557,24 @@ pub fn Gallery() -> impl IntoView {
         match store::spot(&q).filter(|s| s.y >= 1.0 && s.count > 0 && !is_random(&q)) {
             Some(spot) => restore(spot),
             None => {
+                // No spot to land on: the viewer's post is looked for as the
+                // first page comes in.
+                if let Some(Seek::Landing(id, pages)) = seek.get_value() {
+                    seek.set_value(Some(Seek::Loading(id, pages)));
+                }
                 dom::scroll_to(0.0, false);
                 load_more();
             }
         }
     };
     Effect::watch(move || q.get(), move |q, _, _| restart(q.clone()), true);
+    // Posts came back from the recycle bin.
+    let changed = CHANGED.with(Clone::clone);
+    Effect::watch(
+        move || changed.get(),
+        move |_, _, _| restart(shown_q.get_untracked()),
+        false,
+    );
 
     // More of the list comes before the user gets to the end of it.
     Effect::new(move |_| {
@@ -556,6 +613,55 @@ pub fn Gallery() -> impl IntoView {
             count: u32::try_from(count).unwrap_or(u32::MAX),
         });
     };
+
+    // The viewer may have moved on, with previous and next, to a post far from
+    // the spot: its tile comes to the middle of the window when it's mostly
+    // out of sight, loading a few more pages to find it if need be.
+    let reveal = move || {
+        let Some(Seek::Landing(id, pages) | Seek::Loading(id, pages)) = seek.get_value() else {
+            return;
+        };
+        let Grid { tile, gap, .. } = grid.get_untracked();
+        let found = tiles.with_untracked(|t| {
+            posts.with_untracked(|p| {
+                let index = p.iter().position(|p| p.id == id)?;
+                let place = t.tiles.get(index)?;
+                Some((place.top.px(tile, gap), place.height.px(tile, gap)))
+            })
+        });
+        let Some((top, height)) = found else {
+            if pages > 0 && has_more.get_untracked() && error.with_untracked(Option::is_none) {
+                seek.set_value(Some(Seek::Loading(id, pages - 1)));
+                load_more();
+            } else {
+                seek.set_value(None);
+            }
+            return;
+        };
+        seek.set_value(None);
+        let Some(el) = masonry.get_untracked() else {
+            return;
+        };
+        let start = el.get_bounding_client_rect().top() + top;
+        let (from, to) = (dom::bar_bottom(), dom::dock_top());
+        if mostly_hidden(start, height, from, to) {
+            let (y, _) = dom::scroll();
+            dom::scroll_to(y + to_middle(start, height, from, to), false);
+            check_near(true);
+            report();
+        }
+    };
+    Effect::watch(move || landed.get(), move |_, _, _| reveal(), false);
+    // More results came in while looking for that tile.
+    Effect::watch(
+        move || posts.with(Vec::len),
+        move |_, _, _| {
+            if matches!(seek.get_value(), Some(Seek::Loading(..))) {
+                request_animation_frame(reveal);
+            }
+        },
+        false,
+    );
 
     // A new layout moves everything, so the same tile goes back to the top. A
     // width within the same columns only scales it.
@@ -650,6 +756,8 @@ pub fn Gallery() -> impl IntoView {
             })
         })
     };
+    // The viewer shows the tile's post while it loads the rest of it.
+    let open = Callback::new(move |post| super::post::opening(post, shown_q.get_untracked()));
     let tile_view = move |(index, _): (usize, i64)| {
         let post = posts.with_untracked(|p| p.get(index).cloned())?;
         let id = post.id;
@@ -659,7 +767,9 @@ pub fn Gallery() -> impl IntoView {
             route::post(id, &q, seed(&q))
         });
         let still = index < settled.get_untracked() || !in_sight(index);
-        Some(view! { <Thumb post=post index=index href=href place=place still=still /> })
+        Some(
+            view! { <Thumb post=post index=index href=href place=place still=still on_open=open /> },
+        )
     };
     // The entrance plays for what arrives with a page, not for tiles there
     // before it.

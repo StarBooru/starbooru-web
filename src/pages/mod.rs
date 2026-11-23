@@ -2,6 +2,7 @@
 
 pub mod gallery;
 pub mod login;
+pub mod post;
 pub mod shell;
 pub mod soon;
 

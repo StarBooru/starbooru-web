@@ -51,6 +51,51 @@ pub fn on_window(event: &'static str, cb: impl FnMut() + 'static) -> Watch {
     })
 }
 
+/// Calls `cb` with every `event` on `target`. A passive listener can't
+/// cancel the event, and lets the browser scroll without waiting for it.
+pub fn listen(
+    target: &web_sys::EventTarget,
+    event: &'static str,
+    passive: bool,
+    cb: impl FnMut(web_sys::Event) + 'static,
+) -> Watch {
+    let closure = Closure::<dyn FnMut(web_sys::Event)>::new(cb);
+    let options = web_sys::AddEventListenerOptions::new();
+    options.set_passive(passive);
+    let added = target.add_event_listener_with_callback_and_add_event_listener_options(
+        event,
+        closure.as_ref().unchecked_ref(),
+        &options,
+    );
+    if added.is_err() {
+        return Watch::none();
+    }
+    let target = target.clone();
+    Watch::new(move || {
+        let _ = target.remove_event_listener_with_callback(event, closure.as_ref().unchecked_ref());
+        drop(closure);
+    })
+}
+
+/// Waits `ms` milliseconds.
+pub async fn sleep(ms: i32) {
+    let promise = js_sys::Promise::new(&mut |done, _| {
+        if let Some(window) = web_sys::window() {
+            let _ = window.set_timeout_with_callback_and_timeout_and_arguments_0(&done, ms);
+        }
+    });
+    let _ = wasm_bindgen_futures::JsFuture::from(promise).await;
+}
+
+/// Whether an event comes from a place the user types in, where keys are
+/// text and not commands.
+pub fn typing(target: Option<web_sys::EventTarget>) -> bool {
+    let Some(el) = target.and_then(|t| t.dyn_into::<web_sys::HtmlElement>().ok()) else {
+        return false;
+    };
+    el.is_content_editable() || matches!(el.tag_name().as_str(), "INPUT" | "TEXTAREA" | "SELECT")
+}
+
 /// Calls `cb` with the exact width of `el` now and whenever it changes. A
 /// rounded width adds up to a visible error far down a grid.
 pub fn on_width(el: &Element, mut cb: impl FnMut(f64) + 'static) -> Watch {
@@ -144,6 +189,19 @@ pub fn bar_bottom() -> f64 {
         .and_then(|w| w.document())
         .and_then(|d| d.query_selector(".topbar").ok().flatten())
         .map_or(0.0, |bar| bar.get_bounding_client_rect().bottom())
+}
+
+/// The top edge of the navigation at the bottom of a phone, or the bottom of
+/// the window where there's none: what's below it is hidden behind it.
+pub fn dock_top() -> f64 {
+    let (_, tall) = scroll();
+    web_sys::window()
+        .and_then(|w| w.document())
+        .and_then(|d| d.query_selector(".nav-bottom").ok().flatten())
+        .map(|nav| nav.get_bounding_client_rect())
+        // At the side, as a rail, it takes no height from the window.
+        .filter(|r| r.width() > r.height() && r.top() > 0.0)
+        .map_or(tall, |r| r.top())
 }
 
 /// Puts class `name` on `<html>`, or takes it off.

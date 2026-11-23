@@ -6,7 +6,7 @@ use std::cell::RefCell;
 use std::rc::Rc;
 use std::sync::Arc;
 
-use leptos::ev::PointerEvent;
+use leptos::ev::{MouseEvent, PointerEvent};
 use leptos::html;
 use leptos::prelude::*;
 use send_wrapper::SendWrapper;
@@ -37,7 +37,8 @@ fn place_style(p: Place) -> String {
 
 /// `index` is the post's place in the list, for a staggered entrance within a
 /// page of results; `still` skips the entrance, for a tile that isn't new to
-/// the user. `place` is its spot in the layout.
+/// the user. `place` is its spot in the layout. `on_open` hears of a click
+/// that opens the post here, and not one for a new tab.
 #[component]
 pub fn Thumb(
     post: Arc<Post>,
@@ -45,7 +46,16 @@ pub fn Thumb(
     #[prop(into)] href: Signal<String>,
     #[prop(into)] place: Signal<Option<Place>>,
     still: bool,
+    #[prop(optional)] on_open: Option<Callback<Arc<Post>>>,
 ) -> impl IntoView {
+    let opened = Arc::clone(&post);
+    let click = move |e: MouseEvent| {
+        let plain =
+            e.button() == 0 && !(e.ctrl_key() || e.meta_key() || e.shift_key() || e.alt_key());
+        if let Some(open) = on_open.filter(|_| plain) {
+            open.run(Arc::clone(&opened));
+        }
+    };
     let client = api::client();
     let src = post
         .thumb_url
@@ -142,7 +152,15 @@ pub fn Thumb(
         MediaKind::Image => None,
     };
     view! {
-        <a class="thumb" class:still=still class:loaded=loaded style=style href=move || href.get() aria-label=label>
+        <a
+            class="thumb"
+            class:still=still
+            class:loaded=loaded
+            style=style
+            href=move || href.get()
+            aria-label=label
+            on:click=click
+        >
             <div
                 class="thumb-media"
                 on:pointerenter=move |e: PointerEvent| {

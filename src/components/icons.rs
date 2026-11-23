@@ -14,10 +14,16 @@ pub enum Icon {
     ChevronLeft,
     ChevronRight,
     Close,
+    /// Editing a picture.
+    Crop,
+    /// Trimming a video.
+    Cut,
     Delete,
     Download,
     Edit,
     Explore,
+    Fullscreen,
+    FullscreenExit,
     Gallery,
     Help,
     /// A tag.
@@ -40,6 +46,8 @@ pub enum Icon {
     /// Settings.
     Tune,
     Upload,
+    ZoomIn,
+    ZoomOut,
 }
 
 /// How an icon's path data is painted.
@@ -67,6 +75,12 @@ impl Icon {
             Icon::Close => Shape::EvenOdd(
                 "M4.575 4.576a1.5 1.5 0 0 1 2.122 0L12 9.88l5.303-5.303a1.5 1.5 0 0 1 2.122 2.121l-5.304 5.304l5.304 5.303a1.5 1.5 0 1 1-2.122 2.121L12 14.122l-5.303 5.303a1.5 1.5 0 1 1-2.122-2.12L9.88 12L4.575 6.697a1.5 1.5 0 0 1 0-2.12",
             ),
+            Icon::Crop => Shape::Fill(
+                "M7.5 3a1.5 1.5 0 1 0-3 0zM18 16.5a1.5 1.5 0 0 0 0 3zm3 3a1.5 1.5 0 0 0 0-3zM16.5 21a1.5 1.5 0 0 0 3 0zM6 7.5a1.5 1.5 0 1 0 0-3zm-3-3a1.5 1.5 0 1 0 0 3zM6 3H4.5v14h3V3zm12 15v1.5h3v-3h-3zM7 18v1.5h7.5v-3H7zm11 3h1.5V7h-3v14zM6 6V4.5H3v3h3zm11 0V4.5H9.5v3H17zm1 1h1.5A2.5 2.5 0 0 0 17 4.5v3a.5.5 0 0 1-.5-.5zM6 17H4.5A2.5 2.5 0 0 0 7 19.5v-3a.5.5 0 0 1 .5.5z",
+            ),
+            Icon::Cut => Shape::EvenOdd(
+                "m16.862 1.586l.409.287a2.5 2.5 0 0 1 .614 3.482l-4.054 5.789l1.25 1.785a4.5 4.5 0 1 1-2.153 2.155L12 13.759l-.927 1.325a4.5 4.5 0 1 1-2.153-2.155l1.249-1.785l-4.054-5.79a2.5 2.5 0 0 1 .614-3.481l.41-.287L12 8.529zM7 15.5a1.5 1.5 0 1 0 0 3a1.5 1.5 0 0 0 0-3m10 0a1.5 1.5 0 1 0 0 3a1.5 1.5 0 0 0 0-3",
+            ),
             Icon::Delete => Shape::EvenOdd(
                 "M7.823 3.368A2 2 0 0 1 9.721 2h4.558a2 2 0 0 1 1.898 1.368L16.72 5H20a1 1 0 1 1 0 2h-.064l-.814 12.2A3 3 0 0 1 16.13 22H7.87a3 3 0 0 1-2.993-2.8L4.064 7H4a1 1 0 0 1 0-2h3.28zM14.613 5H9.387l.334-1h4.558zM9 10a1 1 0 0 1 1 1v6a1 1 0 1 1-2 0v-6a1 1 0 0 1 1-1m6 0a1 1 0 0 1 1 1v6a1 1 0 1 1-2 0v-6a1 1 0 0 1 1-1",
             ),
@@ -79,6 +93,14 @@ impl Icon {
             ),
             Icon::Explore => Shape::Fill(
                 "M12 2C6.477 2 2 6.477 2 12s4.477 10 10 10s10-4.477 10-10S17.523 2 12 2M9.879 9.879c1.414-1.414 6.01-2.475 6.364-2.121c.352.357-.708 4.95-2.122 6.363s-6.01 2.475-6.363 2.121s.707-4.949 2.12-6.363M12 11a1 1 0 1 0 0 2a1 1 0 0 0 0-2",
+            ),
+            Icon::Fullscreen => Shape::Stroke(
+                "3",
+                "M4 8V5a1 1 0 0 1 1-1h3M4 16v3a1 1 0 0 0 1 1h3M20 8V5a1 1 0 0 0-1-1h-3m4 12v3a1 1 0 0 1-1 1h-3",
+            ),
+            Icon::FullscreenExit => Shape::Stroke(
+                "3",
+                "M8 4v3a1 1 0 0 1-1 1H4m4 12v-3a1 1 0 0 0-1-1H4M16 4v3a1 1 0 0 0 1 1h3m-4 12v-3a1 1 0 0 1 1-1h3",
             ),
             Icon::Gallery => Shape::EvenOdd(
                 "M5 3a3 3 0 0 0-3 3v10a2 2 0 0 0 2 2V6a1 1 0 0 1 1-1h14a2 2 0 0 0-2-2zm0 5a2 2 0 0 1 2-2h13a2 2 0 0 1 2 2v11.333a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2zm15 0H7v8.848L10.848 13a1.25 1.25 0 0 1 1.768 0l3.241 3.24l.884-.883a1.25 1.25 0 0 1 1.768 0L20 16.848zm-2 3a1.5 1.5 0 1 1-3 0a1.5 1.5 0 0 1 3 0",
@@ -132,6 +154,12 @@ impl Icon {
             Icon::Upload => {
                 Shape::Stroke("3", "M5 3.5h14M12 20.5V9.5M7.757 13.743 12 9.5l4.243 4.243")
             }
+            Icon::ZoomIn => Shape::EvenOdd(
+                "M2 10.5a8.5 8.5 0 1 1 15.176 5.262l3.652 3.652a1 1 0 0 1-1.414 1.414l-3.652-3.652A8.5 8.5 0 0 1 2 10.5M10.5 6a1 1 0 0 1 1 1v2.5H14a1 1 0 1 1 0 2h-2.5V14a1 1 0 1 1-2 0v-2.5H7a1 1 0 1 1 0-2h2.5V7a1 1 0 0 1 1-1",
+            ),
+            Icon::ZoomOut => Shape::EvenOdd(
+                "M2 10.5a8.5 8.5 0 1 1 15.176 5.262l3.652 3.652a1 1 0 0 1-1.414 1.414l-3.652-3.652A8.5 8.5 0 0 1 2 10.5m4 0a1 1 0 0 1 1-1h7a1 1 0 1 1 0 2H7a1 1 0 0 1-1-1",
+            ),
         }
     }
 }
@@ -173,7 +201,7 @@ pub fn Ico(icon: Icon, #[prop(default = 24)] size: u32) -> impl IntoView {
 mod tests {
     use super::*;
 
-    const ALL: [Icon; 28] = [
+    const ALL: [Icon; 34] = [
         Icon::Add,
         Icon::ArrowBack,
         Icon::ArrowUp,
@@ -181,10 +209,14 @@ mod tests {
         Icon::ChevronLeft,
         Icon::ChevronRight,
         Icon::Close,
+        Icon::Crop,
+        Icon::Cut,
         Icon::Delete,
         Icon::Download,
         Icon::Edit,
         Icon::Explore,
+        Icon::Fullscreen,
+        Icon::FullscreenExit,
         Icon::Gallery,
         Icon::Help,
         Icon::Label,
@@ -202,6 +234,8 @@ mod tests {
         Icon::ThumbUp,
         Icon::Tune,
         Icon::Upload,
+        Icon::ZoomIn,
+        Icon::ZoomOut,
     ];
 
     #[test]

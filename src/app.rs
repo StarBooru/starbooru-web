@@ -10,8 +10,9 @@ use crate::i18n;
 use crate::pages::NotFound;
 use crate::pages::gallery::Gallery;
 use crate::pages::login::OidcReturn;
+use crate::pages::post::PostView;
 use crate::pages::shell::Shell;
-use crate::pages::soon::{PostSoon, SettingsSoon, Soon, SoonAlone, TagSoon};
+use crate::pages::soon::{SettingsSoon, Soon, SoonAlone, TagSoon};
 use crate::store;
 use crate::theme;
 
@@ -63,7 +64,7 @@ fn AppRoutes() -> impl IntoView {
             <ParentRoute path=path!("") view=Shell>
                 <Route path=path!("/") view=Gallery />
                 <Route path=path!("/explore") view=|| view! { <Soon title=|| t!("nav-explore") /> } />
-                <Route path=path!("/post/:id") view=PostSoon />
+                <Route path=path!("/post/:id") view=PostView />
                 <Route path=path!("/tags") view=|| view! { <Soon title=|| t!("nav-tags") /> } />
                 <Route path=path!("/tag") view=TagSoon />
                 <Route path=path!("/upload") view=|| view! { <Soon title=|| t!("nav-upload") /> } />
@@ -101,6 +102,64 @@ fn set_meta(id: &str, content: &str) {
 
 #[cfg(test)]
 mod tests {
+    /// The body of the first rule in `css` for exactly `selector`.
+    fn rule<'a>(css: &'a str, selector: &str) -> &'a str {
+        let (_, body) = css
+            .split_once(&format!("\n{selector} {{"))
+            .unwrap_or_else(|| panic!("{selector}"));
+        body.split_once('}').map_or(body, |(body, _)| body)
+    }
+
+    #[test]
+    fn the_viewer_keeps_glass_to_its_floating_controls() {
+        let post = include_str!("../style/pages/post.css");
+        // Blur comes only from `.glass`, which the markup puts on the bar and
+        // the stage's buttons.
+        assert!(!post.contains("backdrop-filter"));
+        let stage = include_str!("pages/post/stage.rs");
+        let page = include_str!("pages/post/mod.rs");
+        for class in [
+            "stage-btn stage-back glass float",
+            "stage-btn stage-prev glass float",
+            "stage-btn stage-next glass float",
+            "stage-tools glass float",
+        ] {
+            assert!(stage.contains(class), "{class}");
+        }
+        assert!(page.contains("post-bar glass float"));
+        // Fullscreen is dark in both themes, glass included.
+        let full = rule(post, ".stage.full");
+        for token in [
+            "background: var(--stage)",
+            "--glass: var(--stage-glass)",
+            "--on-surface: var(--on-stage)",
+        ] {
+            assert!(full.contains(token), "{token}");
+        }
+    }
+
+    #[test]
+    fn the_glow_moves_only_its_opacity_and_respects_reduced_effects() {
+        let post = include_str!("../style/pages/post.css");
+        assert!(rule(post, ".post-glow").contains("pointer-events: none"));
+        assert!(rule(post, ".glow-layer").contains("transition: opacity"));
+        assert!(rule(post, ".glow-layer.on").contains("opacity: var(--glow-a)"));
+        assert!(rule(post, r#".app[data-effects="lite"] .post-glow"#).contains("display: none"));
+        // Reduced motion leaves it unpainted (post/glow.rs), and the global rule
+        // in base.css cuts the fades short.
+        let glow = include_str!("pages/post/glow.rs");
+        assert!(glow.contains("dom::reduced_motion()"));
+    }
+
+    #[test]
+    fn the_stage_doesnt_move_with_the_pictures_shape() {
+        let post = include_str!("../style/pages/post.css");
+        let stage = rule(post, ".stage");
+        assert!(stage.contains("height: var(--fit-h)"));
+        assert!(rule(post, ".stage-tools .stage-btn").contains("width: var(--tool-w)"));
+        assert!(rule(post, ".stage-zoom").contains("width: var(--zoom-w)"));
+        assert!(rule(post, ".stage.full[data-rest]").contains("cursor: none"));
+    }
     /// What `name: ` is set to in the first rule of `css` that starts with `rule`.
     fn token<'a>(css: &'a str, rule: &str, name: &str) -> &'a str {
         let (_, body) = css.split_once(rule).unwrap_or_else(|| panic!("{rule}"));
@@ -152,7 +211,10 @@ mod tests {
         let shell = at(r#"<link data-trunk rel="css" href="style/shell.css">"#);
         let login = at(r#"<link data-trunk rel="css" href="style/pages/login.css">"#);
         let gallery = at(r#"<link data-trunk rel="css" href="style/pages/gallery.css">"#);
-        assert!(tokens < base && base < shell && shell < login && login < gallery);
+        let post = at(r#"<link data-trunk rel="css" href="style/pages/post.css">"#);
+        assert!(
+            tokens < base && base < shell && shell < login && login < gallery && gallery < post
+        );
         // Empty, with not even a space in it, or `:empty` never matches.
         assert!(page.contains(r#"<div id="main"></div>"#));
         let base = include_str!("../style/base.css");
@@ -183,6 +245,7 @@ mod tests {
             include_str!("../style/shell.css"),
             include_str!("../style/pages/login.css"),
             include_str!("../style/pages/gallery.css"),
+            include_str!("../style/pages/post.css"),
         ] {
             assert!(!css.contains("-webkit-backdrop-filter"));
         }
@@ -196,6 +259,7 @@ mod tests {
             ("shell", include_str!("../style/shell.css")),
             ("login", include_str!("../style/pages/login.css")),
             ("gallery", include_str!("../style/pages/gallery.css")),
+            ("post", include_str!("../style/pages/post.css")),
         ] {
             // A colour worked out from the tokens is fine: `oklch(from var(--x) …)`,
             // or the strength meter's `oklch(var(--meter-l) …)`.

@@ -2,7 +2,7 @@
 //! that lands replaces its `Soon` in `app.rs`.
 
 use leptos::prelude::*;
-use leptos_router::hooks::{use_params_map, use_query_map};
+use leptos_router::hooks::use_query_map;
 
 use crate::api;
 use crate::components::brand::Mark;
@@ -97,17 +97,6 @@ pub fn SettingsSoon() -> impl IntoView {
             <SoonCard />
         </div>
     }
-}
-
-/// `/post/:id`.
-#[component]
-pub fn PostSoon() -> impl IntoView {
-    let params = use_params_map();
-    let title = move || {
-        let id = params.with(|p| p.get("id").unwrap_or_default());
-        t!("post-number", id = id)
-    };
-    view! { <Soon title=title /> }
 }
 
 /// `/tag?name=…`: the tag's name, or Tags without one.

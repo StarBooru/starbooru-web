@@ -189,6 +189,29 @@ impl Lists {
     pub fn clear(&mut self) {
         self.0.clear();
     }
+
+    /// Takes post `id` out of every list, after it went to the recycle bin.
+    pub fn drop_post(&mut self, id: i64) {
+        for list in &mut self.0 {
+            list.posts.retain(|p| p.id != id);
+        }
+    }
+}
+
+/// Whether less than half of a tile `height` tall, whose top is `top` pixels
+/// down the window, shows between `from` and `to`: the bars cover the rest.
+pub fn mostly_hidden(top: f64, height: f64, from: f64, to: f64) -> bool {
+    // `min` and `max` pass over a NaN, which would count as all of it seen.
+    if !top.is_finite() || !height.is_finite() {
+        return true;
+    }
+    let seen = (top + height).min(to) - top.max(from);
+    seen < height / 2.0
+}
+
+/// How far to scroll for that tile to stand in the middle of what shows.
+pub fn to_middle(top: f64, height: f64, from: f64, to: f64) -> f64 {
+    top + height / 2.0 - (from + to) / 2.0
 }
 
 /// How many posts going back to a spot loads, at most, before it settles for
@@ -494,6 +517,43 @@ mod tests {
         assert!(lists.find("a", "a|1", now).is_some());
         lists.clear();
         assert!(lists.find("d", "a|1", now).is_none());
+    }
+
+    #[test]
+    fn a_binned_post_leaves_every_kept_list() {
+        let now = Utc::now();
+        let mut lists = Lists::default();
+        let mut cat = list("cat", "a|1", now);
+        cat.posts.push(Arc::new(post(2)));
+        lists.keep(cat);
+        lists.keep(list("dog", "a|1", now));
+        lists.drop_post(1);
+        let ids = |q| {
+            lists
+                .find(q, "a|1", now)
+                .map(|l| l.posts.iter().map(|p| p.id).collect::<Vec<_>>())
+        };
+        assert_eq!(ids("cat"), Some(vec![2]));
+        assert_eq!(ids("dog"), Some(vec![]));
+    }
+
+    #[test]
+    fn a_tile_out_of_sight_is_brought_to_the_middle() {
+        // The window shows 80..700 between the bars.
+        assert!(!mostly_hidden(200.0, 300.0, 80.0, 700.0));
+        assert!(!mostly_hidden(500.0, 300.0, 80.0, 700.0), "half shows");
+        assert!(mostly_hidden(560.0, 300.0, 80.0, 700.0));
+        assert!(
+            mostly_hidden(-200.0, 300.0, 80.0, 700.0),
+            "under the top bar"
+        );
+        assert!(mostly_hidden(3000.0, 300.0, 80.0, 700.0));
+        assert!(mostly_hidden(f64::NAN, 300.0, 80.0, 700.0));
+        assert_eq!(
+            to_middle(3000.0, 300.0, 80.0, 700.0),
+            3000.0 + 150.0 - 390.0
+        );
+        assert_eq!(to_middle(240.0, 300.0, 80.0, 700.0), 0.0);
     }
 
     #[test]

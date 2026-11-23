@@ -1,0 +1,202 @@
+/* The viewer (src/pages/post/). The picture stands straight on the page,
+   with its own colours as the light around it. The stage's size comes from
+   the window alone, so the picture's shape moves nothing: not the buttons on
+   the stage, nor the bar below. */
+
+.post-layout {
+  display: grid; grid-template-columns: minmax(0, 1fr) 360px; gap: 20px; align-items: start;
+  --post-bar-h: 60px; --post-gap: 12px; --peek: 48px;
+  /* The stage's height on the page, which is also the media's height limit there. */
+  --stage-h: max(280px, calc(100dvh - var(--bar-end) - 16px - var(--post-gap) - var(--post-bar-h) - var(--post-gap) - var(--peek)));
+}
+.post-main { display: grid; gap: var(--post-gap); min-width: 0; }
+/* In fullscreen the stage is off the page, and its room stays. */
+.post-layout.full-open .post-main::before { content: ""; height: var(--stage-h); }
+/* Painted after the stage, so a picture sliding in passes under the panels. */
+.post-layout > .side { position: relative; min-width: 0; }
+/* A picture sliding in doesn't make the window scroll sideways. */
+.content:has(.post-layout) { overflow-x: clip; }
+/* The glow's negative z-index stops here, above the canvas on `.app`. */
+.app { isolation: isolate; }
+.post-main .banner { margin: 0; }
+
+/* The light behind the viewer (post/glow.rs): drawn once, already blurred,
+   so only opacity moves as one layer fades out and the other in. */
+.post-glow {
+  position: absolute; inset: 0 0 auto; height: 100dvh; z-index: -1; overflow: hidden; pointer-events: none;
+  /* A mask reads only alpha: any opaque colour. */
+  mask-image: linear-gradient(var(--canvas) 40%, transparent);
+  animation: glow-in var(--fade) ease-in-out;
+}
+.glow-layer {
+  position: absolute; left: -12%; top: -12%; width: 124%; height: 124%;
+  opacity: 0; transition: opacity var(--fade) ease-in-out;
+}
+.glow-layer.on { opacity: var(--glow-a); }
+.post-layout.full-open .post-glow {
+  position: fixed; inset: 0; height: auto; z-index: 49; mask-image: none; background: var(--stage);
+  animation: fade-in var(--med) var(--ease);
+}
+.post-layout.full-open .glow-layer.on { opacity: 0.6; }
+.app[data-effects="lite"] .post-glow { display: none; }
+.app[data-effects="lite"] .post-layout.full-open .post-glow { display: block; }
+.app[data-effects="lite"] .post-layout.full-open .glow-layer { display: none; }
+
+/* ---------- the stage ---------- */
+
+.stage {
+  position: relative; isolation: isolate; display: grid; place-items: center;
+  grid-template: minmax(0, 1fr) / minmax(0, 1fr);
+  height: var(--fit-h); border-radius: var(--r);
+  --r: var(--radius-l);
+  /* The tools' width: three buttons, the zoom, gaps and padding. */
+  --tool-w: 40px; --zoom-w: 52px;
+  /* the media's height limit; the image box is sized from it before loading */
+  --fit-h: var(--stage-h);
+  touch-action: pan-y; user-select: none; -webkit-user-select: none;
+}
+.stage > :is(img, video) { grid-area: 1 / 1; }
+.stage img, .stage video {
+  display: block; max-width: 100%; max-height: var(--fit-h); object-fit: contain;
+  border-radius: inherit; box-shadow: 0 0 0 1px var(--glass-line), var(--shadow-2);
+  animation: zoom-in var(--slow) var(--ease);
+}
+.stage video { background: var(--stage); }
+/* Until the picture has loaded, its colour and then its thumbnail fill its box. */
+.stage img.loading { background: var(--thumb, none) center / 100% 100% no-repeat, var(--tint, var(--surface-2)); }
+.stage img.from-next, .stage video.from-next { animation: from-next var(--med) var(--ease); }
+.stage img.from-prev, .stage video.from-prev { animation: from-prev var(--med) var(--ease); }
+.stage img {
+  transform-origin: center;
+  transition: transform var(--fast) var(--ease), border-radius var(--fast) var(--ease), translate var(--med) var(--ease);
+}
+.stage video { transition: translate var(--med) var(--ease); }
+.stage:not(.zoomed) img { cursor: zoom-in; }
+/* Grown past the stage, it's seen through the stage's own rounded window. On
+   its way back to size (`shrinking`) it still is. */
+.stage.zoomed { overflow: hidden; touch-action: none; cursor: grab; }
+.stage.shrinking { overflow: hidden; }
+.stage:is(.zoomed, .shrinking) img { border-radius: calc(var(--r) / var(--z, 1)); }
+.stage.zoomed:active { cursor: grabbing; }
+.stage.dragging img { transition: none; }
+/* A finger swiping to the next post: the picture follows it at once, and
+   slides back when let go. */
+.stage.swiping :is(img, video) { transition: none; }
+
+/* Fullscreen: the stage on the display through the Fullscreen API, or over
+   the window where that isn't there. Dark, whatever the theme. */
+.stage.full {
+  position: fixed; inset: 0; z-index: 50; height: 100dvh; border-radius: 0;
+  --fit-h: 100dvh; --fit-cap: 100%;
+  background: var(--stage);
+  --glass: var(--stage-glass); --glass-edge: var(--stage-glass-edge); --glass-line: var(--stage-glass-line);
+  --on-surface: var(--on-stage); --on-surface-2: var(--on-stage-2);
+}
+.stage.full:not(.zoomed) { touch-action: none; }
+.stage.full img, .stage.full video { max-width: 100vw; box-shadow: none; border-radius: 0; }
+/* No known size: the box fills the display and the media fits inside it. */
+.stage.full :is(img, video):not([style*="aspect-ratio"]) { width: 100%; height: 100%; }
+html:has(.stage.full) { overflow-y: hidden; }
+.stage-glow { display: none; }
+.stage.full .stage-glow {
+  display: block; position: absolute; inset: 0; z-index: -1; width: 100%; height: 100%;
+  opacity: 0.6; pointer-events: none;
+}
+/* Resting: the controls go, and the pointer with them. */
+.stage.full[data-rest] { cursor: none; }
+.stage.full[data-rest] :is(.stage-prev, .stage-next, .stage-tools) { opacity: 0; pointer-events: none; }
+/* Two fingers sideways on a touchpad are the picture's, never the browser's Back. */
+html:has(.stage) { overscroll-behavior-x: none; }
+
+/* The floating glass controls. */
+.stage-btn {
+  display: inline-grid; place-items: center; width: 44px; height: 44px; padding: 0; border: 0; border-radius: 999px;
+  color: var(--on-surface); cursor: pointer;
+  transition: opacity var(--med) var(--ease), transform var(--med) var(--ease-spring), background-color var(--fast) var(--ease);
+}
+.stage-btn:active:not(:disabled) { transform: scale(0.88); }
+.stage-btn:disabled { opacity: 0.4; cursor: default; }
+@media (hover: hover) {
+  .stage-prev:hover:not(:disabled) .icon { transform: translateX(-2px); }
+  .stage-next:hover:not(:disabled) .icon { transform: translateX(2px); }
+  .stage-back:hover .icon { transform: translateX(-2px); }
+  .stage-btn .icon { transition: transform var(--med) var(--ease-spring); }
+}
+.stage-back, .stage-prev, .stage-next, .stage-tools { z-index: 2; }
+.stage-back { position: absolute; left: 12px; top: 12px; }
+.stage-prev, .stage-next { position: absolute; top: calc(50% - 26px); width: 52px; height: 52px; }
+.stage-prev { left: 12px; }
+.stage-next { right: 12px; }
+.stage-tools {
+  position: absolute; right: 12px; top: 12px; display: flex; align-items: center; gap: 2px;
+  padding: 2px; border-radius: 999px;
+  transition: opacity var(--med) var(--ease);
+}
+.stage-tools .stage-btn { width: var(--tool-w); height: 40px; background: transparent; }
+.stage-tools .stage-btn:disabled { opacity: 0.38; }
+@media (hover: hover) {
+  .stage-tools :is(.stage-btn, .stage-zoom):hover:not(:disabled) { background: var(--glass-line); }
+}
+.stage.full .stage-back { display: none; }
+.stage.full .stage-tools { top: max(12px, env(safe-area-inset-top)); }
+.stage-zoom {
+  /* As wide as "100%" or "Adatta", so the buttons beside it stay where they are. */
+  width: var(--zoom-w); min-height: 40px; padding: 0; border: 0; border-radius: 999px; background: transparent;
+  color: var(--on-surface); font: inherit; font-size: 13px; font-weight: 600; font-variant-numeric: tabular-nums; cursor: pointer;
+}
+
+/* ---------- the bar under the picture ---------- */
+
+/* An opinion, what leaves with the file, and, away from the rest, the one
+   that removes it. */
+.post-bar {
+  container-type: inline-size;
+  display: flex; align-items: center; flex-wrap: wrap; gap: 4px 12px;
+  min-height: var(--post-bar-h); padding: 8px; border-radius: calc(var(--post-bar-h) / 2);
+}
+.post-bar .icon-btn { color: var(--on-surface); transition: transform var(--med) var(--ease-spring), background-color var(--fast) var(--ease), color var(--fast) var(--ease); }
+.vote { display: flex; align-items: center; border-radius: 999px; background: var(--surface-3); }
+.post-bar .vote .icon-btn.on { background: var(--primary); color: var(--on-primary); }
+.score { min-width: 3ch; text-align: center; font-weight: 700; font-variant-numeric: tabular-nums; }
+.bar-acts { display: flex; align-items: center; gap: 4px; }
+.bar-delete { margin-left: auto; }
+.bar-label { display: none; }
+@container (min-width: 620px) {
+  .bar-acts .icon-btn { display: inline-flex; align-items: center; gap: 8px; width: auto; padding: 0 16px 0 12px; font: inherit; text-decoration: none; }
+  .bar-acts .bar-label { display: inline; font-size: 14px; font-weight: 600; line-height: 1; }
+}
+/* The narrowest phones: all of it still on one row. */
+@media (max-width: 360px) {
+  .post-bar { gap: 4px 8px; }
+  .post-bar .icon-btn { width: 40px; }
+  .bar-acts { gap: 0; }
+  .stage { --tool-w: 36px; }
+}
+
+/* ---------- the side column ---------- */
+
+.card-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 12px; min-height: 36px; }
+.card-head .card-title { margin: 0; }
+/* the tags, grouped by category and section */
+.tag-groups { display: grid; gap: 14px; }
+.tag-group h3 {
+  margin: 0 0 6px; font-size: 12px; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase;
+  color: var(--on-surface-2);
+}
+.post-swatches { display: flex; flex-wrap: wrap; gap: 6px; }
+.post-swatches .swatch { width: 24px; height: 24px; }
+.meta a { overflow-wrap: anywhere; }
+.sample-note { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: 12px; flex-wrap: wrap; }
+.sample-note .hint { margin: 0; flex: 1 1 180px; font-size: 13px; }
+
+@media (max-width: 900px) {
+  .post-layout { grid-template-columns: minmax(0, 1fr); --stage-h: clamp(240px, 58dvh, 760px); }
+}
+/* A window too short to spare the room: the picture comes first. */
+@media (max-height: 640px) {
+  .post-layout { --peek: 0px; }
+}
+
+@keyframes glow-in { from { opacity: 0; } }
+@keyframes from-next { from { opacity: 0; transform: translateX(48px); } }
+@keyframes from-prev { from { opacity: 0; transform: translateX(-48px); } }

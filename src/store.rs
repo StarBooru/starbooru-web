@@ -115,6 +115,9 @@ pub struct Prefs {
     /// No space between thumbnails and no rounded corners.
     #[serde(deserialize_with = "lenient")]
     pub flush_tiles: bool,
+    /// The viewer shows originals even where the server has a smaller copy.
+    #[serde(deserialize_with = "lenient")]
+    pub originals: bool,
     /// Settings this version doesn't have yet (the reference's, or a newer
     /// version's), written back untouched.
     #[serde(flatten)]
@@ -135,6 +138,7 @@ impl Default for Prefs {
             gallery_view: GalleryView::default(),
             gallery_columns: None,
             flush_tiles: false,
+            originals: false,
             other: Map::new(),
         }
     }
@@ -508,6 +512,7 @@ mod tests {
                 gallery_view: GalleryView::StaggeredAll,
                 gallery_columns: Some(4),
                 flush_tiles: true,
+                originals: true,
                 other: Map::new(),
             },
             memory: GalleryMemory {
@@ -531,6 +536,8 @@ mod tests {
         assert_eq!(value["prefs"]["language"], "it");
         assert_eq!(value["session"]["user"]["username"], "ada");
         assert_eq!(value["prefs"]["gallery_view"], "staggered-all");
+        // The reference's name, so its setting carries over.
+        assert_eq!(value["prefs"]["originals"], true);
         assert_eq!(value["memory"]["spots"][0]["post"], 12);
     }
 

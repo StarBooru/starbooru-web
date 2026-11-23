@@ -57,18 +57,48 @@ where
     F: FnOnce(Client) -> Fut,
     Fut: Future<Output = Result<T, ClientError>>,
 {
+    fetch(request).await.map_err(|f| f.message)
+}
+
+/// A failed request: the words to show, and whether what was asked for isn't
+/// on the server, which no retry mends.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Failure {
+    pub message: String,
+    pub missing: bool,
+}
+
+/// [`call`], saying also whether the thing asked for is missing.
+pub async fn fetch<T, F, Fut>(request: F) -> Result<T, Failure>
+where
+    F: FnOnce(Client) -> Fut,
+    Fut: Future<Output = Result<T, ClientError>>,
+{
+    let failure = |message| Failure {
+        message,
+        missing: false,
+    };
     let Some(session) = store::session_untracked() else {
-        return Err(t!("error-session-expired"));
+        return Err(failure(t!("error-session-expired")));
     };
     let Some(client) = client_for(&session) else {
-        return Err(t!("error-bad-address"));
+        return Err(failure(t!("error-bad-address")));
     };
     request(client).await.map_err(|e| {
         if e.is_unauthorized() {
             expire(&session.token);
         }
-        error_text(&e, &session.server)
+        Failure {
+            message: error_text(&e, &session.server),
+            missing: is_missing(&e),
+        }
     })
+}
+
+/// The server answered that there's no such thing. A 404 without its JSON
+/// is some other site at that address (`Trouble::NotAServer`).
+fn is_missing(e: &ClientError) -> bool {
+    matches!(e, ClientError::Api { status: 404, error } if error.code != "http_error")
 }
 
 /// Signs out after a 401, unless the session it was for has gone already:
@@ -232,6 +262,14 @@ mod tests {
             trouble(&api(409, "username_taken", "username taken")),
             Trouble::Said("username taken")
         );
+    }
+
+    #[test]
+    fn only_the_servers_own_not_found_means_missing() {
+        assert!(is_missing(&api(404, "not_found", "not found")));
+        assert!(!is_missing(&api(404, "http_error", "server answered 404")));
+        assert!(!is_missing(&api(500, "internal", "oops")));
+        assert!(!is_missing(&network()));
     }
 
     #[test]
