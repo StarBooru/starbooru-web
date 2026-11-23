@@ -11,4 +11,6 @@ pub mod legal;
 pub mod select;
 pub mod snackbar;
 pub mod strength;
+pub mod tag_box;
+pub mod tag_menu;
 pub mod thumb;

@@ -213,6 +213,23 @@ post-tags = Tags
 post-edit = Edit
 post-edit-tags = Edit tags
 post-no-tags = No tags yet.
+post-edit-title = Edit tags and rating (E)
+post-tags-hint = Prefix a tag with artist:, character:, copyright: or meta: to set its category.
+post-did-you-mean = Did you mean?
+post-replace-tag = Replace { $from } with { $to }
+tag-offers = Matching tags
+tag-error-prefix = “{ $tag }” can't be a tag: a tag can't start with - or ~.
+tag-error-long = “{ $tag }” is too long for a tag. Keep it to { $max } characters.
+tag-error-many = A post can have at most { $max } tags.
+tag-error-other = “{ $tag }” can't be a tag.
+cancel = Cancel
+save = Save
+ai-suggest = Suggest tags
+ai-suggesting = Asking the AI…
+ai-add-all = Add all
+ai-new-tag = new
+ai-no-suggestions = No suggestions for this post.
+ai-rating = Suggested rating: { $rating }
 category-general = General
 category-artist = Artist
 category-character = Character
@@ -246,6 +263,63 @@ post-added = Added
 post-source = Source
 post-sample-note = Showing a smaller copy. Zooming in loads the original.
 post-show-original = Show original
+
+## Tags
+
+tags-sort = Sort tags
+tags-most-used = Most used
+tags-a-z = A–Z
+tags-filter-label = Filter tags
+tags-filter-placeholder = Filter by name or alias
+tags-any-category = All
+tags-none-yet = No tags yet
+tags-none-match = No tags match
+tags-appear = Tags appear here once posts use them.
+tags-missing = No tag called “{ $name }”
+tags-all = All tags
+tags-browse =
+    { $count ->
+        [one] Browse 1 post
+       *[other] Browse { $count } posts
+    }
+tags-is-alias = “{ $name }” is an alias of this tag.
+tags-category = Category
+tags-tree = Place in the tree
+tags-tree-hint = Searching a tag also finds the tags under it, and the top of the tree is the section a post's tags are grouped under.
+tags-tree-top = At the top: nothing above it.
+tags-parent = Parent tag
+tags-move = Move under
+tags-move-top = Move to the top
+tags-children = Under it
+tags-children-none = Nothing under it yet.
+tags-aliases = Aliases
+tags-aliases-hint = Other names for this tag. Tagging or searching with an alias uses this tag. Adding an alias that is already a tag merges it into this one.
+tags-aliases-none = No aliases.
+tags-implies = Implies
+tags-implies-hint = Posts with this tag get these tags too, including posts tagged earlier.
+tags-implies-none = Implies no other tags.
+tags-implied-by = Implied by
+tags-implied-by-hint = Tags that add this one.
+tags-implied-by-none = No tag implies this one.
+tags-new-alias = New alias
+tags-implied-tag = Implied tag
+tags-remove = Remove
+tags-remove-named = Remove { $name }
+tags-admins-only = Only admins can change this.
+tags-merge-confirm =
+    { $count ->
+        [one] “{ $name }” is a tag of its own, on 1 post. As an alias it merges into this tag, and that can't be undone.
+       *[other] “{ $name }” is a tag of its own, on { $count } posts. As an alias it merges into this tag, and that can't be undone.
+    }
+tags-merge = Merge
+add = Add
+tag-menu-search = Search this tag
+tag-menu-add = Add to this search
+tag-menu-exclude = Leave it out
+tag-menu-details = Tag details
+tag-menu-copy = Copy name
+tag-copied = Tag name copied
+tag-copy-failed = Couldn't copy the tag name
 
 ## Search cheat sheet
 
@@ -304,6 +378,7 @@ help-tip-aliases = An alias finds its tag, and implied tags are added when you t
 help-tip-terms = A query holds at most 40 terms.
 help-shortcuts = Keyboard shortcuts and gestures
 key-prev-next = previous or next post
+key-edit = edit tags and rating
 key-fullscreen = full screen
 key-zoom = zoom in or out
 key-fit = fit to the screen

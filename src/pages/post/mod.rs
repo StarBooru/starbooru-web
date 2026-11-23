@@ -1,7 +1,9 @@
 //! The viewer at `/post/:id?q=…&seed=…`: the post on its stage, the bar of
 //! what can be done with it, and its tags and details beside or below.
-//! Previous and next walk the gallery's results for the same search.
+//! Previous and next walk the gallery's results for the same search. The
+//! tags card turns into the tag editor in place.
 
+mod edit;
 mod glow;
 mod side;
 mod stage;
@@ -17,6 +19,7 @@ use leptos_router::hooks::{use_navigate, use_params_map, use_query_map};
 use send_wrapper::SendWrapper;
 use starbooru_core::{EditKind, MediaKind, Neighbors, Post, edit_kind};
 
+use self::edit::EditCard;
 use self::glow::PostGlow;
 use self::side::{DetailsCard, TagsCard};
 use self::stage::Stage;
@@ -26,6 +29,8 @@ use crate::components::banner::{ErrorBanner, Spinner};
 use crate::components::download::DownloadLink;
 use crate::components::icons::{Ico, Icon};
 use crate::components::snackbar::{notify, notify_undo};
+use crate::components::tag_menu::TagPress;
+use crate::logic::tags::may_edit_post;
 use crate::logic::viewer::{
     back_through_history, download_name, needs_original, neighbour_href, queued, shown_url,
 };
@@ -146,6 +151,8 @@ pub fn PostView() -> impl IntoView {
     let enter = RwSignal::new(None::<bool>);
     let busy = RwSignal::new(false);
     let action_error = RwSignal::new(None::<String>);
+    // The tags card is the tag editor.
+    let editing = RwSignal::new(false);
     let steps = StoredValue::new(0_i32);
     let generation = StoredValue::new(0_u64);
 
@@ -219,6 +226,7 @@ pub fn PostView() -> impl IntoView {
         original.set(false);
         problem.set(None);
         action_error.set(None);
+        editing.set(false);
         gallery::viewed(&q.get_untracked(), id);
         if post.with_untracked(|p| p.as_ref().map(|p| p.id)) != Some(id)
             && let Some(quick) = kept(id)
@@ -395,6 +403,31 @@ pub fn PostView() -> impl IntoView {
         });
     };
 
+    // Anyone signed in may edit a post, unless it's in the recycle bin.
+    let editable = Memo::new(move |_| {
+        let user = store::session().map(|s| s.user);
+        post.with(|p| {
+            p.as_ref()
+                .is_some_and(|p| may_edit_post(user.as_ref(), p.deleted))
+        })
+    });
+    let start_edit = Callback::new(move |()| {
+        // Not while the page still shows the post before.
+        let here = post.with_untracked(|p| p.as_ref().map(|p| p.id)) == id.get_untracked();
+        if here && editable.get_untracked() {
+            editing.set(true);
+        }
+    });
+    let saved = Callback::new(move |p: Post| {
+        let p = Arc::new(p);
+        keep(Arc::clone(&p));
+        post.set(Some(p));
+        // The gallery's kept results and the suggestions show the old tags.
+        gallery::forget_lists();
+        api::forget_tags();
+        editing.set(false);
+    });
+
     let failed = move || {
         let failure = problem.get().unwrap_or(Failure {
             message: String::new(),
@@ -443,6 +476,7 @@ pub fn PostView() -> impl IntoView {
         view! {
             <div class="page post-layout" class:full-open=move || full.get()>
                 <PostGlow thumb=thumb />
+                <TagPress q=q />
                 <div class="post-main">
                     <Stage
                         post=post
@@ -453,8 +487,10 @@ pub fn PostView() -> impl IntoView {
                         first=first
                         last=last
                         enter=enter
+                        editing=editing
                         on_step=press
                         on_back=Callback::new(move |()| back())
+                        on_edit=start_edit
                     />
                     <PostBar post=post busy=busy on_delete=Callback::new(move |()| delete()) />
                     {move || {
@@ -486,7 +522,26 @@ pub fn PostView() -> impl IntoView {
                     </Show>
                 </div>
                 <aside class="side">
-                    <TagsCard post=post />
+                    {move || {
+                        if editing.get() {
+                            post.get_untracked()
+                                .map(|p| {
+                                    view! {
+                                        <EditCard
+                                            post=p
+                                            on_cancel=Callback::new(move |()| editing.set(false))
+                                            on_saved=saved
+                                        />
+                                    }
+                                        .into_any()
+                                })
+                        } else {
+                            Some(
+                                view! { <TagsCard post=post editable=editable on_edit=start_edit /> }
+                                    .into_any(),
+                            )
+                        }
+                    }}
                     <DetailsCard
                         post=post
                         sampled=sampled

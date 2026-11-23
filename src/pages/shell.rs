@@ -3,10 +3,8 @@
 //! wide window, stands up as a rail at the side of a narrower one and floats
 //! at the bottom of a phone (`style/shell.css` has the breakpoints).
 
-use std::cell::RefCell;
 use std::cmp::Ordering;
 
-use chrono::Utc;
 use leptos::ev::{KeyboardEvent, SubmitEvent};
 use leptos::html;
 use leptos::prelude::*;
@@ -22,8 +20,8 @@ use crate::components::brand::{Mark, Wordmark};
 use crate::components::icons::{Ico, Icon};
 use crate::dom;
 use crate::logic::search::{
-    Answers, Hint, Latest, ListKey, SUGGESTIONS, TYPING_PAUSE_MS, byte_index, complete, list_key,
-    short_count, still_fitting, utf16_index, word_at,
+    Hint, Latest, ListKey, TYPING_PAUSE_MS, byte_index, complete, list_key, short_count,
+    still_fitting, utf16_index, word_at,
 };
 use crate::route::{self, Tab};
 use crate::store;
@@ -100,38 +98,10 @@ fn search_href(scope: Scope, q: &str) -> String {
     }
 }
 
-thread_local! {
-    static KEPT: RefCell<Answers<Hint>> = RefCell::new(Answers::default());
-}
-
-/// The collection's tags starting with `typed`, kept from a moment ago.
-fn kept_tags(typed: &str) -> Option<Vec<Hint>> {
-    let owner = store::owner();
-    KEPT.with_borrow(|k| k.get(&owner, typed, Utc::now()))
-}
-
-/// The collection's tags starting with `typed` (or with an alias that does),
-/// most used first. A failed request offers none: the search still works
-/// without them.
-async fn local_tags(typed: String) -> Vec<Hint> {
-    if let Some(known) = kept_tags(&typed) {
-        return known;
-    }
-    let owner = store::owner();
-    let asked = typed.clone();
-    let Ok(tags) = api::call(move |c| async move { c.tags(&asked, SUGGESTIONS).await }).await
-    else {
-        return Vec::new();
-    };
-    let hints: Vec<Hint> = tags.into_iter().map(Hint::from).collect();
-    KEPT.with_borrow_mut(|k| k.put(&owner, typed, hints.clone(), Utc::now()));
-    hints
-}
-
 /// Suggestions for `typed` in `scope`.
 async fn suggest(scope: Scope, typed: String) -> Vec<Hint> {
     match scope {
-        Scope::Collection => local_tags(typed).await,
+        Scope::Collection => api::tag_hints(typed).await,
     }
 }
 
@@ -232,7 +202,7 @@ fn SearchBox() -> impl IntoView {
             hints.set(Vec::new());
             return;
         };
-        if let Some(known) = kept_tags(&typed) {
+        if let Some(known) = api::kept_tags(&typed) {
             hints.set(known);
             return;
         }

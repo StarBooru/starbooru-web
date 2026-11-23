@@ -157,7 +157,6 @@ html.sb-scrolling .thumb img { filter: none; transition: opacity var(--med) var(
   border: 1px solid oklch(from var(--outline) l c h / 0.6);
 }
 .color-hex .icon-btn { justify-self: start; width: 36px; height: 36px; }
-.field-error { color: var(--danger); font-size: 13px; }
 .color-menu .field-error { width: 222px; margin: 0; text-align: center; }
 .swatches { display: grid; grid-template-columns: repeat(6, 32px); gap: 6px; }
 .swatch {

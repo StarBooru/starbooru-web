@@ -123,8 +123,14 @@ pub fn Stage(
     /// The way the last step went, for the entrance.
     #[prop(into)]
     enter: Signal<Option<bool>>,
+    /// The tag editor is open: the keys are left to it, and swipes still
+    /// turn.
+    #[prop(into)]
+    editing: Signal<bool>,
     on_step: Callback<bool>,
     on_back: Callback<()>,
+    /// `E` opens the tag editor.
+    on_edit: Callback<()>,
 ) -> impl IntoView {
     let stage: NodeRef<html::Section> = NodeRef::new();
     let kind = Memo::new(move |_| post.with(|p| p.as_ref().map(|p| p.kind)));
@@ -310,6 +316,7 @@ pub fn Stage(
                     || e.meta_key()
                     || e.alt_key()
                     || dom::typing(e.target())
+                    || editing.get_untracked()
                 {
                     return;
                 }
@@ -321,6 +328,7 @@ pub fn Stage(
                     "+" | "=" if zoomable() => zoom_by(STEP, (0.0, 0.0)),
                     "-" | "_" if zoomable() => zoom_by(1.0 / STEP, (0.0, 0.0)),
                     "0" if zoomable() => zoom.set(Zoom::default()),
+                    "e" | "E" if !full.get_untracked() => on_edit.run(()),
                     "f" | "F" => set_full(!full.get_untracked()),
                     "Escape" if full.get_untracked() => set_full(false),
                     "Escape" => on_back.run(()),

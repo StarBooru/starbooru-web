@@ -2,7 +2,6 @@
 //! that lands replaces its `Soon` in `app.rs`.
 
 use leptos::prelude::*;
-use leptos_router::hooks::use_query_map;
 
 use crate::api;
 use crate::components::brand::Mark;
@@ -97,17 +96,4 @@ pub fn SettingsSoon() -> impl IntoView {
             <SoonCard />
         </div>
     }
-}
-
-/// `/tag?name=…`: the tag's name, or Tags without one.
-#[component]
-pub fn TagSoon() -> impl IntoView {
-    let query = use_query_map();
-    let title = move || {
-        query
-            .with(|q| q.get("name"))
-            .filter(|name| !name.trim().is_empty())
-            .unwrap_or_else(|| t!("nav-tags"))
-    };
-    view! { <Soon title=title /> }
 }

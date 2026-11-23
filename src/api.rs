@@ -1,20 +1,24 @@
 //! The way to the server: one [`Client`] for the signed-in session, and what
 //! to say when a request fails. Pages make their requests through [`call`],
-//! so a session the server no longer knows signs out in one place.
+//! so a session the server no longer knows signs out in one place. Answers
+//! that several pages ask for again and again are kept a little while.
 
 use std::cell::RefCell;
 use std::future::Future;
 
 use chrono::{DateTime, Utc};
 use starbooru_client::{Client, ClientError};
-use starbooru_core::ServerInfo;
+use starbooru_core::{AiStatus, ServerInfo};
 
+use crate::logic::search::{Answers, Hint, SUGGESTIONS};
 use crate::store::{self, Session};
 
 thread_local! {
     // One client per session, so its connections are reused.
     static CLIENT: RefCell<Option<(String, String, Client)>> = const { RefCell::new(None) };
     static SERVER_INFO: RefCell<Kept<ServerInfo>> = const { RefCell::new(Kept::new()) };
+    static AI_STATUS: RefCell<Kept<AiStatus>> = const { RefCell::new(Kept::new()) };
+    static TAG_HINTS: RefCell<Answers<Hint>> = RefCell::new(Answers::default());
 }
 
 /// The client for the signed-in session, or `None` when no one is.
@@ -47,6 +51,8 @@ fn client_for(session: &Session) -> Option<Client> {
 pub fn forget() {
     CLIENT.with_borrow_mut(|cache| *cache = None);
     SERVER_INFO.with_borrow_mut(|kept| kept.0 = None);
+    AI_STATUS.with_borrow_mut(|kept| kept.0 = None);
+    forget_tags();
 }
 
 /// Runs `request` with the session's client. A failure comes back as words
@@ -175,6 +181,48 @@ pub async fn server_info() -> Option<ServerInfo> {
     let info = call(|c| async move { c.info().await }).await.ok()?;
     SERVER_INFO.with_borrow_mut(|kept| kept.put(owner, Utc::now(), info.clone()));
     Some(info)
+}
+
+/// Which AI tools the server offers (`GET /ai`), asked at most every two
+/// minutes. `None` when it can't be asked: the tools are left out.
+pub async fn ai_status() -> Option<AiStatus> {
+    let session = store::session_untracked()?;
+    let owner = owner(&session);
+    if let Some(known) = AI_STATUS.with_borrow(|kept| kept.get(&owner, Utc::now())) {
+        return Some(known);
+    }
+    let status = call(|c| async move { c.ai_status().await }).await.ok()?;
+    AI_STATUS.with_borrow_mut(|kept| kept.put(owner, Utc::now(), status.clone()));
+    Some(status)
+}
+
+/// The collection's tags starting with `typed`, kept from a moment ago.
+pub fn kept_tags(typed: &str) -> Option<Vec<Hint>> {
+    let owner = store::owner();
+    TAG_HINTS.with_borrow(|k| k.get(&owner, typed, Utc::now()))
+}
+
+/// The collection's tags starting with `typed` (or with an alias that does),
+/// most used first, for the search box and the tag editor. A failed request
+/// offers none: typing still works without them.
+pub async fn tag_hints(typed: String) -> Vec<Hint> {
+    if let Some(known) = kept_tags(&typed) {
+        return known;
+    }
+    let owner = store::owner();
+    let asked = typed.clone();
+    let Ok(tags) = call(move |c| async move { c.tags(&asked, SUGGESTIONS).await }).await else {
+        return Vec::new();
+    };
+    let hints: Vec<Hint> = tags.into_iter().map(Hint::from).collect();
+    TAG_HINTS.with_borrow_mut(|k| k.put(&owner, typed, hints.clone(), Utc::now()));
+    hints
+}
+
+/// Drops the tags kept for suggestions, after an edit that added tags or
+/// changed their categories or counts.
+pub fn forget_tags() {
+    TAG_HINTS.with_borrow_mut(|k| *k = Answers::default());
 }
 
 /// Whose an answer is: one account on one server.

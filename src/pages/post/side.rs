@@ -5,25 +5,15 @@ use std::sync::Arc;
 
 use chrono::Local;
 use leptos::prelude::*;
-use starbooru_core::{MediaKind, Post, TagCategory};
+use starbooru_core::{MediaKind, Post};
 
 use crate::components::icons::{Ico, Icon};
 use crate::logic::viewer::{
     Group, category_class, color_href, dimensions, file_date, format_duration, group_tags, headed,
     human_size, source_link, when,
 };
-use crate::pages::rating_label;
+use crate::pages::{category_label, rating_label};
 use crate::route;
-
-fn category_label(category: TagCategory) -> String {
-    match category {
-        TagCategory::General => t!("category-general"),
-        TagCategory::Artist => t!("category-artist"),
-        TagCategory::Character => t!("category-character"),
-        TagCategory::Copyright => t!("category-copyright"),
-        TagCategory::Meta => t!("category-meta"),
-    }
-}
 
 fn section_label(name: &str) -> String {
     match name {
@@ -57,19 +47,26 @@ fn group_label(group: &Group) -> String {
     }
 }
 
+/// A tag that searches for itself. Its menu (`components/tag_menu.rs`) has
+/// the way to its page.
 fn chip(name: String, class: &'static str) -> impl IntoView {
     let href = route::gallery(&name);
+    let key = name.clone();
     view! {
-        <a class=class href=href>
+        <a class=class href=href data-tag=key>
             {name}
         </a>
     }
 }
 
-/// The tags, grouped when the server sent their categories. Editing them
-/// comes later; its button holds its place.
+/// The tags, grouped when the server sent their categories, and the way to
+/// edit them for whoever `editable` says may.
 #[component]
-pub fn TagsCard(#[prop(into)] post: Signal<Option<Arc<Post>>>) -> impl IntoView {
+pub fn TagsCard(
+    #[prop(into)] post: Signal<Option<Arc<Post>>>,
+    #[prop(into)] editable: Signal<bool>,
+    on_edit: Callback<()>,
+) -> impl IntoView {
     let tags = move || {
         let p = post.get()?;
         if p.tags.is_empty() {
@@ -82,7 +79,7 @@ pub fn TagsCard(#[prop(into)] post: Signal<Option<Arc<Post>>>) -> impl IntoView 
                 .iter()
                 .map(|t| chip(t.clone(), "chip"))
                 .collect_view();
-            return Some(view! { <div class="chips">{chips}</div> }.into_any());
+            return Some(view! { <div class="chips" data-press="tag">{chips}</div> }.into_any());
         }
         let groups = group_tags(&p.tag_details);
         let headed = headed(&groups);
@@ -102,19 +99,19 @@ pub fn TagsCard(#[prop(into)] post: Signal<Option<Arc<Post>>>) -> impl IntoView 
                 }
             })
             .collect_view();
-        Some(view! { <div class="tag-groups">{sections}</div> }.into_any())
+        Some(view! { <div class="tag-groups" data-press="tag">{sections}</div> }.into_any())
     };
-    let deleted = move || post.with(|p| p.as_ref().is_some_and(|p| p.deleted));
     view! {
         <section class="card">
             <div class="card-head">
                 <h2 class="card-title">{move || t!("post-tags")}</h2>
-                <Show when=move || !deleted()>
+                <Show when=move || editable.get()>
                     <button
                         type="button"
                         class="btn text small"
-                        disabled=true
-                        title=move || t!("post-edit-tags")
+                        title=move || t!("post-edit-title")
+                        aria-label=move || t!("post-edit-tags")
+                        on:click=move |_| on_edit.run(())
                     >
                         <Ico icon=Icon::Edit size=18 />
                         {move || t!("post-edit")}

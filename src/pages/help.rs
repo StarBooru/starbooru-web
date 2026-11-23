@@ -148,11 +148,12 @@ fn sections() -> [(String, Vec<(&'static str, String)>); 5] {
     ]
 }
 
-/// The viewer's keys and gestures, as they work in this app. The tag editor,
-/// selection and the thumbnails' gestures add theirs when they land.
-fn shortcuts() -> [(String, String); 7] {
+/// The viewer's keys and gestures, as they work in this app. Selection and
+/// the thumbnails' gestures add theirs when they land.
+fn shortcuts() -> [(String, String); 8] {
     [
         ("← →".into(), t!("key-prev-next")),
+        ("E".into(), t!("key-edit")),
         ("F".into(), t!("key-fullscreen")),
         ("+ −".into(), t!("key-zoom")),
         ("0".into(), t!("key-fit")),

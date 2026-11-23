@@ -14,6 +14,7 @@ pub enum Icon {
     ChevronLeft,
     ChevronRight,
     Close,
+    Copy,
     /// Editing a picture.
     Crop,
     /// Trimming a video.
@@ -34,6 +35,8 @@ pub enum Icon {
     /// A colour search.
     Palette,
     Play,
+    /// Leaving something out.
+    Remove,
     Restore,
     Search,
     Share,
@@ -74,6 +77,9 @@ impl Icon {
             Icon::ChevronRight => Shape::Stroke("3", "M9.343 6.343L15 12l-5.657 5.657"),
             Icon::Close => Shape::EvenOdd(
                 "M4.575 4.576a1.5 1.5 0 0 1 2.122 0L12 9.88l5.303-5.303a1.5 1.5 0 0 1 2.122 2.121l-5.304 5.304l5.304 5.303a1.5 1.5 0 1 1-2.122 2.121L12 14.122l-5.303 5.303a1.5 1.5 0 1 1-2.122-2.12L9.88 12L4.575 6.697a1.5 1.5 0 0 1 0-2.12",
+            ),
+            Icon::Copy => Shape::Fill(
+                "M15 7a2 2 0 0 1 2 2v11a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V9a2 2 0 0 1 2-2zm5-5a2 2 0 0 1 2 2v11a2 2 0 0 1-2 2h-2v-2h2V4H9v2H7V4a2 2 0 0 1 2-2z",
             ),
             Icon::Crop => Shape::Fill(
                 "M7.5 3a1.5 1.5 0 1 0-3 0zM18 16.5a1.5 1.5 0 0 0 0 3zm3 3a1.5 1.5 0 0 0 0-3zM16.5 21a1.5 1.5 0 0 0 3 0zM6 7.5a1.5 1.5 0 1 0 0-3zm-3-3a1.5 1.5 0 1 0 0 3zM6 3H4.5v14h3V3zm12 15v1.5h3v-3h-3zM7 18v1.5h7.5v-3H7zm11 3h1.5V7h-3v14zM6 6V4.5H3v3h3zm11 0V4.5H9.5v3H17zm1 1h1.5A2.5 2.5 0 0 0 17 4.5v3a.5.5 0 0 1-.5-.5zM6 17H4.5A2.5 2.5 0 0 0 7 19.5v-3a.5.5 0 0 1 .5.5z",
@@ -123,6 +129,7 @@ impl Icon {
             Icon::Play => Shape::EvenOdd(
                 "M5.669 4.76a1.47 1.47 0 0 1 2.04-1.177c1.062.453 3.442 1.532 6.462 3.276c3.021 1.744 5.146 3.266 6.069 3.958c.788.59.79 1.763.001 2.355c-.914.687-3.013 2.191-6.07 3.956c-3.06 1.766-5.412 2.832-6.464 3.28a1.467 1.467 0 0 1-2.038-1.177c-.138-1.141-.396-3.734-.396-7.236c0-3.5.257-6.092.396-7.235",
             ),
+            Icon::Remove => Shape::EvenOdd("M5 10.5h14a1.5 1.5 0 0 1 0 3H5a1.5 1.5 0 0 1 0-3"),
             Icon::Restore => Shape::EvenOdd(
                 "M13.941 19.244a7.5 7.5 0 0 1-7.534-2.245A1.5 1.5 0 1 0 4.172 19a10.5 10.5 0 0 0 10.545 3.142c5.602-1.501 8.926-7.259 7.425-12.86c-1.5-5.602-7.258-8.926-12.86-7.425a10.5 10.5 0 0 0-7.784 10.06c-.01 1.314 1.449 2.04 2.492 1.337l2.674-1.801c1.466-.988.483-3.274-1.243-2.889l-.1.022a7.5 7.5 0 1 1 8.62 10.658",
             ),
@@ -201,7 +208,7 @@ pub fn Ico(icon: Icon, #[prop(default = 24)] size: u32) -> impl IntoView {
 mod tests {
     use super::*;
 
-    const ALL: [Icon; 34] = [
+    const ALL: [Icon; 36] = [
         Icon::Add,
         Icon::ArrowBack,
         Icon::ArrowUp,
@@ -209,6 +216,7 @@ mod tests {
         Icon::ChevronLeft,
         Icon::ChevronRight,
         Icon::Close,
+        Icon::Copy,
         Icon::Crop,
         Icon::Cut,
         Icon::Delete,
@@ -224,6 +232,7 @@ mod tests {
         Icon::Logout,
         Icon::Palette,
         Icon::Play,
+        Icon::Remove,
         Icon::Restore,
         Icon::Search,
         Icon::Share,

@@ -36,9 +36,9 @@ src/
   theme.rs      the browser's bar colour (theme-color) from the seed hue
   i18n.rs       t!() over the Fluent catalogues
   pages/        one module per page; shell.rs is the frame, soon.rs the placeholder, post/ the viewer
-  components/   icons, brand, snackbar, tiles, downloads; later chips, menus, the tag box
+  components/   icons, brand, snackbar, tiles, downloads, the tag box and its grip, a tag's menu
   logic/        pure Rust with unit tests: server addresses, the gallery's lists and layout, zoom, the viewer's
-                tags, details and file names; later the word at the caret
+                tags, details and file names, the word at the caret, the tag editor's text and who may edit
 locales/        en.ftl, it.ftl
 style/          tokens.css, base.css, shell.css, pages/<page>.css
 index.html      Trunk's entry, with the loading screen
@@ -53,7 +53,7 @@ Plain CSS, split by role. `index.html` links each file with `<link data-trunk re
 | File | Holds |
 |---|---|
 | `style/tokens.css` | Colour roles for light, dark and the system's dark, all from `--seed-hue` in OKLCH; radii, easing, durations, shadows; `.glass` |
-| `style/base.css` | Base elements and the shared components: buttons, switches, fields, segmented choices, chips, cards, banners, spinners, the snackbar, keyframes and the reduced-motion fallback |
+| `style/base.css` | Base elements and the shared components: buttons, switches, fields and the tag box, segmented choices, chips, cards, banners, spinners, the snackbar, the tag menu, keyframes and the reduced-motion fallback |
 | `style/shell.css` | The top bar, the brand and search capsules, the navigation slider in its three places, the content area |
 | `style/pages/<page>.css` | One per page, linked after the three above when the page lands |
 

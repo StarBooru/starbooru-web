@@ -183,6 +183,22 @@ html:has(.stage) { overscroll-behavior-x: none; }
   margin: 0 0 6px; font-size: 12px; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase;
   color: var(--on-surface-2);
 }
+/* The tag editor (post/edit.rs), in the tags' place: the box, its offers and
+   the "did you mean", the AI's suggestions, then the rating. */
+.card.edit { animation: fade-in var(--med) var(--ease); }
+.edit .field { margin-bottom: 12px; }
+.edit .field:last-of-type { margin-bottom: 20px; }
+.edit textarea { min-height: 96px; }
+.edit .hint { font-size: 13px; }
+.edit .segmented { align-self: stretch; display: flex; }
+/* Each as wide as its word needs, so "questionable" fits a narrow column. */
+.edit .seg { flex: 1 1 auto; min-width: 0; padding: 0 8px; }
+.did-you-mean { display: flex; flex-direction: column; align-items: flex-start; gap: 8px; margin-bottom: 12px; font-size: 14px; }
+.suggest { display: flex; flex-direction: column; align-items: flex-start; gap: 8px; margin-bottom: 12px; }
+.suggest .row-end { align-self: stretch; }
+.suggest .banner { align-self: stretch; margin: 0; }
+.chip.suggest-new { border-style: dashed; gap: 6px; }
+.suggest-badge { font-size: 11px; font-weight: 600; text-transform: uppercase; color: var(--tertiary); }
 .post-swatches { display: flex; flex-wrap: wrap; gap: 6px; }
 .post-swatches .swatch { width: 24px; height: 24px; }
 .meta a { overflow-wrap: anywhere; }

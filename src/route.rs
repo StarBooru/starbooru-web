@@ -113,6 +113,8 @@ pub fn tag(name: &str) -> String {
     format!("/tag?name={}", query_value(name))
 }
 
+/// The list of tags.
+pub const TAGS: &str = "/tags";
 /// The Upload page.
 pub const UPLOAD: &str = "/upload";
 /// The search cheat sheet.

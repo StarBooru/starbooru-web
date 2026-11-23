@@ -7,10 +7,11 @@ pub mod post;
 mod search_demo;
 pub mod shell;
 pub mod soon;
+pub mod tags;
 
 use leptos::prelude::*;
 use leptos_router::hooks::use_location;
-use starbooru_core::Rating;
+use starbooru_core::{Rating, TagCategory};
 
 /// An address that leads nowhere.
 #[component]
@@ -38,3 +39,23 @@ pub(crate) fn rating_label(rating: Rating) -> String {
         Rating::Explicit => t!("rating-explicit"),
     }
 }
+
+/// A tag category's name in the current language.
+pub(crate) fn category_label(category: TagCategory) -> String {
+    match category {
+        TagCategory::General => t!("category-general"),
+        TagCategory::Artist => t!("category-artist"),
+        TagCategory::Character => t!("category-character"),
+        TagCategory::Copyright => t!("category-copyright"),
+        TagCategory::Meta => t!("category-meta"),
+    }
+}
+
+/// The categories, in the order the pages list them.
+pub(crate) const CATEGORIES: [TagCategory; 5] = [
+    TagCategory::General,
+    TagCategory::Artist,
+    TagCategory::Character,
+    TagCategory::Copyright,
+    TagCategory::Meta,
+];

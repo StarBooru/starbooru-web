@@ -213,6 +213,23 @@ post-tags = Tag
 post-edit = Modifica
 post-edit-tags = Modifica i tag
 post-no-tags = Ancora nessun tag.
+post-edit-title = Modifica tag e classificazione (E)
+post-tags-hint = Metti artist:, character:, copyright: o meta: davanti a un tag per sceglierne la categoria.
+post-did-you-mean = Intendevi?
+post-replace-tag = Sostituisci { $from } con { $to }
+tag-offers = Tag che corrispondono
+tag-error-prefix = “{ $tag }” non può essere un tag: un tag non può iniziare con - o ~.
+tag-error-long = “{ $tag }” è troppo lungo per un tag. Resta entro { $max } caratteri.
+tag-error-many = Un post può avere al massimo { $max } tag.
+tag-error-other = “{ $tag }” non può essere un tag.
+cancel = Annulla
+save = Salva
+ai-suggest = Suggerisci tag
+ai-suggesting = Chiedo all'IA…
+ai-add-all = Aggiungi tutti
+ai-new-tag = nuovo
+ai-no-suggestions = Nessun suggerimento per questo post.
+ai-rating = Classificazione suggerita: { $rating }
 category-general = Generale
 category-artist = Artista
 category-character = Personaggio
@@ -246,6 +263,63 @@ post-added = Aggiunto
 post-source = Fonte
 post-sample-note = Stai vedendo una copia più leggera. Ingrandendo si carica l’originale.
 post-show-original = Mostra originale
+
+## Tag
+
+tags-sort = Ordina i tag
+tags-most-used = Più usati
+tags-a-z = A–Z
+tags-filter-label = Filtra i tag
+tags-filter-placeholder = Filtra per nome o alias
+tags-any-category = Tutti
+tags-none-yet = Ancora nessun tag
+tags-none-match = Nessun tag corrisponde
+tags-appear = I tag compaiono qui quando i post li usano.
+tags-missing = Nessun tag chiamato “{ $name }”
+tags-all = Tutti i tag
+tags-browse =
+    { $count ->
+        [one] Sfoglia 1 post
+       *[other] Sfoglia { $count } post
+    }
+tags-is-alias = “{ $name }” è un alias di questo tag.
+tags-category = Categoria
+tags-tree = Posizione nell'albero
+tags-tree-hint = Cercare un tag trova anche i tag sotto di esso, e la cima dell'albero è la sezione in cui vengono raggruppati i tag di un post.
+tags-tree-top = In cima: niente sopra.
+tags-parent = Tag genitore
+tags-move = Sposta sotto
+tags-move-top = Porta in cima
+tags-children = Sotto di esso
+tags-children-none = Ancora niente sotto.
+tags-aliases = Alias
+tags-aliases-hint = Altri nomi per questo tag. Taggare o cercare con un alias usa questo tag. Aggiungere un alias che è già un tag lo unisce a questo.
+tags-aliases-none = Nessun alias.
+tags-implies = Implica
+tags-implies-hint = I post con questo tag ricevono anche questi tag, compresi quelli taggati in precedenza.
+tags-implies-none = Non implica altri tag.
+tags-implied-by = Implicato da
+tags-implied-by-hint = Tag che aggiungono questo.
+tags-implied-by-none = Nessun tag implica questo.
+tags-new-alias = Nuovo alias
+tags-implied-tag = Tag implicato
+tags-remove = Rimuovi
+tags-remove-named = Rimuovi { $name }
+tags-admins-only = Solo gli amministratori possono modificarlo.
+tags-merge-confirm =
+    { $count ->
+        [one] “{ $name }” è già un tag, su 1 post. Come alias viene unito a questo tag, e non si può annullare.
+       *[other] “{ $name }” è già un tag, su { $count } post. Come alias viene unito a questo tag, e non si può annullare.
+    }
+tags-merge = Unisci
+add = Aggiungi
+tag-menu-search = Cerca questo tag
+tag-menu-add = Aggiungi alla ricerca
+tag-menu-exclude = Escludilo
+tag-menu-details = Dettagli del tag
+tag-menu-copy = Copia il nome
+tag-copied = Nome del tag copiato
+tag-copy-failed = Non è stato possibile copiare il nome del tag
 
 ## Guida alla ricerca
 
@@ -304,6 +378,7 @@ help-tip-aliases = Un alias trova il suo tag, e i tag implicati vengono aggiunti
 help-tip-terms = Una ricerca contiene al massimo 40 termini.
 help-shortcuts = Scorciatoie da tastiera e gesti
 key-prev-next = post precedente o successivo
+key-edit = modifica tag e classificazione
 key-fullscreen = schermo intero
 key-zoom = ingrandisci o riduci
 key-fit = adatta allo schermo

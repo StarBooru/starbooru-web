@@ -4,5 +4,6 @@ pub mod address;
 pub mod gallery;
 pub mod layout;
 pub mod search;
+pub mod tags;
 pub mod viewer;
 pub mod zoom;

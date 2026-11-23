@@ -1,10 +1,10 @@
-//! The search box's rules that need no browser: the word at the caret and
-//! what completing it does, the answers kept for it, which answer is still
-//! wanted, the keys of its list, the empty box's typing demo, and the words
-//! of the correction banner.
+//! The search box's rules that need no browser: the word at the caret, in
+//! the search and in a tag box, and what completing it does, the answers kept
+//! for it, which answer is still wanted, the keys of its list, the empty
+//! box's typing demo, and the words of the correction banner.
 
 use chrono::{DateTime, Utc};
-use starbooru_core::{Tag, TagCategory, TagCorrection};
+use starbooru_core::{Tag, TagCategory, TagCorrection, split_category};
 
 // ---------- the word at the caret ----------
 
@@ -19,10 +19,9 @@ pub struct Word {
     pub typed: String,
 }
 
-/// The tag under the caret, `caret` bytes into `value`, if there is one to
-/// complete. A `key:value` term, a word in the quotes of `text:"…"` and the
-/// space after a word have none.
-pub fn word_at(value: &str, caret: usize) -> Option<Word> {
+/// Where the word around `caret` starts and ends in `value`, in bytes: words
+/// are what's between spaces and line breaks.
+fn around(value: &str, caret: usize) -> Option<(usize, usize)> {
     let before = value.get(..caret)?;
     let after = value.get(caret..)?;
     let start = before
@@ -31,6 +30,14 @@ pub fn word_at(value: &str, caret: usize) -> Option<Word> {
         .find(|(_, c)| c.is_whitespace())
         .map_or(0, |(i, c)| i + c.len_utf8());
     let end = caret + after.find(char::is_whitespace).unwrap_or(after.len());
+    Some((start, end))
+}
+
+/// The tag under the caret, `caret` bytes into `value`, if there is one to
+/// complete. A `key:value` term, a word in the quotes of `text:"…"` and the
+/// space after a word have none.
+pub fn word_at(value: &str, caret: usize) -> Option<Word> {
+    let (start, end) = around(value, caret)?;
     if in_quotes(value.get(..start)?) {
         return None;
     }
@@ -71,6 +78,26 @@ fn in_quotes(text: &str) -> bool {
         }
     }
     open
+}
+
+/// The tag under the caret in a tag box, where every word is a tag. A
+/// category prefix (`artist:`) stays in front and the rest is completed; a
+/// word with any other colon in it has nothing to complete.
+pub fn tag_word_at(value: &str, caret: usize) -> Option<Word> {
+    let (start, end) = around(value, caret)?;
+    let word = value.get(start..end)?;
+    let (_, tag) = split_category(word);
+    let tag_start = start + (word.len() - tag.len());
+    // In the prefix itself, nothing is typed yet.
+    if caret < tag_start || tag.contains(':') {
+        return None;
+    }
+    let typed = value.get(tag_start..caret)?;
+    (!typed.is_empty()).then(|| Word {
+        start: tag_start,
+        end,
+        typed: typed.to_owned(),
+    })
 }
 
 /// `value` with `word` replaced by `tag`, and where the caret goes: after a
@@ -209,7 +236,9 @@ impl From<Tag> for Hint {
     }
 }
 
-fn category_class(category: TagCategory) -> &'static str {
+/// The class that colours a tag's name by its category; none for a general
+/// tag.
+pub fn category_class(category: TagCategory) -> &'static str {
     match category {
         TagCategory::General => "",
         TagCategory::Artist => "cat-artist",
@@ -427,6 +456,57 @@ mod tests {
         );
         assert_eq!(word_at("猫", 1), None);
         assert_eq!(word_at("cat", 9), None);
+    }
+
+    /// The tag box's word at `|` in `marked`, as `(typed, start)`.
+    fn in_box(marked: &str) -> Option<(String, usize)> {
+        let caret = marked.find('|').unwrap();
+        let value = marked.replace('|', "");
+        tag_word_at(&value, caret).map(|w| (w.typed, w.start))
+    }
+
+    /// Accepting `tag` at `|` in a tag box.
+    fn accept_in_box(marked: &str, tag: &str) -> String {
+        let caret = marked.find('|').unwrap();
+        let value = marked.replace('|', "");
+        let word = tag_word_at(&value, caret).unwrap();
+        let (mut out, at) = complete(&value, &word, tag).unwrap();
+        out.insert(at, '|');
+        out
+    }
+
+    #[test]
+    fn a_tag_box_completes_each_word_and_keeps_a_category_prefix() {
+        assert_eq!(in_box("blue_sk|"), Some(("blue_sk".into(), 0)));
+        assert_eq!(in_box("cat blu| dog"), Some(("blu".into(), 4)));
+        // Lines are words apart too.
+        assert_eq!(in_box("cat\nchar:ri|"), Some(("ri".into(), 9)));
+        assert_eq!(in_box("artist:mi|"), Some(("mi".into(), 7)));
+        assert_eq!(accept_in_box("artist:mi|", "mika"), "artist:mika |");
+        assert_eq!(
+            accept_in_box("cat blu| dog", "blue_sky"),
+            "cat blue_sky |dog"
+        );
+        assert_eq!(
+            accept_in_box("cat\nblu|\ndog", "blue_sky"),
+            "cat\nblue_sky\n|dog"
+        );
+        // Halfway into a word, as in the search.
+        assert_eq!(in_box("cat bl|u dog"), Some(("bl".into(), 4)));
+        // A minus or a brace is part of the tag here: there are no groups.
+        assert_eq!(in_box("{fra|"), Some(("{fra".into(), 0)));
+        for nothing in [
+            "|",
+            "cat |",
+            "|cat dog",
+            "cat | dog",
+            "artist:|",
+            "arti|st:mi",
+            "rating:s|",
+            "a:b:c|",
+        ] {
+            assert_eq!(in_box(nothing), None, "{nothing}");
+        }
     }
 
     #[test]
