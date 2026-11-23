@@ -181,7 +181,6 @@ a.brand:hover .mark-star, a.search-home:hover .mark-star { transform: rotate(90d
 .content { --pad-x: 16px; padding: calc(var(--bar-end) + 16px) var(--pad-x) 48px; }
 .page { max-width: 1600px; margin: 0 auto; animation: fade-up var(--med) var(--ease); }
 .page.narrow { max-width: 720px; }
-.soon-mark { color: var(--primary); opacity: 0.7; }
 .center-page { display: grid; place-items: center; min-height: 50vh; padding: 16px; }
 .center-page > .card { width: min(480px, 100%); }
 /* A page outside the shell, with no bars around it. */

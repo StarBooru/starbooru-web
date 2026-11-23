@@ -14,10 +14,15 @@ use super::icons::{Ico, Icon};
 use super::snackbar::notify;
 use crate::logic::viewer::same_origin;
 
-/// A button that saves `href`, a signed media address, as `name`.
+/// A button that saves `href`, a signed media address, as `name`. `label`
+/// says what it saves, when that's more than the post on screen.
 #[component]
-pub fn DownloadLink(href: String, name: String) -> impl IntoView {
-    let label = move || t!("post-download");
+pub fn DownloadLink(
+    href: String,
+    name: String,
+    #[prop(optional, into)] label: Option<Signal<String>>,
+) -> impl IntoView {
+    let label = move || label.map_or_else(|| t!("post-download"), |l| l.get());
     let target = href.clone();
     let file = name.clone();
     let click = move |e: MouseEvent| {

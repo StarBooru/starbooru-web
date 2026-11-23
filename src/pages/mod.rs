@@ -1,5 +1,6 @@
 //! The app's pages. `app.rs` says which address shows which.
 
+pub mod admin;
 pub mod boorus;
 mod bulk;
 pub mod duplicates;

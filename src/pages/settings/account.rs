@@ -8,8 +8,8 @@ use leptos::prelude::*;
 use leptos::task::spawn_local;
 use starbooru_core::{ServerInfo, SignInMethods};
 
-use super::ConfirmButton;
 use crate::components::banner::ErrorBanner;
+use crate::components::confirm::ConfirmButton;
 use crate::components::icons::{Ico, Icon};
 use crate::components::strength::StrengthField;
 use crate::logic::settings::{

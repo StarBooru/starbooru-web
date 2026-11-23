@@ -1,0 +1,101 @@
+/* Administration (src/pages/admin/): its tabs, the overview's numbers and
+   upload chart, each account's tools, the AI tools, and the backups. */
+
+.admin-tabs { margin-bottom: 16px; }
+/* The tabs are links, so a reload or a new browser tab keeps the one open. */
+a.seg { display: inline-flex; align-items: center; justify-content: center; text-align: center; text-decoration: none; }
+.admin-wait { display: grid; place-items: center; padding: 48px 0; }
+
+/* ---------- overview ---------- */
+
+.stat-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 12px; margin-bottom: 16px; }
+.stat {
+  display: grid; gap: 2px; padding: 16px 18px; border-radius: var(--radius-m);
+  background: var(--surface); box-shadow: var(--shadow-1); animation: fade-up var(--med) var(--ease) both;
+}
+.stat-value { font-size: 24px; font-weight: 600; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.stat-label { font-size: 13px; color: var(--on-surface-2); }
+.bars { display: flex; align-items: flex-end; gap: 3px; height: 120px; padding-top: 4px; }
+.bar {
+  flex: 1 1 0; min-width: 0; min-height: 3px; border-radius: 4px 4px 2px 2px; background: var(--primary);
+  transform-origin: bottom; animation: grow var(--slow) var(--ease-spring) both;
+}
+.bar.empty { background: var(--surface-3); }
+.bars-axis { display: flex; justify-content: space-between; margin-top: 6px; font-size: 12px; font-variant-numeric: tabular-nums; }
+@keyframes grow { from { transform: scaleY(0); } }
+
+/* ---------- accounts ---------- */
+
+.account { flex-wrap: wrap; }
+.account-line span { white-space: nowrap; }
+.account-tools .segmented { justify-self: start; }
+.account-tools {
+  flex-basis: 100%; display: grid; gap: 4px; padding: 16px; border-radius: var(--radius-m);
+  background: var(--surface-2); animation: fade-up var(--med) var(--ease);
+}
+.account-tools .field { margin-bottom: 12px; }
+.account-tools .banner { margin-bottom: 8px; }
+.account-tools > .field-hint { margin: 0; font-size: 13px; }
+.inline-input { display: flex; gap: 8px; align-items: center; min-width: 0; }
+.inline-input input, .inline-input .pw-field { flex: 1; width: 0; min-width: 0; }
+.inline-input .pw-field input { width: 100%; }
+.inline-input .btn { flex: none; }
+.saved-note { display: inline-flex; align-items: center; gap: 4px; font-size: 14px; color: var(--ok); }
+
+/* ---------- AI ---------- */
+
+.ai-machine { margin-bottom: 12px; overflow-wrap: anywhere; }
+/* Local models can't run: what, why, and what's left. */
+.ai-runtime { display: grid; justify-content: stretch; gap: 2px; margin-bottom: 8px; }
+.ai-tool { display: grid; gap: 12px; padding: 16px 0; border-top: 1px solid var(--outline); min-width: 0; }
+.ai-machine + .ai-tool, .ai-runtime + .ai-tool { border-top: 0; padding-top: 8px; }
+.ai-tool:last-child { padding-bottom: 0; }
+.ai-tool .segmented { justify-self: start; max-width: 100%; }
+.ai-tool .seg { display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 48px; line-height: 1.25; }
+.ai-tool .seg small { font-size: 12px; font-weight: 400; text-transform: none; }
+.ai-tool .field, .ai-tool .check { margin: 0; }
+.ai-tool-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: 28px; }
+.ai-tool-head h3 { margin: 0; font-size: 16px; font-weight: 600; }
+.ai-tool-head .pill { flex: none; max-width: none; }
+.ai-note { margin: 0; font-size: 14px; overflow-wrap: anywhere; }
+.ai-tool .banner { margin: 0; }
+.ai-models summary { cursor: pointer; font-size: 14px; font-weight: 500; padding: 4px 0; }
+.ai-model { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 16px; padding: 10px 0; border-top: 1px solid var(--outline); }
+.ai-models summary + .ai-model { margin-top: 8px; }
+.ai-model-text { display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 8px; flex: 1 1 220px; min-width: 0; font-size: 14px; overflow-wrap: anywhere; }
+.ai-model-text strong { flex-basis: 100%; font-weight: 500; }
+.ai-model-text .pill { max-width: none; }
+.ai-model-error { flex-basis: 100%; color: var(--danger); }
+.ai-model-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; font-size: 14px; }
+.ai-model-actions .pill { max-width: none; }
+.ai-meter { width: 96px; }
+.ai-api { display: grid; gap: 12px; }
+.ai-api .banner { margin: 0; }
+.ai-api-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; font-size: 14px; }
+
+/* ---------- backups ---------- */
+
+.backup-actions { display: flex; align-items: center; gap: 4px; flex-shrink: 0; }
+.backups-none { margin-bottom: 12px; }
+pre.command {
+  margin: 0 0 12px; padding: 10px 12px; border-radius: var(--radius-s);
+  background: var(--surface-2); color: var(--on-surface);
+  font: 13px/1.5 ui-monospace, "Cascadia Code", "Roboto Mono", monospace;
+  white-space: pre-wrap; overflow-wrap: anywhere;
+}
+.schedule-fields { display: grid; grid-template-columns: 1fr 1fr; gap: 0 16px; align-items: start; }
+
+/* ---------- phones ---------- */
+
+@media (max-width: 760px) {
+  .admin-tabs, .ai-tool .segmented, .account-tools .segmented { display: flex; justify-self: stretch; }
+  .admin-tabs .seg, .ai-tool .seg, .account-tools .seg { flex: 1 1 0; }
+}
+@media (max-width: 600px) {
+  .schedule-fields { grid-template-columns: 1fr; }
+}
+
+/* The bars and tiles appear without moving; base.css shortens the rest. */
+@media (prefers-reduced-motion: reduce) {
+  .stat, .bar, .account-tools { animation: none; }
+}

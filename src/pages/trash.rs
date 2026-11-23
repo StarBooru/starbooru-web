@@ -401,6 +401,13 @@ async fn restore_all() -> Result<String, String> {
     Ok(message)
 }
 
+/// Empties the bin from another page. What's in it is read first, so that
+/// no page keeps showing those posts.
+pub(crate) async fn empty_whole_bin() -> Result<String, String> {
+    let listed = whole_bin().await.unwrap_or_default();
+    empty_all(listed).await
+}
+
 /// Empties the bin, which held at least `listed`.
 async fn empty_all(listed: Vec<i64>) -> Result<String, String> {
     let done = api::call(|c| async move { c.empty_trash().await }).await?;

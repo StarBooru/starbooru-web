@@ -51,10 +51,16 @@ fn client_for(session: &Session) -> Option<Client> {
 /// Drops the client and what it was told, at sign-out.
 pub fn forget() {
     CLIENT.with_borrow_mut(|cache| *cache = None);
-    SERVER_INFO.with_borrow_mut(|kept| kept.0 = None);
-    AI_STATUS.with_borrow_mut(|kept| kept.0 = None);
+    forget_server_answers();
     forget_tags();
     REMOTE_HINTS.with_borrow_mut(|k| *k = Answers::default());
+}
+
+/// Drops what the server said of itself and of its AI tools, after an
+/// administrator may have changed them, so other pages ask again.
+pub fn forget_server_answers() {
+    SERVER_INFO.with_borrow_mut(|kept| kept.0 = None);
+    AI_STATUS.with_borrow_mut(|kept| kept.0 = None);
 }
 
 /// Runs `request` with the session's client. A failure comes back as words

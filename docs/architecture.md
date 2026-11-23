@@ -39,19 +39,21 @@ src/
   i18n.rs       t!() over the Fluent catalogues
   pages/        one module per page; shell.rs is the frame, soon.rs the placeholder, post/ the viewer and
                   its media editor, share/ the share sheet, the list of links and the public /s/ page,
-                  settings/ the Settings cards
-  components/   icons, brand, snackbar, tiles and their swipes, downloads, the tag box and its grip, a tag's menu
+                  settings/ the Settings cards, admin/ the administration's tabs
+  components/   icons, brand, snackbar, tiles and their swipes, downloads, the tag box and its grip, a tag's menu,
+                  the button that asks "Sure?"
   logic/        pure Rust with unit tests: server addresses, the gallery's lists and layout, zoom, the viewer's
                   tags, details and file names, the word at the caret, the tag editor's text and who may edit,
                   the gallery's selection and the mass edit it sends, the booru browser's sites, addresses and
                   results, the library import's text, the media editor's crop, turns and trim, share links'
-                  lifetimes, addresses and expiry text, Settings' accent, lists and password checks, and swipes
+                  lifetimes, addresses and expiry text, Settings' accent, lists and password checks, swipes, and
+                  the administration's limits, chart, form checks and AI requests
 locales/        en.ftl, it.ftl
 style/          tokens.css, base.css, shell.css, pages/<page>.css
 index.html      Trunk's entry, with the loading screen
 ```
 
-Routes keep the reference's paths, so links people saved still open: `/`, `/explore`, `/post/:id`, `/tags`, `/tag`, `/upload`, `/boorus`, `/boorus/post`, `/settings`, `/trash`, `/duplicates`, `/help`, `/admin`, `/oidc`, `/s/:token`, `/privacy`, `/terms`. The first thirteen show inside the shell. A page that isn't built yet shows `Soon` with its title; it lands by replacing that view in `app.rs`.
+Routes keep the reference's paths, so links people saved still open: `/`, `/explore`, `/post/:id`, `/tags`, `/tag`, `/upload`, `/boorus`, `/boorus/post`, `/settings`, `/trash`, `/duplicates`, `/help`, `/admin`, `/oidc`, `/s/:token`, `/privacy`, `/terms`. The first thirteen show inside the shell. A page that isn't built yet shows `SoonAlone` with its title; it lands by replacing that view in `app.rs`.
 
 ## Styles
 

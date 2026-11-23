@@ -8,6 +8,7 @@ use leptos_router::path;
 use crate::components::snackbar::Snackbar;
 use crate::i18n;
 use crate::pages::NotFound;
+use crate::pages::admin::Admin;
 use crate::pages::boorus::{BooruPost, Boorus};
 use crate::pages::duplicates::Duplicates;
 use crate::pages::explore::Explore;
@@ -18,7 +19,7 @@ use crate::pages::post::PostView;
 use crate::pages::settings::Settings;
 use crate::pages::share::SharedPage;
 use crate::pages::shell::Shell;
-use crate::pages::soon::{Soon, SoonAlone};
+use crate::pages::soon::SoonAlone;
 use crate::pages::tags::{TagPage, Tags};
 use crate::pages::trash::Trash;
 use crate::pages::upload::Upload;
@@ -69,7 +70,7 @@ pub fn App() -> impl IntoView {
 }
 
 /// Every address the app has, the reference's. A page still to be built
-/// shows `Soon` with its name until it lands.
+/// shows `SoonAlone` with its name until it lands.
 #[component]
 fn AppRoutes() -> impl IntoView {
     view! {
@@ -92,7 +93,7 @@ fn AppRoutes() -> impl IntoView {
                 <Route path=path!("/trash") view=Trash />
                 <Route path=path!("/duplicates") view=Duplicates />
                 <Route path=path!("/help") view=Help />
-                <Route path=path!("/admin") view=|| view! { <Soon title=|| t!("admin-title") /> } />
+                <Route path=path!("/admin") view=Admin />
             </ParentRoute>
         </Routes>
     }
@@ -295,6 +296,7 @@ mod tests {
             include_str!("../style/pages/editor.css"),
             include_str!("../style/pages/help.css"),
             include_str!("../style/pages/share.css"),
+            include_str!("../style/pages/admin.css"),
         ] {
             assert!(!css.contains("-webkit-backdrop-filter"));
         }
@@ -314,6 +316,7 @@ mod tests {
             ("duplicates", include_str!("../style/pages/duplicates.css")),
             ("settings", include_str!("../style/pages/settings.css")),
             ("share", include_str!("../style/pages/share.css")),
+            ("admin", include_str!("../style/pages/admin.css")),
         ] {
             // A colour worked out from the tokens is fine: `oklch(from var(--x) …)`,
             // or the strength meter's `oklch(var(--meter-l) …)`.

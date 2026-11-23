@@ -10,8 +10,8 @@ use leptos::task::spawn_local;
 use starbooru_core::keys::MAX_API_KEY_NAME_CHARS;
 use starbooru_core::{ApiKey, CreatedApiKey};
 
-use super::ConfirmButton;
 use crate::components::banner::{ErrorBanner, Spinner};
+use crate::components::confirm::ConfirmButton;
 use crate::components::icons::{Ico, Icon};
 use crate::components::select::{Choice, Select};
 use crate::logic::settings::{
