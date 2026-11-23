@@ -5,6 +5,7 @@ mod i18n;
 mod api;
 mod app;
 mod components;
+mod dom;
 mod logic;
 mod oidc;
 mod pages;
@@ -22,6 +23,7 @@ fn main() {
         &i18n::browser_languages(),
     );
     i18n::set_lang(lang);
+    dom::manual_scroll_restoration();
     // Into `#main`, so the loading screen after it knows when to go.
     let root = web_sys::window()
         .and_then(|w| w.document())

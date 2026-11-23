@@ -22,15 +22,33 @@ percent-encoding = "2"
 wasm-bindgen = "0.2"
 wasm-bindgen-futures = "0.4"
 js-sys = "0.3"
+# Lets a browser handle go into Leptos's cleanups, which want `Send`.
+send_wrapper = "0.6"
 web-sys = { version = "0.3", features = [
+  "AddEventListenerOptions",
   "Document",
+  "DomRect",
   "DomTokenList",
   "Element",
+  "History",
   "HtmlElement",
+  "HtmlImageElement",
   "HtmlInputElement",
+  "IntersectionObserver",
+  "IntersectionObserverEntry",
+  "IntersectionObserverInit",
+  "KeyboardEvent",
   "Location",
   "MediaQueryList",
+  "MouseEvent",
   "Navigator",
+  "PointerEvent",
+  "ResizeObserver",
+  "ScrollBehavior",
+  "ScrollIntoViewOptions",
+  "ScrollLogicalPosition",
+  "ScrollRestoration",
+  "ScrollToOptions",
   "Storage",
   "Window",
 ] }

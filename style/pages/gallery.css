@@ -1,0 +1,219 @@
+/* The gallery (pages/gallery.rs, components/thumb.rs): the header and its
+   menus, the grid of tiles, the end of the list and the arrow to the top. */
+
+/* ---------- grid ---------- */
+
+/* `--tile-gap` is also TILE_GAP in logic/layout.rs. */
+.app { --tile-gap: 8px; --tile-radius: var(--radius-m); }
+.app[data-tiles="flush"] { --tile-gap: 0px; --tile-radius: 0px; }
+/* The layout (logic/layout.rs) works out each tile's place and size as so many
+   tile widths and so many gaps, and this does the pixels. The grid's height
+   changes with every page of results; as an ordinary custom property it is
+   inherited, and every tile on the page would be restyled each time. */
+@property --height { syntax: "<number>"; inherits: false; initial-value: 0; }
+@property --height-gaps { syntax: "<number>"; inherits: false; initial-value: 0; }
+.masonry-box { container-type: inline-size; }
+.masonry {
+  position: relative;
+  --tile: calc((100cqw - (var(--columns) - 1) * var(--tile-gap)) / var(--columns));
+  height: calc(var(--height) * var(--tile) + var(--height-gaps) * var(--tile-gap));
+}
+.masonry .thumb {
+  position: absolute; aspect-ratio: auto;
+  left: calc(var(--x) * var(--tile) + var(--x-gaps) * var(--tile-gap));
+  top: calc(var(--y) * var(--tile) + var(--y-gaps) * var(--tile-gap));
+  width: calc(var(--w) * var(--tile) + var(--w-gaps) * var(--tile-gap));
+  height: calc(var(--h) * var(--tile) + var(--h-gaps) * var(--tile-gap));
+}
+.app[data-tiles="flush"] .page.gallery { max-width: none; }
+.app[data-tiles="flush"] .masonry-box { margin-inline: calc(var(--pad-x) * -1); }
+/* Tiles at fractional sizes round apart at some zooms, leaving a hairline;
+   each one reaches a pixel under the next instead. */
+.app[data-tiles="flush"] .masonry { overflow: clip; }
+.app[data-tiles="flush"] .masonry .thumb {
+  width: calc(var(--w) * var(--tile) + 1px); height: calc(var(--h) * var(--tile) + 1px);
+}
+.app[data-tiles="flush"] .masonry .thumb-media { inset: -1px; }
+
+/* ---------- tiles ---------- */
+
+/* `--tint` is the picture's main colour, which fills the tile until its
+   thumbnail has come; then the picture fades in over it. */
+.thumb {
+  position: relative; display: block; aspect-ratio: 1; overflow: hidden; text-decoration: none;
+  border-radius: var(--tile-radius); background: var(--tint, var(--surface-2));
+  animation: pop-in var(--slow) var(--ease-spring) both; animation-delay: var(--delay, 0ms);
+}
+.thumb.still, .app[data-effects="lite"] .thumb { animation: none; }
+/* Hidden until it has come: a browser draws the description, underlined like
+   a link, or a broken-picture mark in the meantime. */
+.thumb img {
+  width: 100%; height: 100%; object-fit: cover; display: block; color: transparent; opacity: 0;
+  transition: opacity var(--med) var(--ease), filter var(--fast) var(--ease);
+}
+.thumb.loaded img { opacity: 1; }
+/* Hover and press only change the light: nothing in the grid moves. */
+.thumb:hover img { filter: brightness(1.08); }
+.thumb:active img { filter: brightness(0.92); }
+/* While the page scrolls under a pointer that stays put, a different tile is
+   under it on every frame. Each would start a fade of its own, with a layer to
+   draw it on, so the light waits until the page is still (pages/gallery.rs). */
+html.sb-scrolling .thumb img { filter: none; transition: opacity var(--med) var(--ease); }
+.thumb:focus-visible { outline-offset: -3px; }
+.thumb-placeholder { display: grid; place-items: center; height: 100%; color: var(--on-surface-2); }
+.thumb-media { position: absolute; inset: 0; }
+.thumb .preview {
+  position: absolute; inset: 0; pointer-events: none;
+  animation: fade-in var(--med) var(--ease) 250ms both;
+}
+.thumb .preview video { width: 100%; height: 100%; object-fit: cover; display: block; }
+.badge {
+  position: absolute; right: 8px; bottom: 8px; display: inline-flex; align-items: center; gap: 4px;
+  min-height: 24px; font-variant-numeric: tabular-nums; padding: 2px 8px; border-radius: 999px; font-size: 12px; font-weight: 700;
+  background: var(--scrim); color: var(--on-scrim);
+}
+.page.gallery { animation: none; }
+
+/* ---------- the end of the list ---------- */
+
+.sentinel { display: grid; place-items: center; min-height: 104px; padding: 32px 0; }
+.sentinel.done { display: none; }
+.help-link { margin: -4px 0 16px; }
+
+/* The arrow back to the top: in the middle at the bottom, or on a phone above
+   the bar, on the side of the hand that holds it. */
+.to-top {
+  position: fixed; z-index: 8; bottom: calc(24px + env(safe-area-inset-bottom));
+  left: calc(50% + (var(--rail-l) - var(--rail-r)) / 2 - 24px);
+  display: grid; place-items: center; width: 48px; height: 48px; padding: 0; border: 0; border-radius: 50%;
+  background: var(--primary-container); color: var(--on-primary-container); box-shadow: var(--shadow-2); cursor: pointer;
+  opacity: 0; visibility: hidden; transform: translateY(16px) scale(0.8);
+  transition: opacity var(--med) var(--ease), transform var(--med) var(--ease-spring), visibility 0s var(--med);
+}
+/* On its way out, a touch goes through it to what's under it. */
+.to-top:not(.shown) { pointer-events: none; }
+.to-top.shown { opacity: 1; visibility: visible; transform: none; transition-delay: 0s; }
+.to-top.shown:active { transform: scale(0.9); }
+.to-top:focus-visible { outline-offset: 3px; }
+@media (hover: hover) {
+  .to-top.shown:hover { transform: translateY(-2px); }
+}
+@media (max-width: 760px) {
+  .to-top { left: auto; right: 12px; bottom: calc(max(12px, env(safe-area-inset-bottom)) + 72px); }
+  .app[data-hand="left"] .to-top { left: 12px; right: auto; }
+}
+
+/* ---------- header ---------- */
+
+.page-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.gallery .page-head { justify-content: flex-start; margin-bottom: 12px; }
+.gallery .page-head .page-title { margin: 0; }
+.gallery .page-head .tag-info { margin-left: -8px; }
+/* The menus stay together, at the right, on a line of their own when the
+   title leaves them no room. */
+.page-tools { display: flex; align-items: center; gap: 12px; margin-left: auto; }
+.sort { display: inline-flex; align-items: center; gap: 8px; font-size: 14px; }
+@media (max-width: 760px) {
+  .sort > .muted { display: none; }
+}
+
+/* The colour search and the layout menu. The wheel and the swatches show the
+   colours they search for: the wheel's are tokens, the swatches' come with
+   the names they search for. */
+.color-pick, .view-pick { position: relative; display: inline-flex; }
+.color-toggle { position: relative; }
+.color-toggle.on { color: var(--primary); }
+.color-dot {
+  position: absolute; right: 5px; bottom: 5px; width: 10px; height: 10px; border-radius: 50%;
+  border: 1px solid var(--outline);
+}
+.color-menu, .view-menu {
+  position: absolute; top: calc(100% + 6px); right: 0; z-index: 31;
+  display: grid; justify-items: center; gap: 12px; padding: 12px;
+  border-radius: var(--radius-m); background: var(--surface); color: var(--on-surface);
+  border: 1px solid oklch(from var(--outline) l c h / 0.4); box-shadow: var(--shadow-2);
+  animation: drop-in var(--med) var(--ease); transform-origin: top right;
+}
+.view-menu { justify-items: stretch; width: min(380px, calc(100vw - 32px)); font-size: 14px; }
+.view-menu .segmented { display: flex; align-self: stretch; }
+.view-menu .seg { flex: 1 1 0; min-width: 0; padding: 0 6px; font-size: 13px; white-space: normal; line-height: 1.2; }
+.view-row { display: grid; gap: 6px; }
+.view-row .btn { justify-self: end; }
+.view-row input[type="range"] { width: 100%; margin-top: 0; }
+.view-switch { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+@media (max-width: 760px) {
+  .view-menu { position: fixed; top: calc(var(--bar-end) + 8px); left: 8px; right: 8px; width: auto; }
+}
+.color-wheel {
+  width: 176px; height: 176px; border-radius: 50%; cursor: crosshair;
+  background: var(--color-wheel);
+}
+/* The box on the wheel's centre line, with the colour and the button either side. */
+.color-hex { grid-template-columns: 1fr 124px 1fr; align-items: center; gap: 8px; width: 222px; margin: 0; }
+.color-hex input { text-align: center; }
+/* As far from the box as the empty space around the button's tick. */
+.color-preview {
+  justify-self: end; width: 24px; height: 24px; margin-right: 10px; border-radius: 50%;
+  border: 1px solid oklch(from var(--outline) l c h / 0.6);
+}
+.color-hex .icon-btn { justify-self: start; width: 36px; height: 36px; }
+.field-error { color: var(--danger); font-size: 13px; }
+.color-menu .field-error { width: 222px; margin: 0; text-align: center; }
+.swatches { display: grid; grid-template-columns: repeat(6, 32px); gap: 6px; }
+.swatch {
+  display: block; width: 32px; height: 32px; padding: 0; border-radius: 50%; cursor: pointer;
+  border: 1px solid oklch(from var(--outline) l c h / 0.6);
+  transition: box-shadow var(--fast) var(--ease);
+}
+.swatch:hover { box-shadow: 0 0 0 2px var(--surface), 0 0 0 4px var(--outline); }
+.swatch:focus-visible { outline: 3px solid var(--primary); outline-offset: 2px; }
+.swatch[aria-pressed="true"] { outline: 3px solid var(--primary); outline-offset: 2px; }
+
+/* ---------- drop-down (components/select.rs) ---------- */
+
+.select { position: relative; display: inline-block; max-width: 100%; }
+.select-button {
+  display: inline-grid; align-items: center; width: 100%; min-height: 40px; padding: 0 38px 0 16px;
+  border: 1px solid var(--outline); border-radius: 999px; text-align: left;
+  font: inherit; font-weight: 600; color: var(--on-surface); cursor: pointer;
+  position: relative; background-color: var(--surface);
+  transition: background-color var(--fast) var(--ease), border-color var(--fast) var(--ease);
+}
+/* The arrow, an SVG shape filled in the theme's colour. */
+.select-button::after {
+  content: ""; position: absolute; right: 14px; top: 50%; width: 10px; height: 6px; margin-top: -3px;
+  background: var(--on-surface-2); pointer-events: none;
+  mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 10 6'%3E%3Cpath d='M1.5 1.25h7L5 4.75z' stroke='black' stroke-width='1.5' stroke-linejoin='round'/%3E%3C/svg%3E") center / contain no-repeat;
+}
+.select-button:hover { background-color: var(--surface-2); }
+.select-button[aria-expanded="true"] { border-color: var(--primary); background-color: var(--surface-2); }
+.select-button:focus-visible { outline: 3px solid var(--primary); outline-offset: 2px; }
+/* The button is as wide as its longest option, like a native select. */
+.select-sizer, .select-value { grid-area: 1 / 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.select-sizer { display: grid; visibility: hidden; height: 0; }
+.select-sizer > span { grid-area: 1 / 1; }
+.select-backdrop { position: fixed; inset: 0; z-index: 30; cursor: default; }
+.select-list {
+  position: absolute; top: calc(100% + 6px); right: 0; z-index: 31; min-width: 100%;
+  max-height: min(480px, calc(100dvh - var(--bar-end) - 120px)); overflow-y: auto; overscroll-behavior: contain;
+  margin: 0; padding: 6px; list-style: none; border-radius: var(--radius-m);
+  background: var(--surface); color: var(--on-surface);
+  border: 1px solid oklch(from var(--outline) l c h / 0.4); box-shadow: var(--shadow-2);
+  animation: drop-in var(--med) var(--ease); transform-origin: top right;
+}
+.select-list li {
+  position: relative; padding: 10px 40px 10px 14px; border-radius: 10px;
+  white-space: nowrap; cursor: pointer;
+}
+.select-list li.active { background: var(--surface-2); }
+.select-list li[aria-selected="true"] { color: var(--on-primary-container); background: var(--primary-container); font-weight: 600; }
+/* The check mark on the chosen option. */
+.select-list li[aria-selected="true"]::after {
+  content: ""; position: absolute; right: 16px; top: 50%; width: 5px; height: 10px; margin-top: -7px;
+  border: solid currentColor; border-width: 0 2px 2px 0; transform: rotate(45deg);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .thumb img { transition: none; }
+  .thumb .preview { display: none; }
+}

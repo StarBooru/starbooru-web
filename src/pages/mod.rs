@@ -1,5 +1,6 @@
 //! The app's pages. `app.rs` says which address shows which.
 
+pub mod gallery;
 pub mod login;
 pub mod shell;
 pub mod soon;

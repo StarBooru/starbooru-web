@@ -79,9 +79,66 @@ pub fn gallery(q: &str) -> String {
     }
 }
 
+/// Post `id`, opened from the gallery for search `q`, so the viewer can step
+/// through the same results. `seed` is the shuffle of an `order:random` search.
+pub fn post(id: i64, q: &str, seed: Option<i64>) -> String {
+    let mut to = format!("/post/{id}");
+    let q = q.trim();
+    if !q.is_empty() {
+        to.push_str("?q=");
+        to.push_str(&query_value(q));
+    }
+    if let Some(seed) = seed {
+        to.push(if q.is_empty() { '?' } else { '&' });
+        to.push_str(&format!("seed={seed}"));
+    }
+    to
+}
+
+/// Whether the page at `path` shows a search of its own in `?q=`: the
+/// gallery and the posts opened from it.
+pub fn has_search(path: &str) -> bool {
+    let segments: Vec<&str> = path.split('/').filter(|s| !s.is_empty()).collect();
+    matches!(segments.as_slice(), [] | ["post", _])
+}
+
+/// The page of tag `name`.
+pub fn tag(name: &str) -> String {
+    format!("/tag?name={}", query_value(name))
+}
+
+/// The Upload page.
+pub const UPLOAD: &str = "/upload";
+/// The search cheat sheet.
+pub const HELP: &str = "/help";
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_post_carries_the_search_it_was_opened_from() {
+        assert_eq!(post(12, "", None), "/post/12");
+        assert_eq!(post(12, " cat dog ", None), "/post/12?q=cat+dog");
+        assert_eq!(
+            post(5, "order:random", Some(-42)),
+            "/post/5?q=order:random&seed=-42"
+        );
+        assert_eq!(post(5, "", Some(9)), "/post/5?seed=9");
+        assert_eq!(tag("blue_sky"), "/tag?name=blue_sky");
+        assert_eq!(tag("a&b"), "/tag?name=a%26b");
+        assert_eq!(tab_of(&post(5, "cat", None)), Some(Tab::Gallery));
+    }
+
+    #[test]
+    fn the_gallery_and_its_posts_carry_a_search() {
+        for path in ["/", "", "/post/12"] {
+            assert!(has_search(path), "{path}");
+        }
+        for path in ["/tags", "/tag", "/settings", "/post", "/explore"] {
+            assert!(!has_search(path), "{path}");
+        }
+    }
 
     #[test]
     fn a_page_under_a_tab_keeps_that_tab_selected() {

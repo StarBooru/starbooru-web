@@ -4,7 +4,8 @@
 //!
 //! ```json
 //! { "session": { "server": "…", "token": "…", "user": { … } } | null,
-//!   "prefs": { "theme": "system", "accent_hue": 285, … } }
+//!   "prefs": { "theme": "system", "accent_hue": 285, … },
+//!   "memory": { "owner": "server|user id", "spots": [{ "q": "cat", … }] } }
 //! ```
 //!
 //! Reading never fails: a field this version can't read takes its default, and
@@ -53,6 +54,41 @@ impl Theme {
     }
 }
 
+/// The shape of the gallery's tiles. Staggered tiles keep the picture's own
+/// proportions, within the limits in `logic/layout.rs`: portrait ones are at
+/// least square, landscape ones at most square, and `StaggeredAll` takes both.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum GalleryView {
+    Square,
+    Landscape,
+    Portrait,
+    StaggeredLandscape,
+    StaggeredAll,
+    /// As on Pinterest. Also what an unknown value (from a newer version)
+    /// reads as.
+    #[default]
+    #[serde(other)]
+    StaggeredPortrait,
+}
+
+impl GalleryView {
+    pub const FIXED: [GalleryView; 3] = [
+        GalleryView::Square,
+        GalleryView::Landscape,
+        GalleryView::Portrait,
+    ];
+    pub const STAGGERED: [GalleryView; 3] = [
+        GalleryView::StaggeredPortrait,
+        GalleryView::StaggeredLandscape,
+        GalleryView::StaggeredAll,
+    ];
+
+    pub fn is_staggered(self) -> bool {
+        Self::STAGGERED.contains(&self)
+    }
+}
+
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(default)]
 pub struct Prefs {
@@ -71,6 +107,14 @@ pub struct Prefs {
     /// The server signed in to last, to prefill the sign-in screen.
     #[serde(deserialize_with = "lenient")]
     pub last_server: String,
+    #[serde(deserialize_with = "lenient")]
+    pub gallery_view: GalleryView,
+    /// Columns in the gallery; `None` aims for a set tile width.
+    #[serde(deserialize_with = "lenient")]
+    pub gallery_columns: Option<u8>,
+    /// No space between thumbnails and no rounded corners.
+    #[serde(deserialize_with = "lenient")]
+    pub flush_tiles: bool,
     /// Settings this version doesn't have yet (the reference's, or a newer
     /// version's), written back untouched.
     #[serde(flatten)]
@@ -88,8 +132,84 @@ impl Default for Prefs {
             accent_color: None,
             language: None,
             last_server: String::new(),
+            gallery_view: GalleryView::default(),
+            gallery_columns: None,
+            flush_tiles: false,
             other: Map::new(),
         }
+    }
+}
+
+/// Where the gallery was for one search. It remembers the tile at the top of
+/// the screen and how far down it was, as a scroll position alone means
+/// nothing once new posts arrive or the layout changes.
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct Spot {
+    pub q: String,
+    pub post: Option<i64>,
+    /// The tile's distance from the top of the screen in pixels.
+    pub offset: f64,
+    /// The scroll position, for when that tile has gone.
+    pub y: f64,
+    /// How many posts were loaded.
+    pub count: u32,
+}
+
+const MAX_SPOTS: usize = 30;
+
+/// The searches the gallery has shown this account, the latest first.
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct GalleryMemory {
+    owner: String,
+    spots: Vec<Spot>,
+}
+
+impl GalleryMemory {
+    fn visit(&mut self, q: &str) {
+        let spot = self
+            .spots
+            .iter()
+            .position(|s| s.q == q)
+            .map(|i| self.spots.remove(i))
+            .unwrap_or_else(|| Spot {
+                q: q.to_owned(),
+                ..Spot::default()
+            });
+        self.spots.insert(0, spot);
+        self.spots.truncate(MAX_SPOTS);
+    }
+
+    fn remember(&mut self, spot: Spot) {
+        self.visit(&spot.q);
+        if let Some(first) = self.spots.first_mut() {
+            *first = spot;
+        }
+    }
+
+    /// This account's memory, or a fresh one for an account it isn't.
+    fn for_owner(&mut self, owner: &str) -> &mut Self {
+        if self.owner != owner {
+            *self = Self {
+                owner: owner.to_owned(),
+                spots: Vec::new(),
+            };
+        }
+        self
+    }
+
+    fn spot(&self, owner: &str, q: &str) -> Option<Spot> {
+        (self.owner == owner)
+            .then(|| self.spots.iter().find(|s| s.q == q).cloned())
+            .flatten()
+    }
+
+    fn last_search(&self, owner: &str) -> String {
+        (self.owner == owner)
+            .then(|| self.spots.first().map(|s| s.q.clone()))
+            .flatten()
+            .unwrap_or_default()
     }
 }
 
@@ -103,8 +223,9 @@ struct Stored {
     session: Option<Session>,
     #[serde(deserialize_with = "lenient")]
     prefs: Prefs,
-    /// What else the reference kept here (the gallery's places), written back
-    /// untouched.
+    #[serde(deserialize_with = "lenient")]
+    memory: GalleryMemory,
+    /// What else the reference kept here, written back untouched.
     #[serde(flatten)]
     other: Map<String, Value>,
 }
@@ -146,6 +267,7 @@ thread_local! {
     // Reference counted, so no component's owner can dispose of them.
     static SESSION: ArcRwSignal<Option<Session>> = ArcRwSignal::new(None);
     static PREFS: ArcRwSignal<Prefs> = ArcRwSignal::new(Prefs::default());
+    static MEMORY: ArcRwSignal<GalleryMemory> = ArcRwSignal::new(GalleryMemory::default());
     static OTHER: RefCell<Map<String, Value>> = RefCell::new(Map::new());
     static SIGN_IN_NOTE: RefCell<Option<String>> = const { RefCell::new(None) };
 }
@@ -155,6 +277,7 @@ pub fn load() {
     let stored = backend::read().map(|json| parse(&json)).unwrap_or_default();
     SESSION.with(|s| s.set(stored.session));
     PREFS.with(|p| p.set(stored.prefs));
+    MEMORY.with(|m| m.set(stored.memory));
     OTHER.with_borrow_mut(|o| *o = stored.other);
 }
 
@@ -163,6 +286,7 @@ fn save() {
     let stored = Stored {
         session: SESSION.with(|s| s.get_untracked()),
         prefs: PREFS.with(|p| p.get_untracked()),
+        memory: MEMORY.with(|m| m.get_untracked()),
         other: OTHER.with_borrow(Clone::clone),
     };
     if let Some(json) = to_json(&stored) {
@@ -226,9 +350,7 @@ pub fn sign_out() {
         });
     }
     // Where the gallery was in each search belongs to this account.
-    OTHER.with_borrow_mut(|o| {
-        o.remove("memory");
-    });
+    MEMORY.with(|m| m.set(GalleryMemory::default()));
     forget_session();
 }
 
@@ -271,10 +393,50 @@ pub fn prefs_untracked() -> Prefs {
 }
 
 /// Changes the preferences and saves them.
-#[allow(dead_code, reason = "the Settings page changes them")]
 pub fn update_prefs(change: impl FnOnce(&mut Prefs)) {
     PREFS.with(|p| p.update(change));
     save();
+}
+
+/// Who the app is signed in as, so one account never sees what another
+/// searched: `server|user id`, or empty when no one is.
+pub fn owner() -> String {
+    session_untracked().map_or_else(String::new, |s| format!("{}|{}", s.server, s.user.id))
+}
+
+fn update_memory(change: impl FnOnce(&mut GalleryMemory)) {
+    let owner = owner();
+    MEMORY.with(|m| m.update(|m| change(m.for_owner(&owner))));
+    save();
+}
+
+/// Makes `q` the search the gallery goes back to.
+pub fn visit_search(q: &str) {
+    update_memory(|memory| memory.visit(q));
+}
+
+/// Where the gallery is in its search, as the screen stops moving.
+pub fn remember_spot(spot: Spot) {
+    update_memory(|memory| memory.remember(spot));
+}
+
+/// Where the gallery was for `q`.
+pub fn spot(q: &str) -> Option<Spot> {
+    let owner = owner();
+    MEMORY.with(|m| m.with_untracked(|m| m.spot(&owner, q)))
+}
+
+/// The search the gallery showed last. Read inside a view, it redraws when
+/// the gallery remembers a spot, so read it through a `Memo`.
+pub fn last_search() -> String {
+    let owner = owner();
+    MEMORY.with(|m| m.with(|m| m.last_search(&owner)))
+}
+
+/// The search the gallery showed last, outside a view.
+pub fn last_search_untracked() -> String {
+    let owner = owner();
+    MEMORY.with(|m| m.with_untracked(|m| m.last_search(&owner)))
 }
 
 #[cfg(target_arch = "wasm32")]
@@ -343,7 +505,20 @@ mod tests {
                 accent_color: Some([1, 2, 3]),
                 language: Some(Lang::Italian),
                 last_server: "https://booru.example".into(),
+                gallery_view: GalleryView::StaggeredAll,
+                gallery_columns: Some(4),
+                flush_tiles: true,
                 other: Map::new(),
+            },
+            memory: GalleryMemory {
+                owner: "https://booru.example|7".into(),
+                spots: vec![Spot {
+                    q: "cat".into(),
+                    post: Some(12),
+                    offset: 80.5,
+                    y: 2400.0,
+                    count: 120,
+                }],
             },
             other: Map::new(),
         };
@@ -355,6 +530,8 @@ mod tests {
         assert_eq!(value["prefs"]["accent_hue"], 120);
         assert_eq!(value["prefs"]["language"], "it");
         assert_eq!(value["session"]["user"]["username"], "ada");
+        assert_eq!(value["prefs"]["gallery_view"], "staggered-all");
+        assert_eq!(value["memory"]["spots"][0]["post"], 12);
     }
 
     #[test]
@@ -449,14 +626,92 @@ mod tests {
     #[test]
     fn signing_out_forgets_where_the_gallery_was() {
         OTHER.with_borrow_mut(|o| {
-            o.insert("memory".into(), serde_json::json!({"owner": "x|1"}));
             o.insert("kept".into(), serde_json::json!(1));
         });
+        visit_search("cat");
+        assert_eq!(last_search_untracked(), "cat");
         sign_out();
-        OTHER.with_borrow(|o| {
-            assert!(!o.contains_key("memory"));
-            assert!(o.contains_key("kept"));
+        assert_eq!(MEMORY.with(|m| m.get_untracked()), GalleryMemory::default());
+        OTHER.with_borrow(|o| assert!(o.contains_key("kept")));
+    }
+
+    #[test]
+    fn the_latest_search_comes_first_and_keeps_its_spot() {
+        let mut memory = GalleryMemory::default();
+        memory.remember(Spot {
+            q: "cat".into(),
+            post: Some(7),
+            offset: 12.0,
+            y: 900.0,
+            count: 120,
         });
+        memory.visit("dog");
+        assert_eq!(memory.last_search(""), "dog");
+        assert_eq!(memory.spot("", "dog").and_then(|s| s.post), None);
+        memory.visit("cat");
+        assert_eq!(memory.last_search(""), "cat");
+        assert_eq!(memory.spot("", "cat").and_then(|s| s.post), Some(7));
+        assert_eq!(memory.spots.len(), 2);
+    }
+
+    #[test]
+    fn old_searches_drop_off() {
+        let mut memory = GalleryMemory::default();
+        for i in 0..MAX_SPOTS + 5 {
+            memory.visit(&format!("tag{i}"));
+        }
+        assert_eq!(memory.spots.len(), MAX_SPOTS);
+        assert!(memory.spots.iter().all(|s| s.q != "tag0"));
+    }
+
+    #[test]
+    fn one_account_never_sees_where_another_was() {
+        let mut memory = GalleryMemory::default();
+        memory.for_owner("a|1").visit("cat");
+        assert_eq!(memory.last_search("a|1"), "cat");
+        assert_eq!(memory.last_search("a|2"), "");
+        assert_eq!(memory.spot("a|2", "cat"), None);
+        // Another account starts again.
+        memory.for_owner("a|2").visit("dog");
+        assert_eq!(memory.last_search("a|1"), "");
+        assert_eq!(memory.spots.len(), 1);
+    }
+
+    #[test]
+    fn gallery_prefs_default_and_round_trip() {
+        let prefs = parse(r#"{"prefs":{"theme":"dark"}}"#).prefs;
+        assert_eq!(prefs.gallery_view, GalleryView::StaggeredPortrait);
+        assert_eq!(prefs.gallery_columns, None);
+        assert!(!prefs.flush_tiles);
+        for view in GalleryView::FIXED.into_iter().chain(GalleryView::STAGGERED) {
+            let json = serde_json::to_string(&view).unwrap();
+            let stored = parse(&format!(r#"{{"prefs":{{"gallery_view":{json}}}}}"#));
+            assert_eq!(stored.prefs.gallery_view, view);
+        }
+        // An unknown view from a newer version falls back rather than failing,
+        // and an odd column count costs only itself.
+        let prefs = parse(
+            r#"{"prefs":{"gallery_view":"hexagons","gallery_columns":4,"flush_tiles":true}}"#,
+        )
+        .prefs;
+        assert_eq!(prefs.gallery_view, GalleryView::StaggeredPortrait);
+        assert_eq!(prefs.gallery_columns, Some(4));
+        assert!(prefs.flush_tiles);
+        let prefs = parse(r#"{"prefs":{"gallery_view":"square","gallery_columns":900}}"#).prefs;
+        assert_eq!(prefs.gallery_view, GalleryView::Square);
+        assert_eq!(prefs.gallery_columns, None);
+    }
+
+    #[test]
+    fn state_without_memory_still_loads() {
+        assert_eq!(
+            parse(r#"{"prefs":{"theme":"dark"}}"#).memory,
+            GalleryMemory::default()
+        );
+        assert_eq!(
+            parse(r#"{"memory":"odd"}"#).memory,
+            GalleryMemory::default()
+        );
     }
 
     #[test]
@@ -475,6 +730,9 @@ mod tests {
         assert_eq!(again["prefs"]["hand"], before["prefs"]["hand"]);
         assert_eq!(again["prefs"]["effects"], before["prefs"]["effects"]);
         assert_eq!(again["prefs"]["boorus"], before["prefs"]["boorus"]);
-        assert_eq!(again["memory"], before["memory"]);
+        // The gallery's places, in the reference's shape, read as they were.
+        assert_eq!(stored.memory.last_search("x|1"), "cat");
+        assert_eq!(again["memory"]["owner"], before["memory"]["owner"]);
+        assert_eq!(again["memory"]["spots"][0]["q"], "cat");
     }
 }

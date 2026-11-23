@@ -84,3 +84,64 @@ settings-account = Account
 settings-signed-in-as = Signed in as
 settings-server-version = Server version
 settings-sign-out = Sign out
+
+## Gallery
+
+retry = Retry
+loading = Loading
+load-more = Load more
+no-matches = No matches
+post-alt = Post { $id }
+badge-gif = GIF
+gallery-tag-info = About this tag
+gallery-syntax = Search syntax
+gallery-to-top = Back to the top
+gallery-empty = No posts yet
+gallery-empty-body = Upload images or videos to start your collection.
+gallery-try-fewer = Nothing matches this search. Try fewer tags.
+sort = Sort
+sort-by = Sort by
+sort-new = Newest
+sort-old = Oldest
+sort-score = Top score
+sort-updated = Recently edited
+sort-size = Largest file
+sort-size-asc = Smallest file
+sort-pixels = Highest resolution
+sort-longside = Longest side
+sort-tags = Most tags
+sort-tags-asc = Fewest tags
+sort-random = Random
+view-title = Gallery layout
+view-shape = Tile shape
+view-square = Square
+view-landscape = Landscape
+view-portrait = Portrait
+view-staggered = Staggered
+view-staggered-by = Staggered shapes
+view-everything = Everything
+view-columns = { $count ->
+    [one] 1 column
+   *[other] { $count } columns
+}
+view-per-row = About { $count } per row
+view-columns-auto = Automatic
+view-flush = Remove the spaces and rounded corners between images
+color-search = Search by colour
+color-wheel = Pick a colour from the wheel
+color-hex = Hex colour
+color-hex-apply = Use this colour
+color-hex-invalid = Use 3 or 6 hex digits, like #2060e0
+color-clear = Any colour
+color-red = Red
+color-orange = Orange
+color-yellow = Yellow
+color-green = Green
+color-teal = Teal
+color-blue = Blue
+color-purple = Purple
+color-pink = Pink
+color-brown = Brown
+color-black = Black
+color-gray = Gray
+color-white = White

@@ -8,6 +8,7 @@ use leptos_router::path;
 use crate::components::snackbar::Snackbar;
 use crate::i18n;
 use crate::pages::NotFound;
+use crate::pages::gallery::Gallery;
 use crate::pages::login::OidcReturn;
 use crate::pages::shell::Shell;
 use crate::pages::soon::{PostSoon, SettingsSoon, Soon, SoonAlone, TagSoon};
@@ -19,6 +20,7 @@ pub fn App() -> impl IntoView {
     let theme = Memo::new(|_| store::prefs().theme);
     let hue = Memo::new(|_| store::prefs().accent_hue);
     let picked = Memo::new(|_| store::prefs().language);
+    let flush = Memo::new(|_| store::prefs().flush_tiles);
     // A language picked in Settings, else the browser's.
     Effect::new(move |_| {
         i18n::set_lang(i18n::resolve(picked.get(), &i18n::browser_languages()));
@@ -35,6 +37,8 @@ pub fn App() -> impl IntoView {
             class="app"
             lang=move || i18n::lang().code()
             data-theme=move || theme.get().as_str()
+            // Thumbnails edge to edge (style/pages/gallery.css).
+            data-tiles=move || flush.get().then_some("flush")
             style=move || format!("--seed-hue: {}", hue.get())
         >
             <Router>
@@ -57,7 +61,7 @@ fn AppRoutes() -> impl IntoView {
             <Route path=path!("/privacy") view=|| view! { <SoonAlone title=|| t!("privacy-title") /> } />
             <Route path=path!("/terms") view=|| view! { <SoonAlone title=|| t!("terms-title") /> } />
             <ParentRoute path=path!("") view=Shell>
-                <Route path=path!("/") view=|| view! { <Soon title=|| t!("nav-gallery") /> } />
+                <Route path=path!("/") view=Gallery />
                 <Route path=path!("/explore") view=|| view! { <Soon title=|| t!("nav-explore") /> } />
                 <Route path=path!("/post/:id") view=PostSoon />
                 <Route path=path!("/tags") view=|| view! { <Soon title=|| t!("nav-tags") /> } />
@@ -147,7 +151,8 @@ mod tests {
         let base = at(r#"<link data-trunk rel="css" href="style/base.css">"#);
         let shell = at(r#"<link data-trunk rel="css" href="style/shell.css">"#);
         let login = at(r#"<link data-trunk rel="css" href="style/pages/login.css">"#);
-        assert!(tokens < base && base < shell && shell < login);
+        let gallery = at(r#"<link data-trunk rel="css" href="style/pages/gallery.css">"#);
+        assert!(tokens < base && base < shell && shell < login && login < gallery);
         // Empty, with not even a space in it, or `:empty` never matches.
         assert!(page.contains(r#"<div id="main"></div>"#));
         let base = include_str!("../style/base.css");
@@ -177,6 +182,7 @@ mod tests {
             include_str!("../style/base.css"),
             include_str!("../style/shell.css"),
             include_str!("../style/pages/login.css"),
+            include_str!("../style/pages/gallery.css"),
         ] {
             assert!(!css.contains("-webkit-backdrop-filter"));
         }
@@ -189,6 +195,7 @@ mod tests {
             ("base", include_str!("../style/base.css")),
             ("shell", include_str!("../style/shell.css")),
             ("login", include_str!("../style/pages/login.css")),
+            ("gallery", include_str!("../style/pages/gallery.css")),
         ] {
             // A colour worked out from the tokens is fine: `oklch(from var(--x) …)`,
             // or the strength meter's `oklch(var(--meter-l) …)`.

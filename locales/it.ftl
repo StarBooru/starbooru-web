@@ -84,3 +84,64 @@ settings-account = Account
 settings-signed-in-as = Accesso come
 settings-server-version = Versione del server
 settings-sign-out = Esci
+
+## Gallery
+
+retry = Riprova
+loading = Caricamento
+load-more = Carica altri
+no-matches = Nessun risultato
+post-alt = Post { $id }
+badge-gif = GIF
+gallery-tag-info = Informazioni su questo tag
+gallery-syntax = Sintassi di ricerca
+gallery-to-top = Torna all'inizio
+gallery-empty = Ancora nessun post
+gallery-empty-body = Carica immagini o video per iniziare la tua raccolta.
+gallery-try-fewer = Nessun risultato per questa ricerca. Prova con meno tag.
+sort = Ordina
+sort-by = Ordina per
+sort-new = Più recenti
+sort-old = Meno recenti
+sort-score = Punteggio più alto
+sort-updated = Modificati di recente
+sort-size = File più grandi
+sort-size-asc = File più piccoli
+sort-pixels = Risoluzione più alta
+sort-longside = Lato più lungo
+sort-tags = Più tag
+sort-tags-asc = Meno tag
+sort-random = Casuale
+view-title = Disposizione della galleria
+view-shape = Forma delle miniature
+view-square = Quadrate
+view-landscape = Orizzontali
+view-portrait = Verticali
+view-staggered = Sfalsate
+view-staggered-by = Forme sfalsate
+view-everything = Tutte
+view-columns = { $count ->
+    [one] 1 colonna
+   *[other] { $count } colonne
+}
+view-per-row = Circa { $count } per riga
+view-columns-auto = Automatico
+view-flush = Togli gli spazi e gli angoli arrotondati tra le immagini
+color-search = Cerca per colore
+color-wheel = Scegli un colore dalla ruota
+color-hex = Colore esadecimale
+color-hex-apply = Usa questo colore
+color-hex-invalid = Usa 3 o 6 cifre esadecimali, ad es. #2060e0
+color-clear = Qualsiasi colore
+color-red = Rosso
+color-orange = Arancione
+color-yellow = Giallo
+color-green = Verde
+color-teal = Verde acqua
+color-blue = Blu
+color-purple = Viola
+color-pink = Rosa
+color-brown = Marrone
+color-black = Nero
+color-gray = Grigio
+color-white = Bianco

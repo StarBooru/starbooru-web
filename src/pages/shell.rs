@@ -44,6 +44,20 @@ fn Frame() -> impl IntoView {
     let location = use_location();
     let path = location.pathname;
     let here = Memo::new(move |_| path.with(|p| route::tab_of(p)));
+    // Opening the app carries on from the last search.
+    let navigate = use_navigate();
+    let query = use_query_map();
+    Effect::new(move |_| {
+        let last = store::last_search_untracked();
+        let at_home = path.get_untracked() == "/" && query.with_untracked(|q| q.get("q").is_none());
+        if at_home && !last.trim().is_empty() {
+            let options = NavigateOptions {
+                replace: true,
+                ..NavigateOptions::default()
+            };
+            navigate(&route::gallery(&last), options);
+        }
+    });
     view! {
         <header class="topbar">
             <a class="brand glass float" href="/" aria-label=move || t!("app-name")>
@@ -61,11 +75,20 @@ fn Frame() -> impl IntoView {
 }
 
 /// The search: Enter shows the gallery for what was typed, and an empty box
-/// all of it. It shows the search of the page it's on.
+/// all of it. It shows the search of the gallery or post it's on, and the last
+/// one elsewhere.
 #[component]
 fn SearchBox() -> impl IntoView {
     let query = use_query_map();
-    let current = Memo::new(move |_| query.with(|q| q.get("q").unwrap_or_default()));
+    let path = use_location().pathname;
+    let last = Memo::new(|_| store::last_search());
+    let current = Memo::new(move |_| {
+        if path.with(|p| route::has_search(p)) {
+            query.with(|q| q.get("q").unwrap_or_default())
+        } else {
+            last.get()
+        }
+    });
     let text = RwSignal::new(current.get_untracked());
     // A new page, or Back, brings its own search.
     Effect::watch(
@@ -164,6 +187,8 @@ fn NavSlider(place: &'static str, here: Memo<Option<Tab>>) -> impl IntoView {
         (at, way(was, at, last_way))
     });
     let cells = Tab::ALL.len();
+    // The gallery goes back to the search it showed last.
+    let last = Memo::new(|_| store::last_search());
     view! {
         <nav
             class=format!("{place} slider glass float")
@@ -187,7 +212,13 @@ fn NavSlider(place: &'static str, here: Memo<Option<Tab>>) -> impl IntoView {
                             <a
                                 class="nav-item"
                                 class:active=active
-                                href=tab.href()
+                                href=move || {
+                                    if tab == Tab::Gallery {
+                                        route::gallery(&last.get())
+                                    } else {
+                                        tab.href().to_owned()
+                                    }
+                                }
                                 aria-current=move || if active() { "page" } else { "false" }
                             >
                                 <span class="nav-icon">
