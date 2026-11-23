@@ -1094,6 +1094,11 @@ share-days =
         [one] 1 giorno
        *[other] { $count } giorni
     }
+share-pick-day = Fino a una data
+share-day = Ultimo giorno in cui il link funziona
+share-day-missing = Scegli fino a quale giorno funziona il link.
+share-day-soon = Scegli domani o un giorno successivo.
+share-day-late = Scegli il { $last } o prima: al massimo { $max } giorni.
 share-create = Crea link
 share-ready = Link pronto. Chiunque lo abbia può aprirlo.
 share-link = Link di condivisione

@@ -9,6 +9,32 @@
 /* The lifetimes open upwards, over the title, so the sheet doesn't scroll
    to show them. */
 .share-sheet .select-list { top: auto; bottom: calc(100% + 6px); transform-origin: bottom right; }
+/* Until a date: the day slides open beside the drop-down, which gives up
+   part of the row, so the sheet keeps its height. The list still spans the
+   row. The drop-down keeps the larger part, for "Fino a una data" at phone
+   width, and its words line up with the title's. */
+.share-when { container-type: inline-size; }
+.share-lifetime {
+  position: relative; display: grid; grid-template-columns: minmax(0, 6fr) minmax(0, 0fr); column-gap: 0;
+  transition: grid-template-columns var(--med) var(--ease), column-gap var(--med) var(--ease);
+}
+.share-lifetime.picking { grid-template-columns: minmax(0, 6fr) minmax(0, 5fr); column-gap: 8px; }
+.share-lifetime .select { position: static; }
+.share-lifetime .select-button { padding: 0 32px 0 14px; }
+/* Too narrow for both on one row, as on the smallest phones: the day goes
+   under the drop-down. */
+@container (width < 310px) {
+  .share-lifetime.picking { grid-template-columns: minmax(0, 1fr); row-gap: 8px; }
+}
+/* Room for the field's focus ring, which the clip would cut. */
+.share-day {
+  display: grid; min-width: 0; margin: -3px; padding: 3px; overflow: hidden;
+  visibility: hidden; opacity: 0; transition: opacity var(--med) var(--ease), visibility 0s var(--med);
+}
+.share-lifetime.picking .share-day { visibility: visible; opacity: 1; transition: opacity var(--med) var(--ease); }
+.field .share-day input { min-width: 0; min-height: 48px; padding: 0 10px 0 14px; accent-color: var(--primary); }
+.share-ends { min-height: 1lh; }
+.app[data-effects="lite"] .share-lifetime { transition: none; }
 
 /* ---------- the list in Settings ---------- */
 
@@ -87,5 +113,5 @@ html:has(.lightbox) { overflow-y: hidden; }
 
 @media (prefers-reduced-motion: reduce) {
   .lightbox, .lightbox img, .lightbox video, .shared-missing { animation: none; }
-  .lightbox-btn { transition: none; }
+  .lightbox-btn, .share-lifetime, .share-day, .share-lifetime.picking .share-day { transition: none; }
 }

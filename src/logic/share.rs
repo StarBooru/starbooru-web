@@ -1,8 +1,9 @@
-//! Share links without a browser: the lifetimes a new link can have and the
-//! request they make, the address to give out, what the list of links says
-//! of each, and how the public page lays out what a link shows.
+//! Share links without a browser: the lifetimes a new link can have, the
+//! day picked on a calendar and the days it takes, the request they make,
+//! the address to give out, what the list of links says of each, and how the
+//! public page lays out what a link shows.
 
-use chrono::{DateTime, Local, Utc};
+use chrono::{DateTime, Local, NaiveDate, TimeDelta, TimeZone, Utc};
 use starbooru_client::Client;
 use starbooru_core::share::{MAX_SHARE_DAYS, MAX_SHARE_POSTS, MAX_SHARE_TITLE_CHARS, share_path};
 use starbooru_core::{MediaKind, NewShare, Share, ShareError, SharedView};
@@ -35,6 +36,146 @@ pub fn lifetime_label(days: Option<u32>) -> String {
     match days {
         None => t!("share-until-removed"),
         Some(d) => t!("share-days", count = d),
+    }
+}
+
+/// When a link stops working, as the sheet says it: the moment on the local
+/// clock, or that it never does.
+pub fn ends_text(expires_at: Option<DateTime<Utc>>) -> String {
+    match expires_at {
+        Some(at) => t!("shares-expires-on", date = when(&at, &Local)),
+        None => t!("shares-no-expiry"),
+    }
+}
+
+/// When a new link of `days` would stop working, made `now`.
+pub fn ends_after(days: Option<u32>, now: DateTime<Utc>) -> Option<DateTime<Utc>> {
+    days.and_then(|d| after_days(now, d))
+}
+
+fn after_days(now: DateTime<Utc>, days: u32) -> Option<DateTime<Utc>> {
+    now.checked_add_signed(TimeDelta::try_days(i64::from(days))?)
+}
+
+// ---------- a day picked on the calendar ----------
+
+/// The drop-down's value for a day picked on the calendar.
+pub const PICK_DAY: &str = "day";
+
+/// Why a picked day can't make a link.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum PickError {
+    /// The field is empty or half typed.
+    NoDay,
+    /// Today or earlier.
+    TooSoon,
+    /// Further than a link can last.
+    TooLate,
+}
+
+/// A day as a date field holds it: `2026-11-30`.
+pub fn day_value(day: NaiveDate) -> String {
+    day.format("%Y-%m-%d").to_string()
+}
+
+/// A date field's value as a day, when it holds a whole one.
+pub fn parse_day(value: &str) -> Option<NaiveDate> {
+    NaiveDate::parse_from_str(value.trim(), "%Y-%m-%d").ok()
+}
+
+/// When `day` ends on the clock of `zone`: the first moment of the next.
+fn day_end<Tz: TimeZone>(day: NaiveDate, zone: &Tz) -> Option<DateTime<Utc>> {
+    let next = day.succ_opt()?;
+    // Where the clocks skip midnight the day starts when they land. A
+    // browser's clock gives a moment of the day before for a time that never
+    // was, so each answer is read back on the clock.
+    (0..4).find_map(|hour| {
+        let at = zone
+            .from_local_datetime(&next.and_hms_opt(hour, 0, 0)?)
+            .earliest()?
+            .with_timezone(&Utc);
+        (at.with_timezone(zone).date_naive() == next).then_some(at)
+    })
+}
+
+/// The days a link needs from `now` to work until the end of `day` on the
+/// clock of `zone`. The server counts whole days from when it makes the
+/// link, so this rounds up and the link runs on into the day after.
+pub fn days_until<Tz: TimeZone>(
+    day: NaiveDate,
+    now: DateTime<Utc>,
+    zone: &Tz,
+) -> Result<u32, PickError> {
+    if day <= now.with_timezone(zone).date_naive() {
+        return Err(PickError::TooSoon);
+    }
+    let left = day_end(day, zone).ok_or(PickError::TooLate)? - now;
+    let whole = left.num_days();
+    let days = if TimeDelta::try_days(whole).is_some_and(|d| d < left) {
+        whole.saturating_add(1)
+    } else {
+        whole
+    };
+    if days < 1 {
+        return Err(PickError::TooSoon);
+    }
+    u32::try_from(days)
+        .ok()
+        .filter(|d| *d <= MAX_SHARE_DAYS)
+        .ok_or(PickError::TooLate)
+}
+
+/// The date field's value as the request's `days`.
+pub fn picked_days<Tz: TimeZone>(
+    value: &str,
+    now: DateTime<Utc>,
+    zone: &Tz,
+) -> Result<u32, PickError> {
+    days_until(parse_day(value).ok_or(PickError::NoDay)?, now, zone)
+}
+
+/// The first day the calendar offers: tomorrow.
+pub fn first_day<Tz: TimeZone>(now: DateTime<Utc>, zone: &Tz) -> Option<NaiveDate> {
+    now.with_timezone(zone).date_naive().succ_opt()
+}
+
+/// The last day the calendar offers: the last a link of the longest
+/// lifetime covers to its end.
+pub fn last_day<Tz: TimeZone>(now: DateTime<Utc>, zone: &Tz) -> Option<NaiveDate> {
+    let limit = after_days(now, MAX_SHARE_DAYS)?;
+    let mut day = limit.with_timezone(zone).date_naive();
+    // The day the limit falls in ends after it, so this is usually the one before.
+    for _ in 0..3 {
+        if days_until(day, now, zone).is_ok() {
+            return Some(day);
+        }
+        day = day.pred_opt()?;
+    }
+    None
+}
+
+/// The day the calendar opens on: the last day `days` covers to its end (a
+/// week's for a link until removed), so the link ends when it would have.
+pub fn first_pick<Tz: TimeZone>(
+    days: Option<u32>,
+    now: DateTime<Utc>,
+    zone: &Tz,
+) -> Option<NaiveDate> {
+    let ends = after_days(now, days.or(DEFAULT_LIFETIME)?)?;
+    let day = ends.with_timezone(zone).date_naive().pred_opt()?;
+    Some(day.max(first_day(now, zone)?).min(last_day(now, zone)?))
+}
+
+/// Why a picked day won't do, in words.
+pub fn pick_error_text<Tz: TimeZone>(error: PickError, now: DateTime<Utc>, zone: &Tz) -> String {
+    match error {
+        PickError::NoDay => t!("share-day-missing"),
+        PickError::TooSoon => t!("share-day-soon"),
+        PickError::TooLate => t!(
+            "share-day-late",
+            max = MAX_SHARE_DAYS,
+            last = last_day(now, zone).map(day_value).unwrap_or_default()
+        ),
     }
 }
 
@@ -190,7 +331,7 @@ pub fn items(view: &SharedView, absolute: impl Fn(&str) -> String) -> Vec<Item> 
 
 #[cfg(test)]
 mod tests {
-    use chrono::TimeDelta;
+    use chrono::FixedOffset;
     use starbooru_core::SharedPost;
 
     use super::*;
@@ -229,6 +370,240 @@ mod tests {
         assert_eq!(lifetime_label(Some(1)), "1 day");
         assert_eq!(lifetime_label(Some(30)), "30 days");
         assert_eq!(DEFAULT_LIFETIME, Some(7));
+    }
+
+    /// Rome in winter, an hour ahead of UTC.
+    fn rome() -> FixedOffset {
+        FixedOffset::east_opt(3_600).unwrap()
+    }
+
+    /// `y-m-d h:m:s` on the clock of `zone`.
+    fn at(zone: &impl TimeZone, y: i32, m: u32, d: u32, h: u32, min: u32, s: u32) -> DateTime<Utc> {
+        zone.with_ymd_and_hms(y, m, d, h, min, s)
+            .unwrap()
+            .with_timezone(&Utc)
+    }
+
+    fn day(y: i32, m: u32, d: u32) -> NaiveDate {
+        NaiveDate::from_ymd_opt(y, m, d).unwrap()
+    }
+
+    #[test]
+    fn a_picked_day_is_counted_in_whole_days_rounded_up() {
+        let zone = rome();
+        // An evening: tomorrow ends in 30 hours, so it takes two days.
+        let now = at(&zone, 2026, 11, 23, 18, 0, 0);
+        assert_eq!(days_until(day(2026, 11, 24), now, &zone), Ok(2));
+        assert_eq!(first_day(now, &zone), Some(day(2026, 11, 24)));
+        assert_eq!(days_until(day(2026, 12, 3), now, &zone), Ok(11));
+        // Today and before can't be picked, however near the end.
+        assert_eq!(
+            days_until(day(2026, 11, 23), now, &zone),
+            Err(PickError::TooSoon)
+        );
+        assert_eq!(
+            days_until(day(2025, 1, 1), now, &zone),
+            Err(PickError::TooSoon)
+        );
+        // As the field gives it, and what it can't.
+        assert_eq!(picked_days("2026-12-03", now, &zone), Ok(11));
+        assert_eq!(picked_days(" 2026-12-03 ", now, &zone), Ok(11));
+        assert_eq!(picked_days("", now, &zone), Err(PickError::NoDay));
+        assert_eq!(picked_days("2026-02-30", now, &zone), Err(PickError::NoDay));
+        assert_eq!(picked_days("soon", now, &zone), Err(PickError::NoDay));
+        assert_eq!(day_value(day(2027, 1, 5)), "2027-01-05");
+        assert_eq!(parse_day("2027-01-05"), Some(day(2027, 1, 5)));
+    }
+
+    #[test]
+    fn around_midnight_the_day_still_ends_in_time() {
+        let zone = rome();
+        // Half a minute before midnight, today is still today.
+        let late = at(&zone, 2026, 11, 23, 23, 59, 30);
+        assert_eq!(
+            days_until(day(2026, 11, 23), late, &zone),
+            Err(PickError::TooSoon)
+        );
+        assert_eq!(days_until(day(2026, 11, 24), late, &zone), Ok(2));
+        // On the stroke of midnight two days are exactly enough.
+        let midnight = at(&zone, 2026, 11, 24, 0, 0, 0);
+        assert_eq!(
+            days_until(day(2026, 11, 24), midnight, &zone),
+            Err(PickError::TooSoon)
+        );
+        assert_eq!(days_until(day(2026, 11, 25), midnight, &zone), Ok(2));
+        let after = midnight + TimeDelta::milliseconds(1);
+        assert_eq!(days_until(day(2026, 11, 25), after, &zone), Ok(2));
+        // Midnight in Rome is 23:00 the day before in UTC: the days are the
+        // user's own.
+        assert_eq!(first_day(midnight, &zone), Some(day(2026, 11, 25)));
+        assert_eq!(first_day(midnight, &Utc), Some(day(2026, 11, 24)));
+        assert_eq!(days_until(day(2026, 11, 24), midnight, &Utc), Ok(2));
+    }
+
+    #[test]
+    fn the_server_ends_the_link_after_the_day_and_not_a_day_later() {
+        // Every hour of a day, each sixth day of a year ahead: the server's
+        // end (made now, plus the days) is past the day's end, and a day
+        // less wouldn't be.
+        for zone in [rome(), FixedOffset::west_opt(5 * 3_600).unwrap()] {
+            for hour in 0..24 {
+                let now = at(&zone, 2026, 11, 23, hour, 17, 41);
+                for ahead in (1..365).step_by(6) {
+                    let picked = day(2026, 11, 23) + TimeDelta::days(ahead);
+                    let Ok(days) = days_until(picked, now, &zone) else {
+                        continue;
+                    };
+                    let end = day_end(picked, &zone).unwrap();
+                    assert!(now + TimeDelta::days(days.into()) >= end, "{now} {picked}");
+                    assert!(
+                        now + TimeDelta::days(i64::from(days) - 1) < end,
+                        "{now} {picked}"
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn the_last_day_is_the_last_a_years_link_covers() {
+        let zone = rome();
+        let now = at(&zone, 2026, 11, 23, 18, 0, 0);
+        let last = last_day(now, &zone).unwrap();
+        assert_eq!(last, day(2027, 11, 22));
+        assert_eq!(days_until(last, now, &zone), Ok(MAX_SHARE_DAYS));
+        assert_eq!(
+            days_until(day(2027, 11, 23), now, &zone),
+            Err(PickError::TooLate)
+        );
+        assert_eq!(
+            picked_days("2099-01-01", now, &zone),
+            Err(PickError::TooLate)
+        );
+        assert_eq!(
+            picked_days("+262142-12-31", now, &zone),
+            Err(PickError::TooLate)
+        );
+        // At midnight the year's link ends just as that day does.
+        let midnight = at(&zone, 2026, 11, 24, 0, 0, 0);
+        let last = last_day(midnight, &zone).unwrap();
+        assert_eq!(last, day(2027, 11, 23));
+        assert_eq!(days_until(last, midnight, &zone), Ok(MAX_SHARE_DAYS));
+    }
+
+    #[test]
+    fn the_calendar_opens_where_the_lifetime_would_have_ended() {
+        let zone = rome();
+        let now = at(&zone, 2026, 11, 23, 18, 0, 0);
+        // A week covers through the 29th and ends on the 30th at six.
+        let week = first_pick(Some(7), now, &zone).unwrap();
+        assert_eq!(week, day(2026, 11, 29));
+        assert_eq!(days_until(week, now, &zone), Ok(7));
+        assert_eq!(first_pick(None, now, &zone), Some(week));
+        let month = first_pick(Some(30), now, &zone).unwrap();
+        assert_eq!(days_until(month, now, &zone), Ok(30));
+        // A day covers no whole day, so the calendar starts on tomorrow.
+        assert_eq!(first_pick(Some(1), now, &zone), first_day(now, &zone));
+        assert_eq!(first_pick(Some(400), now, &zone), last_day(now, &zone));
+    }
+
+    /// Clocks that go from 23:59:59 straight to 01:00 on 29 March 2026, as
+    /// some countries' do. Asked for a time that never was, chrono says so;
+    /// a browser's clock answers with the summer's offset instead.
+    #[derive(Clone, Copy, Debug)]
+    struct SkipsMidnight {
+        browser: bool,
+    }
+
+    impl SkipsMidnight {
+        fn change() -> chrono::NaiveDateTime {
+            day(2026, 3, 29).and_hms_opt(0, 0, 0).unwrap()
+        }
+        fn winter() -> FixedOffset {
+            FixedOffset::east_opt(0).unwrap()
+        }
+        fn summer() -> FixedOffset {
+            FixedOffset::east_opt(3_600).unwrap()
+        }
+    }
+
+    impl TimeZone for SkipsMidnight {
+        type Offset = FixedOffset;
+        fn from_offset(_: &FixedOffset) -> Self {
+            SkipsMidnight { browser: false }
+        }
+        fn offset_from_local_date(
+            &self,
+            local: &NaiveDate,
+        ) -> chrono::MappedLocalTime<FixedOffset> {
+            self.offset_from_local_datetime(&local.and_hms_opt(12, 0, 0).unwrap())
+        }
+        fn offset_from_local_datetime(
+            &self,
+            local: &chrono::NaiveDateTime,
+        ) -> chrono::MappedLocalTime<FixedOffset> {
+            let change = Self::change();
+            let never_was = *local >= change && *local < change + TimeDelta::hours(1);
+            if never_was && !self.browser {
+                chrono::MappedLocalTime::None
+            } else if *local < change {
+                chrono::MappedLocalTime::Single(Self::winter())
+            } else {
+                chrono::MappedLocalTime::Single(Self::summer())
+            }
+        }
+        fn offset_from_utc_date(&self, utc: &NaiveDate) -> FixedOffset {
+            self.offset_from_utc_datetime(&utc.and_hms_opt(0, 0, 0).unwrap())
+        }
+        fn offset_from_utc_datetime(&self, utc: &chrono::NaiveDateTime) -> FixedOffset {
+            if *utc < Self::change() {
+                Self::winter()
+            } else {
+                Self::summer()
+            }
+        }
+    }
+
+    #[test]
+    fn a_day_whose_next_skips_midnight_ends_when_the_clocks_land() {
+        let landed = at(&Utc, 2026, 3, 29, 0, 0, 0);
+        let now = at(&Utc, 2026, 3, 27, 23, 0, 0);
+        for zone in [
+            SkipsMidnight { browser: false },
+            SkipsMidnight { browser: true },
+        ] {
+            assert_eq!(day_end(day(2026, 3, 28), &zone), Some(landed), "{zone:?}");
+            // 25 hours left: one day would end the link an hour early.
+            assert_eq!(days_until(day(2026, 3, 28), now, &zone), Ok(2), "{zone:?}");
+        }
+    }
+
+    #[test]
+    fn the_sheet_says_when_the_link_ends_and_what_is_wrong() {
+        let zone = rome();
+        let now = at(&zone, 2026, 11, 23, 18, 0, 0);
+        assert_eq!(ends_after(None, now), None);
+        assert_eq!(ends_text(None), "Never expires");
+        let week = now + TimeDelta::days(7);
+        assert_eq!(ends_after(Some(7), now), Some(week));
+        assert_eq!(
+            ends_text(Some(week)),
+            format!("Expires {}", when(&week, &Local))
+        );
+        assert_eq!(
+            pick_error_text(PickError::NoDay, now, &zone),
+            "Pick the last day the link works."
+        );
+        assert_eq!(
+            pick_error_text(PickError::TooSoon, now, &zone),
+            "Pick tomorrow or a later day."
+        );
+        assert_eq!(
+            pick_error_text(PickError::TooLate, now, &zone),
+            "Pick 2027-11-22 or earlier: 365 days at most."
+        );
+        assert_ne!(PICK_DAY, lifetime_value(None));
+        assert_eq!(lifetime_days(PICK_DAY), None);
     }
 
     #[test]

@@ -1,9 +1,11 @@
 //! The sheet that makes a link for one post or a selection: an optional
-//! title and how long it works, then the link to copy or hand to the
-//! browser's own share sheet.
+//! title and how long it works, for a set number of days or until a day
+//! picked on a calendar, then the link to copy or hand to the browser's own
+//! share sheet.
 
 use std::time::Duration;
 
+use chrono::{DateTime, Local, Utc};
 use leptos::ev::{KeyboardEvent, SubmitEvent};
 use leptos::html;
 use leptos::prelude::*;
@@ -20,8 +22,9 @@ use crate::components::icons::{Ico, Icon};
 use crate::components::select::{Choice, Select};
 use crate::dom;
 use crate::logic::share::{
-    DEFAULT_LIFETIME, LIFETIMES, lifetime_days, lifetime_label, lifetime_value, new_share,
-    share_error_text, share_url,
+    DEFAULT_LIFETIME, LIFETIMES, PICK_DAY, PickError, day_value, ends_after, ends_text, first_day,
+    first_pick, last_day, lifetime_days, lifetime_label, lifetime_value, new_share,
+    pick_error_text, picked_days, share_error_text, share_url,
 };
 
 /// A sheet over the page that makes a link for `post_ids`, in that order,
@@ -32,9 +35,17 @@ pub fn ShareSheet(post_ids: Vec<i64>, on_close: Callback<()>) -> impl IntoView {
     let ids = StoredValue::new(post_ids);
     let title = RwSignal::new(String::new());
     let lifetime = RwSignal::new(DEFAULT_LIFETIME);
+    // The calendar: whether it's the choice, the day it opened on, the
+    // field's value now, and whether a link was refused for want of a day.
+    let picking = RwSignal::new(false);
+    let opened_on = RwSignal::new(String::new());
+    let picked = RwSignal::new(String::new());
+    let tried = RwSignal::new(false);
+    let day_field: NodeRef<html::Input> = NodeRef::new();
     let busy = RwSignal::new(false);
     let error = RwSignal::new(None::<String>);
-    let made = RwSignal::new(None::<String>);
+    // The link, and when the server says it ends.
+    let made = RwSignal::new(None::<(String, Option<DateTime<Utc>>)>);
     let first: NodeRef<html::Input> = NodeRef::new();
     first.on_load(|el| {
         request_animation_frame(move || {
@@ -82,11 +93,22 @@ pub fn ShareSheet(post_ids: Vec<i64>, on_close: Callback<()>) -> impl IntoView {
         if busy.get_untracked() {
             return;
         }
-        let request = match new_share(
-            ids.get_value(),
-            &title.get_untracked(),
-            lifetime.get_untracked(),
-        ) {
+        // Checked again here: the sheet may have stayed open past midnight.
+        let days = if picking.get_untracked() {
+            match picked_days(&picked.get_untracked(), Utc::now(), &Local) {
+                Ok(days) => Some(days),
+                Err(_) => {
+                    tried.set(true);
+                    if let Some(el) = day_field.get_untracked() {
+                        let _ = el.focus();
+                    }
+                    return;
+                }
+            }
+        } else {
+            lifetime.get_untracked()
+        };
+        let request = match new_share(ids.get_value(), &title.get_untracked(), days) {
             Ok(request) => request,
             Err(problem) => {
                 // Read in a submit, where the language isn't followed.
@@ -99,13 +121,13 @@ pub fn ShareSheet(post_ids: Vec<i64>, on_close: Callback<()>) -> impl IntoView {
         spawn_local(async move {
             let result = api::call(move |c| async move {
                 let share = c.create_share(&request).await?;
-                Ok::<_, ClientError>(share_url(&c, &share.token))
+                Ok::<_, ClientError>((share_url(&c, &share.token), share.expires_at))
             })
             .await;
             busy.try_set(false);
             match result {
-                Ok(url) => {
-                    made.try_set(Some(url));
+                Ok(link) => {
+                    made.try_set(Some(link));
                 }
                 Err(message) => {
                     error.try_set(Some(message));
@@ -118,10 +140,69 @@ pub fn ShareSheet(post_ids: Vec<i64>, on_close: Callback<()>) -> impl IntoView {
         LIFETIMES
             .into_iter()
             .map(|d| Choice::new(lifetime_value(d), lifetime_label(d)))
+            .chain([Choice::new(PICK_DAY, t!("share-pick-day"))])
             .collect::<Vec<_>>()
     });
+    let chosen = Signal::derive(move || {
+        if picking.get() {
+            PICK_DAY.to_owned()
+        } else {
+            lifetime_value(lifetime.get())
+        }
+    });
+    let choose = Callback::new(move |value: String| {
+        if value != PICK_DAY {
+            picking.set(false);
+            lifetime.set(lifetime_days(&value));
+            return;
+        }
+        // The calendar opens on the day the lifetime chosen would have
+        // covered, unless it already holds one that will do.
+        let now = Utc::now();
+        if picked_days(&picked.get_untracked(), now, &Local).is_err() {
+            let day = first_pick(lifetime.get_untracked(), now, &Local)
+                .map(day_value)
+                .unwrap_or_default();
+            opened_on.set(day.clone());
+            picked.set(day);
+        }
+        tried.set(false);
+        picking.set(true);
+        request_animation_frame(move || {
+            if let Some(el) = day_field.try_get_untracked().flatten() {
+                let _ = el.focus();
+            }
+        });
+    });
+    // Under the lifetime: when the link would stop working, or why the
+    // picked day won't do. An empty field is only a hint until Create.
+    let ends = Memo::new(move |_| {
+        let now = Utc::now();
+        if !picking.get() {
+            return (ends_text(ends_after(lifetime.get(), now)), false);
+        }
+        match picked_days(&picked.get(), now, &Local) {
+            Ok(days) => (ends_text(ends_after(Some(days), now)), false),
+            Err(problem) => (
+                pick_error_text(problem, now, &Local),
+                problem != PickError::NoDay || tried.get(),
+            ),
+        }
+    });
+    let wrong = move || ends.with(|(_, wrong)| *wrong);
+    // The bounds follow the clock each time the calendar opens.
+    let bound = move |last: bool| {
+        picking.track();
+        let now = Utc::now();
+        let day = if last {
+            last_day(now, &Local)
+        } else {
+            first_day(now, &Local)
+        };
+        day.map(day_value)
+    };
     let native = dom::can_share();
-    let ready = move |url: String| {
+    let ready = move |(url, expires_at): (String, Option<DateTime<Utc>>)| {
         let handed = url.clone();
         let share = native.then(|| {
             view! {
@@ -142,6 +223,7 @@ pub fn ShareSheet(post_ids: Vec<i64>, on_close: Callback<()>) -> impl IntoView {
             <div class="banner info key-created" role="status">
                 <strong>{move || t!("share-ready")}</strong>
                 <LinkField url=url focus=true />
+                <small class="share-ends">{move || ends_text(expires_at)}</small>
             </div>
             <div class="row-end">
                 {share}
@@ -153,7 +235,8 @@ pub fn ShareSheet(post_ids: Vec<i64>, on_close: Callback<()>) -> impl IntoView {
     };
     let form = move || {
         view! {
-            <form on:submit=create>
+            // The sheet checks the day itself and says what's wrong in words.
+            <form on:submit=create novalidate=true>
                 <div class="field">
                     <label for="share-name">{move || t!("share-name")}</label>
                     <input
@@ -167,16 +250,46 @@ pub fn ShareSheet(post_ids: Vec<i64>, on_close: Callback<()>) -> impl IntoView {
                     />
                 </div>
                 // Not a `label`: a click on the list would press the button in
-                // it again. The list opens upwards, inside the sheet.
-                <div class="field">
+                // it again. The list opens upwards, inside the sheet. The day
+                // opens beside the drop-down, so the sheet keeps its height.
+                <div class="field share-when">
                     <span>{move || t!("share-lifetime")}</span>
-                    <Select
-                        class="boxed"
-                        value=Signal::derive(move || lifetime_value(lifetime.get()))
-                        options=choices
-                        on_change=Callback::new(move |v: String| lifetime.set(lifetime_days(&v)))
-                        label=Signal::derive(|| t!("share-lifetime"))
-                    />
+                    <div class="share-lifetime" class:picking=move || picking.get()>
+                        <Select
+                            class="boxed"
+                            value=chosen
+                            options=choices
+                            on_change=choose
+                            label=Signal::derive(|| t!("share-lifetime"))
+                        />
+                        <div class="share-day">
+                            <input
+                                type="date"
+                                node_ref=day_field
+                                disabled=move || !picking.get()
+                                min=move || bound(false)
+                                max=move || bound(true)
+                                aria-label=move || t!("share-day")
+                                aria-describedby="share-ends"
+                                aria-invalid=move || if wrong() { "true" } else { "false" }
+                                prop:value=move || opened_on.get()
+                                on:input=move |e| picked.set(event_target_value(&e))
+                            />
+                        </div>
+                    </div>
+                    <small
+                        id="share-ends"
+                        class=move || {
+                            if wrong() {
+                                "share-ends field-error"
+                            } else {
+                                "share-ends muted field-hint"
+                            }
+                        }
+                        aria-live="polite"
+                    >
+                        {move || ends.with(|(text, _)| text.clone())}
+                    </small>
                 </div>
                 <div class="row-end">
                     <button class="btn text" type="button" on:click=move |_| on_close.run(())>
@@ -229,7 +342,7 @@ pub fn ShareSheet(post_ids: Vec<i64>, on_close: Callback<()>) -> impl IntoView {
                 <p class="muted hint">{move || t!("share-lead", count = count)}</p>
                 {move || error.get().map(|message| view! { <ErrorBanner message=message /> })}
                 {move || match made.get() {
-                    Some(url) => ready(url).into_any(),
+                    Some(link) => ready(link).into_any(),
                     None => form().into_any(),
                 }}
             </div>
@@ -246,5 +359,18 @@ mod tests {
         assert!(source.contains(r#"class="card sheet share-sheet""#));
         let css = include_str!("../../../style/pages/share.css");
         assert!(css.contains(".share-sheet .select-list { top: auto; bottom: calc(100% + 6px);"));
+    }
+
+    #[test]
+    fn the_day_opens_beside_the_lifetime_and_not_below_it() {
+        let css = include_str!("../../../style/pages/share.css");
+        // Same two columns, one of them closed, so the sheet keeps its height.
+        assert!(css.contains("grid-template-columns: minmax(0, 6fr) minmax(0, 0fr);"));
+        assert!(css.contains(
+            ".share-lifetime.picking { grid-template-columns: minmax(0, 6fr) minmax(0, 5fr);"
+        ));
+        assert!(css.contains(".app[data-effects=\"lite\"] .share-lifetime { transition: none; }"));
+        // The browser's own checks are off, so a refusal is in the app's words.
+        assert!(include_str!("sheet.rs").contains("<form on:submit=create novalidate=true>"));
     }
 }

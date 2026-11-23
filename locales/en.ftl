@@ -1073,6 +1073,11 @@ share-days =
         [one] 1 day
        *[other] { $count } days
     }
+share-pick-day = Until a date
+share-day = Last day the link works
+share-day-missing = Pick the last day the link works.
+share-day-soon = Pick tomorrow or a later day.
+share-day-late = Pick { $last } or earlier: { $max } days at most.
 share-create = Create link
 share-ready = Link ready. Anyone who has it can open it.
 share-link = Share link

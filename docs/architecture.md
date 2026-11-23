@@ -46,8 +46,8 @@ src/
                   tags, people, details and file names, the word at the caret, the tag editor's text and who may edit,
                   the gallery's selection and the mass edit it sends, the booru browser's sites, addresses and
                   results, the library import's text, the media editor's crop, turns and trim, share links'
-                  lifetimes, addresses and expiry text, Settings' accent, lists and password checks, swipes, and
-                  the administration's limits, chart, form checks and AI requests
+                  lifetimes, the days a picked end date takes, addresses and expiry text, Settings' accent, lists
+                  and password checks, swipes, and the administration's limits, chart, form checks and AI requests
 locales/        en.ftl, it.ftl
 style/          tokens.css, base.css, shell.css, pages/<page>.css
 index.html      Trunk's entry, with the loading screen
@@ -76,6 +76,7 @@ Component CSS uses only the role variables, never a literal colour. The navigati
 - **Uploads.** `Client::upload_file` sends files in chunks and resends a failed one. The queue lives in a signal at the root, so it keeps going while the user moves between pages.
 - **Explore.** A private booru has no Trending or Popular tags, and every instance counts as private until the server reports a mode, so Explore shows the posts added on this day in earlier years and random picks. It asks for a one-day window, as only the two missing sections read it.
 - **Other boorus.** The server searches them (`/remote/search`), keeps the accounts and relays the pictures a site won't serve to other pages. The browser keeps the last results for a few hours while the tab is open, and saving a post queues an import on the server.
+- **Share link end dates.** The server takes a link's lifetime in whole days from when it makes it. A day picked on the calendar becomes the days from now to the end of that day on the browser's clock, rounded up, so the link ends on the day after, at the time of day it was made.
 
 The server decides which booru pictures it relays: the previews and samples of sites that serve them only to their own pages come as its signed `/api/v1/remote/media` addresses. Everything else loads in the browser straight from the booru, as the privacy page says, so the app shows a picture only from one of those addresses or over `https:`. Anything else (`http:`, `data:`, `//host`) gets the tile's colour instead.
 
