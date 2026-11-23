@@ -69,7 +69,7 @@ Both modes:
 
 - [x] Explore has no search field of its own: the top bar's search narrows Explore while it's open
 - [x] The last posts opened (history) in Explore
-- [ ] The staggered view fills left to right before top to bottom, so the next post in the viewer is the tile beside it
+- [x] The staggered view fills left to right before top to bottom, so the next post in the viewer is the tile beside it
 - [ ] Click and drag across tiles to select several
 - [ ] A saved search reopens where it was left. Today the gallery remembers only the last 30 searches, so a saved one can drop out
 - [x] Share links: a custom expiry date besides 1, 7 and 30 days

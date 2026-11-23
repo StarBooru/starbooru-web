@@ -7,6 +7,8 @@
 //!
 //! Staggered portrait stacks tiles in columns. Staggered landscape does the same
 //! with rows, each as wide as the grid. Staggered everything lines up neither.
+//! All of them read like a page, left to right and then down, in the order of
+//! the list, so the tile beside a post is the one the viewer shows next.
 
 use crate::store::GalleryView;
 
@@ -256,35 +258,59 @@ pub fn place(view: GalleryView, ratios: impl IntoIterator<Item = f64>, columns: 
     }
 }
 
-/// Puts each tile in the shortest column so far, the leftmost if they tie. A
-/// new page of results leaves the earlier tiles where they are.
+/// How far apart, in tile widths, two tiles side by side in a row of columns
+/// may end, and so where the tiles under them start. It's under half a square,
+/// the shortest tile of staggered portrait, so each tile reaches past the
+/// middle of the one beside it.
+const SIDE_BY_SIDE: f64 = 0.4;
+/// How far apart any two tiles of a row may end. It's under a square, so a row
+/// starts below every tile of the row before.
+const ACROSS_A_ROW: f64 = 0.8;
+
+/// Puts tile n in column n mod `columns`, so a row reads left to right and the
+/// next post is the tile beside. Left to their pictures' shapes, the columns
+/// would drift apart until the tile beside one came from rows before or after
+/// it. So a tile gives up as much of its shape as it must, and no more, to end
+/// within `SIDE_BY_SIDE` of the tile on its left and `ACROSS_A_ROW` of the rest
+/// of its row. It stays between the shortest and the tallest of the list, and
+/// tiles of one shape, as in the fixed views, never change. A new page of
+/// results leaves the earlier tiles where they are.
 fn stack(ratios: impl IntoIterator<Item = f64>, columns: u32) -> Layout {
-    let mut stacks = vec![Length::default(); columns.max(1) as usize];
+    let columns = columns.max(1) as usize;
+    let mut tops = vec![Length::default(); columns];
     let mut layout = Layout::default();
-    for ratio in ratios {
-        let mut shortest = 0_usize;
-        let mut lowest = f64::INFINITY;
-        for (i, top) in stacks.iter().enumerate() {
-            // The margin lets a rounding error not break a tie.
-            if top.tiles < lowest - 1e-9 {
-                shortest = i;
-                lowest = top.tiles;
-            }
+    // Where the tiles of this row end, in tile widths: the tops of a row are
+    // all as many gaps down.
+    let mut ends: Vec<f64> = Vec::with_capacity(columns);
+    for (column, ratio) in (0..columns).cycle().zip(ratios) {
+        if column == 0 {
+            ends.clear();
         }
-        if let Some(top) = stacks.get_mut(shortest) {
-            let height = Length::tiles(ratio);
-            layout.tiles.push(Place {
-                left: Length {
-                    tiles: shortest as f64,
-                    gaps: shortest as f64,
-                },
-                top: *top,
-                width: Length::tiles(1.0),
-                height,
+        let Some(top) = tops.get_mut(column) else {
+            continue;
+        };
+        let (mut low, mut high) = ends
+            .last()
+            .map_or((f64::NEG_INFINITY, f64::INFINITY), |left| {
+                (left - SIDE_BY_SIDE, left + SIDE_BY_SIDE)
             });
-            layout.reach(top.plus(height));
-            *top = top.plus(height).plus(GAP);
+        for end in &ends {
+            low = low.max(end - ACROSS_A_ROW);
+            high = high.min(end + ACROSS_A_ROW);
         }
+        let height = Length::tiles(ratio.max(low - top.tiles).min(high - top.tiles));
+        layout.tiles.push(Place {
+            left: Length {
+                tiles: column as f64,
+                gaps: column as f64,
+            },
+            top: *top,
+            width: Length::tiles(1.0),
+            height,
+        });
+        layout.reach(top.plus(height));
+        ends.push(top.tiles + height.tiles);
+        *top = top.plus(height).plus(GAP);
     }
     layout
 }
@@ -393,25 +419,51 @@ fn wanted_parts(ratio: f64, index: usize, columns: usize) -> usize {
     }
 }
 
+/// How far above the lowest stretch of the mosaic, in tile widths, a stretch
+/// can be and still take the next tile: one beside the tile before it, or one
+/// that starts a new line.
+const ALONG_A_LINE: f64 = 1.0;
+const NEW_LINE: f64 = 0.5;
+
+/// The level stretches of the mosaic, left to right: where each starts and how
+/// high it is.
+fn stretches(tops: &[Length]) -> impl Iterator<Item = (usize, Length)> + '_ {
+    tops.iter()
+        .enumerate()
+        .filter(|(i, top)| {
+            i.checked_sub(1)
+                .and_then(|left| tops.get(left))
+                .is_none_or(|left| !left.same(**top))
+        })
+        .map(|(i, top)| (i, *top))
+}
+
 /// Tiles of different widths and heights, lining up in neither rows nor
-/// columns. Each goes on the lowest level stretch of what is there so far, the
-/// leftmost if they tie, and stands on all of it or on its left end. So no tile
-/// ever leaves a hole under it, and a new page of results leaves the earlier
-/// tiles where they are.
+/// columns, read in lines from left to right. Each goes on the first level
+/// stretch to the right of the tile before it that starts above that tile's
+/// middle, so it sits beside it, or else on the leftmost, to start a line.
+/// Only stretches near the lowest count (`ALONG_A_LINE`, `NEW_LINE`), so a
+/// low spot is filled within a line or so. A tile stands on all of its stretch
+/// or on its left end, so it never leaves a hole under it, and a new page of
+/// results leaves the earlier tiles where they are.
 fn mosaic(ratios: impl IntoIterator<Item = f64>, columns: u32) -> Layout {
     let columns = columns.max(1) as usize;
     let parts = columns * PARTS;
     let mut tops = vec![Length::default(); parts];
     let mut layout = Layout::default();
+    // Where the tile before ends on the right, and its middle, roughly.
+    let mut after = 0_usize;
+    let mut middle = f64::INFINITY;
     for (index, ratio) in ratios.into_iter().enumerate() {
-        let mut start = 0_usize;
-        let mut lowest = f64::INFINITY;
-        for (i, top) in tops.iter().enumerate() {
-            if top.rough() < lowest - 1e-9 {
-                start = i;
-                lowest = top.rough();
-            }
-        }
+        let lowest = tops
+            .iter()
+            .map(|top| top.rough())
+            .fold(f64::INFINITY, f64::min);
+        let near = |top: &Length, slack: f64| top.rough() <= lowest + slack + 1e-9;
+        let start = stretches(&tops)
+            .find(|(i, top)| *i >= after && top.rough() < middle && near(top, ALONG_A_LINE))
+            .or_else(|| stretches(&tops).find(|(_, top)| near(top, NEW_LINE)))
+            .map_or(0, |(i, _)| i);
         let Some(floor) = tops.get(start).copied() else {
             continue;
         };
@@ -484,6 +536,8 @@ fn mosaic(ratios: impl IntoIterator<Item = f64>, columns: u32) -> Layout {
         for top in tops.iter_mut().skip(start).take(taken) {
             *top = next;
         }
+        after = start + taken;
+        middle = floor.plus(height.times(0.5)).rough();
     }
     layout
 }
@@ -630,11 +684,16 @@ mod tests {
     }
 
     #[test]
-    fn each_tile_goes_in_the_shortest_column() {
+    fn each_tile_goes_in_the_next_column() {
         let layout = stack([2.0, 1.0, 1.0, 1.0], 2);
         let columns: Vec<_> = layout.tiles.iter().map(|p| p.left.tiles).collect();
-        assert_eq!(columns, [0.0, 1.0, 1.0, 0.0]);
-        assert_eq!(layout.tiles.get(3).map(|p| p.top.tiles), Some(2.0));
+        assert_eq!(columns, [0.0, 1.0, 0.0, 1.0]);
+        // The square beside the tall tile stretches to end close to it, or the
+        // squares under them would be a row apart.
+        let heights: Vec<_> = layout.tiles.iter().map(|p| p.height.tiles).collect();
+        for (height, expected) in heights.iter().zip([2.0, 2.0 - SIDE_BY_SIDE, 1.0, 1.0]) {
+            assert!((height - expected).abs() < 1e-9, "{heights:?}");
+        }
         assert_eq!(
             layout.height,
             Length {
@@ -642,6 +701,160 @@ mod tests {
                 gaps: 1.0
             }
         );
+    }
+
+    /// Lists for columns, with staggered portrait's shapes: assorted, in no
+    /// order, tall and short by turns, and the same few shapes over and over,
+    /// which put the same shape in a column every row.
+    fn portrait_lists() -> Vec<Vec<f64>> {
+        let repeating = [1.0, 1.0, 1.78, 1.33, 1.5, 1.0, 1.0, 1.0];
+        vec![
+            assorted(400, 1.0, 2.0),
+            unrelated(400, 7)
+                .into_iter()
+                .map(|r| r.clamp(1.0, 2.0))
+                .collect(),
+            (0..400)
+                .map(|i| if i % 2 == 0 { 1.0 } else { 2.0 })
+                .collect(),
+            repeating.iter().copied().cycle().take(400).collect(),
+        ]
+    }
+
+    /// The tiles of a layout in columns, row by row.
+    fn rows_of_columns(layout: &Layout, columns: u32) -> Vec<&[Place]> {
+        layout.tiles.chunks(columns as usize).collect()
+    }
+
+    #[test]
+    fn the_next_tile_is_always_in_the_next_column() {
+        for list in portrait_lists() {
+            for columns in [1, 2, 3, 4, 5, 9] {
+                let layout = stack(list.iter().copied(), columns);
+                assert_eq!(layout.tiles.len(), list.len());
+                for (n, place) in layout.tiles.iter().enumerate() {
+                    let column = (n % columns as usize) as f64;
+                    assert_eq!(
+                        place.left,
+                        Length {
+                            tiles: column,
+                            gaps: column
+                        }
+                    );
+                    assert_eq!(place.width, Length::tiles(1.0));
+                }
+                assert_stacks_exactly(&layout, columns);
+            }
+        }
+    }
+
+    #[test]
+    fn a_tile_and_the_next_reach_past_each_others_middle() {
+        // Looking right from the middle of a tile finds the next one, and
+        // looking left from the middle of that finds this one again.
+        for list in portrait_lists() {
+            for columns in [2, 3, 4, 5, 9] {
+                let layout = stack(list.iter().copied(), columns);
+                for (tile, gap) in SIZES {
+                    let span = |p: &Place| {
+                        let top = p.top.px(tile, gap);
+                        (
+                            top,
+                            top + p.height.px(tile, gap) / 2.0,
+                            top + p.height.px(tile, gap),
+                        )
+                    };
+                    for row in rows_of_columns(&layout, columns) {
+                        for pair in row.windows(2) {
+                            let (top, middle, bottom) = span(&pair[0]);
+                            let (next_top, next_middle, next_bottom) = span(&pair[1]);
+                            assert!(next_top < middle && middle < next_bottom);
+                            assert!(top < next_middle && next_middle < bottom);
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn a_row_starts_below_every_tile_of_the_row_before() {
+        // So the tile after the last of a row is the first of the next, on
+        // the left and lower down, as on a page of text.
+        for list in portrait_lists() {
+            for columns in [2, 3, 4, 5, 9] {
+                let layout = stack(list.iter().copied(), columns);
+                for (tile, gap) in SIZES {
+                    let tops = |row: &[Place]| -> Vec<f64> {
+                        row.iter().map(|p| p.top.px(tile, gap)).collect()
+                    };
+                    for pair in rows_of_columns(&layout, columns).windows(2) {
+                        let above = tops(pair[0]).into_iter().fold(f64::MIN, f64::max);
+                        let below = tops(pair[1]).into_iter().fold(f64::MAX, f64::min);
+                        assert!(above < below, "{above} then {below}");
+                    }
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn the_columns_never_drift_apart() {
+        // However long the list, the tiles of a row end close together, and so
+        // does the bottom of the grid while the next page loads.
+        for list in portrait_lists() {
+            for columns in [2, 3, 4, 5, 9] {
+                let layout = stack(list.iter().copied(), columns);
+                for row in rows_of_columns(&layout, columns) {
+                    let ends: Vec<f64> = row.iter().map(|p| p.top.tiles + p.height.tiles).collect();
+                    let low = ends.iter().copied().fold(f64::MAX, f64::min);
+                    let high = ends.iter().copied().fold(f64::MIN, f64::max);
+                    assert!(high - low <= ACROSS_A_ROW + 1e-9, "{ends:?}");
+                    for pair in ends.windows(2) {
+                        assert!((pair[0] - pair[1]).abs() <= SIDE_BY_SIDE + 1e-9);
+                    }
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn a_tile_keeps_its_shape_unless_its_row_needs_it() {
+        for list in portrait_lists() {
+            let (shortest, tallest) = list
+                .iter()
+                .fold((f64::MAX, f64::MIN), |(lo, hi), r| (lo.min(*r), hi.max(*r)));
+            for columns in [2, 3, 4, 5, 9] {
+                let layout = stack(list.iter().copied(), columns);
+                let mut kept = 0;
+                for (n, (place, ratio)) in layout.tiles.iter().zip(&list).enumerate() {
+                    let height = place.height.tiles;
+                    assert!((shortest - 1e-9..=tallest + 1e-9).contains(&height));
+                    if height == *ratio {
+                        kept += 1;
+                        continue;
+                    }
+                    // No more than it must: it ends right at one of its limits.
+                    let column = n % columns as usize;
+                    let row = layout.tiles.get(n - column..n).unwrap_or_default();
+                    let end = place.top.tiles + height;
+                    let ends = row.iter().map(|p| p.top.tiles + p.height.tiles);
+                    let at_limit = ends.enumerate().any(|(i, other)| {
+                        let limit = if i + 1 == column {
+                            SIDE_BY_SIDE
+                        } else {
+                            ACROSS_A_ROW
+                        };
+                        ((end - other).abs() - limit).abs() < 1e-9
+                    });
+                    assert!(at_limit, "tile {n} of {columns}");
+                }
+                assert!(kept * 2 >= list.len(), "{kept} of {} kept", list.len());
+            }
+        }
+        // Tiles of one shape, as in the fixed views, are never changed.
+        let layout = stack([1.5; 50], 4);
+        assert!(layout.tiles.iter().all(|p| p.height == Length::tiles(1.5)));
     }
 
     #[test]
@@ -749,6 +962,24 @@ mod tests {
             let below = pair[1][0];
             let bottom = above.top.px(tile, gap) + above.height.px(tile, gap);
             assert!((below.top.px(tile, gap) - bottom - gap).abs() < 1e-6);
+        }
+    }
+
+    #[test]
+    fn rows_read_left_to_right() {
+        for columns in [1, 3, 4, 9] {
+            let layout = rows(assorted(300, 0.5, 1.0), columns);
+            for (tile, gap) in SIZES {
+                for pair in layout.tiles.windows(2) {
+                    let (a, b) = (pair[0], pair[1]);
+                    let after = a.left.px(tile, gap) + a.width.px(tile, gap) + gap;
+                    let below = a.top.px(tile, gap) + a.height.px(tile, gap) + gap;
+                    let beside = b.top == a.top && (b.left.px(tile, gap) - after).abs() < 1e-6;
+                    let next_row =
+                        b.left.px(tile, gap) == 0.0 && (b.top.px(tile, gap) - below).abs() < 1e-6;
+                    assert!(beside || next_row, "{a:?} then {b:?}");
+                }
+            }
         }
     }
 
@@ -993,6 +1224,47 @@ mod tests {
         }
     }
 
+    /// Whether tile `b`, after `a`, reads on from it: beside it, to its right
+    /// and starting above its middle, or on a new line, from as far left or
+    /// further and lower down.
+    fn reads_on(a: &Place, b: &Place) -> bool {
+        let (tile, gap) = (243.2, 8.0);
+        let (left, top) = (a.left.px(tile, gap), a.top.px(tile, gap));
+        let (next_left, next_top) = (b.left.px(tile, gap), b.top.px(tile, gap));
+        let right = left + a.width.px(tile, gap);
+        let middle = top + a.height.px(tile, gap) / 2.0;
+        let beside = next_left >= right - 1e-6 && next_top < middle;
+        let new_line = next_left <= left + 1e-6 && next_top > top + 1e-6;
+        beside || new_line
+    }
+
+    #[test]
+    fn the_mosaic_reads_in_lines_left_to_right() {
+        let mut lists = vec![
+            assorted(600, 0.5, 2.0),
+            unrelated(600, 1),
+            unrelated(600, 42),
+        ];
+        lists.extend([0.5625, 0.75, 1.0, 1.5, 2.0].map(|ratio| vec![ratio; 300]));
+        for columns in [3, 4, 5, 6, 9] {
+            for list in &lists {
+                let layout = mosaic(list.iter().copied(), columns);
+                let steps = layout.tiles.len() - 1;
+                let reading = layout
+                    .tiles
+                    .windows(2)
+                    .filter(|pair| reads_on(&pair[0], &pair[1]))
+                    .count();
+                // A tile can only go where a hole won't be left under it,
+                // which now and then is under the one before.
+                assert!(
+                    reading * 100 >= steps * 93,
+                    "{reading} of {steps} on {columns}"
+                );
+            }
+        }
+    }
+
     #[test]
     fn the_mosaic_widens_wide_pictures_and_keeps_shapes_close() {
         assert_eq!(wanted_parts(0.55, 1, 5), 4);
@@ -1018,6 +1290,13 @@ mod tests {
         let more = [1.1, 1.9, 1.3];
         let all = stack(first.iter().chain(&more).copied(), 3);
         assert_eq!(all.tiles.get(..5), Some(&stack(first, 3).tiles[..]));
+        // A page that ends partway through a row, and a tile that had to give
+        // up its shape for its row.
+        for list in portrait_lists() {
+            let all = stack(list.iter().copied(), 4);
+            let part = stack(list.iter().take(122).copied(), 4);
+            assert_eq!(all.tiles.get(..122), Some(&part.tiles[..]));
+        }
         let list = assorted(300, 0.5, 2.0);
         let all = mosaic(list.iter().copied(), 5);
         let part = mosaic(list.iter().take(120).copied(), 5);
@@ -1030,13 +1309,13 @@ mod tests {
         assert_eq!(tile_width(1000.0, 0.0, 4), 250.0);
         assert_eq!(tile_width(0.0, 8.0, 5), 0.0, "a grid not measured yet");
         assert_eq!(tile_width(100.0, 8.0, 0), 100.0);
-        let layout = stack([1.5, 1.0, 1.0, 2.0], 2);
+        let layout = stack([1.5, 1.25, 1.0, 1.5], 2);
         let last = layout.tiles[3];
-        assert_eq!(last.left.px(100.0, 8.0), 0.0);
-        assert_eq!(last.top.px(100.0, 8.0), 158.0);
+        assert_eq!(last.left.px(100.0, 8.0), 108.0);
+        assert_eq!(last.top.px(100.0, 8.0), 133.0);
         assert_eq!(last.width.px(100.0, 8.0), 100.0);
-        assert_eq!(last.height.px(100.0, 8.0), 200.0);
-        assert_eq!(layout.height.px(100.0, 8.0), 358.0);
+        assert_eq!(last.height.px(100.0, 8.0), 150.0);
+        assert_eq!(layout.height.px(100.0, 8.0), 283.0);
         assert_eq!(Layout::default().height.px(100.0, 8.0), 0.0);
     }
 
