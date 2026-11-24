@@ -15,8 +15,9 @@ use crate::components::icons::{Ico, Icon};
 use crate::components::legal::LegalLinks;
 use crate::components::strength::StrengthField;
 use crate::logic::address::normalize_server;
+use crate::logic::settings::Group;
 use crate::oidc::{self, Back};
-use crate::{route, store};
+use crate::store;
 
 #[component]
 pub fn Login() -> impl IntoView {
@@ -336,7 +337,7 @@ pub fn OidcReturn() -> impl IntoView {
                 let go = go.clone();
                 spawn_local(async move {
                     match api::attempt(move |c| async move { c.oidc_link(&finish).await }).await {
-                        Ok(_) => go(route::SETTINGS),
+                        Ok(_) => go(Group::Account.href()),
                         Err(e) => {
                             error.try_set(Some(oidc::link_error(e.status, e.message)));
                         }
@@ -374,7 +375,7 @@ pub fn OidcReturn() -> impl IntoView {
             <div class="banner error" role="alert">
                 {message}
             </div>
-            <a class="btn wide" href=route::SETTINGS>
+            <a class="btn wide" href=Group::Account.href()>
                 {move || t!("oidc-back-settings")}
             </a>
         }

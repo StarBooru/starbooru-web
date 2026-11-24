@@ -12,6 +12,7 @@ use starbooru_core::{FigureTerm, MediaKind, Order, Rating, SortKey, parse_query}
 use super::{figure_kind_label, query_error_text, rating_label};
 use crate::components::back::BackButton;
 use crate::components::icons::{Ico, Icon};
+use crate::logic::settings::Group;
 use crate::route;
 
 /// The examples, section by section, as the cheat sheet lists them. Each is
@@ -238,7 +239,7 @@ pub fn Help() -> impl IntoView {
     view! {
         <div class="page narrow help">
             <div class="titled">
-                <BackButton up=route::SETTINGS />
+                <BackButton up=Group::About.href() />
                 <h1 class="page-title">{move || t!("help-title")}</h1>
             </div>
             <section class="card">

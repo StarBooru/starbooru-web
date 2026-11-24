@@ -538,11 +538,18 @@ mod tests {
     #[test]
     fn the_palette_matches_the_stylesheet() {
         let tokens = include_str!("../style/tokens.css");
+        // The light and dark roles are also those of the theme's pictures in
+        // Settings.
+        let light = "\n.app, .scheme-light";
+        let dark = r#".app[data-theme="dark"], .scheme-dark"#;
         let blocks: [(&str, &[Role]); 5] = [
-            ("\n.app", &LIGHT),
-            (r#".app[data-theme="dark"]"#, &DARK),
+            (light, &LIGHT),
+            (dark, &DARK),
             (r#".app[data-theme="system"]"#, &DARK),
-            (r#".app[data-theme="dark"][data-oled]"#, &OLED),
+            (
+                r#".app[data-theme="dark"][data-oled], .scheme-dark.oled"#,
+                &OLED,
+            ),
             (r#".app[data-theme="system"][data-oled]"#, &OLED),
         ];
         for (selector, roles) in blocks {
@@ -567,11 +574,11 @@ mod tests {
         // The canvas the bars are painted in.
         let canvas = |l: f64, c: f64| format!("oklch({l} calc({c} * var(--k)) var(--h))");
         assert_eq!(
-            declared(tokens, base, "canvas"),
+            declared(tokens, light, "canvas"),
             canvas(CANVAS_LIGHT.0, CANVAS_LIGHT.1)
         );
         assert_eq!(
-            declared(tokens, r#".app[data-theme="dark"]"#, "canvas"),
+            declared(tokens, dark, "canvas"),
             canvas(CANVAS_DARK.0, CANVAS_DARK.1)
         );
     }

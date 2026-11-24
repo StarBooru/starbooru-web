@@ -198,8 +198,8 @@ pub(super) fn ApiKeysCard() -> impl IntoView {
     });
 
     view! {
-        <section class="card">
-            <h2 class="card-title">{move || t!("keys-title")}</h2>
+        <section class="card" id="keys">
+            <h3 class="card-title">{move || t!("keys-title")}</h3>
             <p class="muted hint">{move || t!("keys-lead")}</p>
             {move || {
                 error

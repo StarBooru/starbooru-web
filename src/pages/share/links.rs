@@ -114,8 +114,8 @@ pub fn SharesCard() -> impl IntoView {
     let waiting = move || list.with(Option::is_none) && error.with(Option::is_none);
 
     view! {
-        <section class="card shares">
-            <h2 class="card-title">{move || t!("shares-title")}</h2>
+        <section class="card shares" id="links">
+            <h3 class="card-title">{move || t!("shares-title")}</h3>
             <p class="muted hint">{move || t!("shares-lead")}</p>
             {move || {
                 error

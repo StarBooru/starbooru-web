@@ -1,6 +1,6 @@
-//! Settings › Appearance and Gestures, and the People switch: what this
-//! browser keeps for itself. Each choice is saved the moment it's made and
-//! shows at once.
+//! Settings › Appearance: the theme with its black background, the accent
+//! and the language, what this browser keeps for itself. Each choice is
+//! saved the moment it's made and shows at once, in the pictures here too.
 
 use leptos::ev::KeyboardEvent;
 use leptos::html;
@@ -9,17 +9,17 @@ use starbooru_core::color::{Rgb, to_hex};
 
 use wasm_bindgen::JsCast;
 
+use super::controls::{pick, segment};
 use crate::components::color_picker::ColorPicker;
 use crate::components::focus::hold_focus;
 use crate::components::icons::{Ico, Icon};
-use crate::components::select::{Choice, Select};
 use crate::i18n::Lang;
 use crate::logic::settings::{
-    NEUTRALS, SWATCHES, accent_rgb, custom_in_use, neutral_name, oled_applies, pick, pick_color,
-    picked, swatch_name,
+    NEUTRALS, SWATCHES, accent_rgb, custom_in_use, neutral_name, oled_applies, pick as pick_hue,
+    pick_color, picked, swatch_name,
 };
-use crate::store::{self, Effects, Hand, Prefs, Saver, SwipeAction, Theme};
-use crate::{dom, power, theme};
+use crate::store::{self, Prefs, Theme};
+use crate::{dom, theme};
 
 fn theme_label(theme: Theme) -> String {
     match theme {
@@ -37,124 +37,67 @@ fn lang_name(lang: Lang) -> String {
     }
 }
 
-fn hand_label(hand: Hand) -> String {
-    match hand {
-        Hand::Either => t!("hand-either"),
-        Hand::Left => t!("hand-left"),
-        Hand::Right => t!("hand-right"),
-    }
-}
-
-fn saver_label(saver: Saver) -> String {
-    match saver {
-        Saver::Auto => t!("saver-auto"),
-        Saver::Always => t!("saver-always"),
-        Saver::Never => t!("saver-never"),
-    }
-}
-
-fn effects_label(effects: Effects) -> String {
-    match effects {
-        Effects::Auto => t!("effects-auto"),
-        Effects::Full => t!("effects-full"),
-        Effects::Lite => t!("effects-lite"),
-    }
-}
-
-pub(super) fn swipe_label(action: SwipeAction) -> String {
-    match action {
-        SwipeAction::Off => t!("swipe-off"),
-        SwipeAction::Like => t!("swipe-like"),
-        SwipeAction::Select => t!("swipe-select"),
-        SwipeAction::Share => t!("share-button"),
-        SwipeAction::Download => t!("post-download"),
-        SwipeAction::Delete => t!("swipe-delete"),
-    }
-}
-
-/// One choice of a segmented control, on while `on` says so.
-fn segment(
-    label: impl Fn() -> String + Send + Sync + 'static,
-    on: impl Fn() -> bool + Copy + Send + Sync + 'static,
-    choose: impl Fn() + 'static,
-    lang: Option<&'static str>,
-) -> impl IntoView {
+/// A small window of the app in a theme's colours, the accent's included.
+fn window(scheme: &'static str, oled: Memo<bool>) -> impl IntoView {
     view! {
-        <button
-            type="button"
-            role="radio"
-            class="seg"
-            class:on=on
-            lang=lang
-            aria-checked=move || if on() { "true" } else { "false" }
-            on:click=move |_| choose()
-        >
-            {label}
-        </button>
+        <span class=format!("theme-demo {scheme}") class:oled=move || oled.get()>
+            <span class="demo-bar"></span>
+            <span class="demo-tiles">
+                <span></span>
+                <span class="accent-tile"></span>
+                <span></span>
+                <span></span>
+                <span></span>
+                <span></span>
+            </span>
+            <span class="demo-nav"></span>
+        </span>
     }
 }
 
-/// A row of choices under a name, all from the preferences.
-fn choices<T: Copy + PartialEq + Send + Sync + 'static>(
-    name: fn() -> String,
-    all: &[T],
-    current: Memo<T>,
-    label: fn(T) -> String,
-    set: fn(&mut Prefs, T),
-) -> impl IntoView {
-    let buttons = all
-        .iter()
-        .map(|&value| {
-            segment(
-                move || label(value),
-                move || current.get() == value,
-                move || store::update_prefs(|p| set(p, value)),
-                None,
+/// The theme as three small windows, System split between the two, with
+/// the black background under them.
+#[component]
+fn ThemeCard() -> impl IntoView {
+    let theme = Memo::new(|_| store::prefs().theme);
+    let oled = Memo::new(|_| store::prefs().oled);
+    let picks = Theme::ALL
+        .into_iter()
+        .map(|value| {
+            let picture = match value {
+                Theme::Light => window("scheme-light", oled).into_any(),
+                Theme::Dark => window("scheme-dark", oled).into_any(),
+                Theme::System => view! {
+                    <span class="theme-split">
+                        {window("scheme-light", oled)}
+                        {window("scheme-dark", oled)}
+                    </span>
+                }
+                .into_any(),
+            };
+            pick(
+                move || theme_label(value),
+                move || theme.get() == value,
+                move || store::update_prefs(|p| p.theme = value),
+                picture,
             )
         })
         .collect_view();
     view! {
-        <div class="segmented" role="radiogroup" aria-label=name>
-            {buttons}
-        </div>
+        <section class="card" id="theme">
+            <h3 class="card-title">{move || t!("settings-theme")}</h3>
+            <div class="picks" role="radiogroup" aria-label=move || t!("settings-theme")>
+                {picks}
+            </div>
+            <OledSwitch theme=theme />
+        </section>
     }
 }
 
-/// An on/off setting, with what it does under it.
-fn check_row(
-    name: fn() -> String,
-    hint: fn() -> String,
-    on: Memo<bool>,
-    set: fn(&mut Prefs, bool),
-) -> impl IntoView {
-    view! {
-        <label class="check">
-            <input
-                type="checkbox"
-                prop:checked=move || on.get()
-                on:change=move |e| {
-                    let checked = event_target_checked(&e);
-                    store::update_prefs(|p| set(p, checked));
-                }
-            />
-            <span>{name}</span>
-        </label>
-        <p class="muted hint">{hint}</p>
-    }
-}
-
+/// Settings › Appearance.
 #[component]
-pub(super) fn AppearanceCard() -> impl IntoView {
-    let theme = Memo::new(|_| store::prefs().theme);
+pub(super) fn AppearanceGroup() -> impl IntoView {
     let language = Memo::new(|_| store::prefs().language);
-    let hand = Memo::new(|_| store::prefs().hand);
-    let saver = Memo::new(|_| store::prefs().battery_saver);
-    let effects = Memo::new(|_| store::prefs().effects);
-    let reduced = Memo::new(|_| store::prefs().effects_reduced);
-    let originals = Memo::new(|_| store::prefs().originals);
-    let flush = Memo::new(|_| store::prefs().flush_tiles);
-    let keep = Memo::new(|_| store::prefs().keep_original);
-
     let languages = Lang::ALL
         .into_iter()
         .map(|lang| {
@@ -166,90 +109,24 @@ pub(super) fn AppearanceCard() -> impl IntoView {
             )
         })
         .collect_view();
-    let saving_now = move || {
-        (saver.get() == Saver::Auto && power::device_low())
-            .then(|| view! { <p class="hint saver-now">{move || t!("settings-saver-now")}</p> })
-    };
-    let reduced_now = move || {
-        (effects.get() == Effects::Auto && reduced.get())
-            .then(|| view! { <p class="hint saver-now">{move || t!("settings-effects-now")}</p> })
-    };
 
     view! {
-        <section class="card">
-            <h2 class="card-title">{move || t!("settings-appearance")}</h2>
-            <div class="field">
-                <span>{move || t!("settings-theme")}</span>
-                {choices(|| t!("settings-theme"), &Theme::ALL, theme, theme_label, |p, t| p.theme = t)}
-                <OledSwitch theme=theme />
-            </div>
-            <div class="field">
-                <span>{move || t!("settings-language")}</span>
-                <div class="segmented" role="radiogroup" aria-label=move || t!("settings-language")>
-                    {segment(
-                        || t!("settings-language-system"),
-                        move || language.get().is_none(),
-                        || store::update_prefs(|p| p.language = None),
-                        None,
-                    )}
-                    {languages}
-                </div>
-            </div>
-            <div class="field">
-                <span>{move || t!("settings-accent")}</span>
-                <Accents />
-            </div>
-            <div class="field">
-                <span>{move || t!("settings-hand")}</span>
-                {choices(|| t!("settings-hand"), &Hand::ALL, hand, hand_label, |p, h| p.hand = h)}
-                <p class="muted hint">{move || t!("settings-hand-hint")}</p>
-            </div>
-            <div class="field">
-                <span>{move || t!("settings-saver")}</span>
-                {choices(
-                    || t!("settings-saver"),
-                    &Saver::ALL,
-                    saver,
-                    saver_label,
-                    |p, s| p.battery_saver = s,
+        <ThemeCard />
+        <section class="card" id="accent">
+            <h3 class="card-title">{move || t!("settings-accent")}</h3>
+            <Accents />
+        </section>
+        <section class="card" id="language">
+            <h3 class="card-title">{move || t!("settings-language")}</h3>
+            <div class="segmented" role="radiogroup" aria-label=move || t!("settings-language")>
+                {segment(
+                    || t!("settings-language-system"),
+                    move || language.get().is_none(),
+                    || store::update_prefs(|p| p.language = None),
+                    None,
                 )}
-                <p class="muted hint">{move || t!("settings-saver-hint")}</p>
-                {saving_now}
+                {languages}
             </div>
-            <div class="field">
-                <span>{move || t!("settings-effects")}</span>
-                // Choosing again, Automatic too, measures the device afresh.
-                {choices(
-                    || t!("settings-effects"),
-                    &Effects::ALL,
-                    effects,
-                    effects_label,
-                    |p, e| {
-                        p.effects = e;
-                        p.effects_reduced = false;
-                    },
-                )}
-                <p class="muted hint">{move || t!("settings-effects-hint")}</p>
-                {reduced_now}
-            </div>
-            {check_row(
-                || t!("settings-originals"),
-                || t!("settings-originals-hint"),
-                originals,
-                |p, on| p.originals = on,
-            )}
-            {check_row(
-                || t!("settings-flush"),
-                || t!("settings-flush-hint"),
-                flush,
-                |p, on| p.flush_tiles = on,
-            )}
-            {check_row(
-                || t!("settings-keep-original"),
-                || t!("settings-keep-original-hint"),
-                keep,
-                |p, on| p.keep_original = on,
-            )}
         </section>
     }
 }
@@ -318,7 +195,7 @@ fn Accents() -> impl IntoView {
                     aria-pressed=move || if on() { "true" } else { "false" }
                     aria-label=move || swatch_name(hue)
                     title=move || swatch_name(hue)
-                    on:click=move |_| store::update_prefs(|p| pick(p, hue))
+                    on:click=move |_| store::update_prefs(|p| pick_hue(p, hue))
                 >
                     <Show when=on>
                         <Ico icon=Icon::Check size=18 />
@@ -469,76 +346,6 @@ fn AccentMenu(on_close: Callback<()>) -> impl IntoView {
     }
 }
 
-/// People on or off, as a row among the library's links, with its switch at
-/// the end. A press anywhere on the row flips it.
-#[component]
-pub(super) fn PeopleSwitch() -> impl IntoView {
-    let on = Memo::new(|_| store::prefs().people);
-    view! {
-        <button
-            type="button"
-            class="list-link switch-row"
-            role="switch"
-            aria-checked=move || if on.get() { "true" } else { "false" }
-            aria-labelledby="people-switch-name"
-            aria-describedby="people-switch-hint"
-            on:click=move |_| store::update_prefs(|p| p.people = !p.people)
-        >
-            <Ico icon=Icon::People />
-            <span id="people-switch-name">{move || t!("settings-people")}</span>
-            <span id="people-switch-hint" class="muted">
-                {move || t!("settings-people-hint")}
-            </span>
-            <span class="switch" class:on=move || on.get() aria-hidden="true">
-                <span class="switch-knob">
-                    {move || {
-                        let icon = if on.get() { Icon::Check } else { Icon::Close };
-                        view! { <Ico icon=icon size=16 /> }
-                    }}
-                </span>
-            </span>
-        </button>
-    }
-}
-
-/// What swiping a thumbnail aside does, each way. Nothing until chosen, as a
-/// swipe that does something by surprise can't always be taken back.
-#[component]
-pub(super) fn GesturesCard() -> impl IntoView {
-    let options = Signal::derive(|| {
-        SwipeAction::ALL
-            .into_iter()
-            .map(|a| Choice::new(a.as_str(), swipe_label(a)))
-            .collect::<Vec<_>>()
-    });
-    let side =
-        |name: fn() -> String, get: fn(&Prefs) -> SwipeAction, set: fn(&mut Prefs, SwipeAction)| {
-            view! {
-                <div class="field">
-                    <span aria-hidden="true">{name}</span>
-                    <Select
-                        value=Signal::derive(move || get(&store::prefs()).as_str().to_owned())
-                        options=options
-                        label=Signal::derive(name)
-                        on_change=Callback::new(move |v: String| {
-                            if let Some(action) = SwipeAction::parse(&v) {
-                                store::update_prefs(|p| set(p, action));
-                            }
-                        })
-                    />
-                </div>
-            }
-        };
-    view! {
-        <section class="card">
-            <h2 class="card-title">{move || t!("settings-gestures")}</h2>
-            <p class="muted hint">{move || t!("settings-gestures-hint")}</p>
-            {side(|| t!("settings-swipe-left"), |p| p.swipe_left, |p, a| p.swipe_left = a)}
-            {side(|| t!("settings-swipe-right"), |p| p.swipe_right, |p, a| p.swipe_right = a)}
-        </section>
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -550,12 +357,21 @@ mod tests {
         }
         assert_eq!(lang_name(Lang::Italian), "Italiano");
         assert_eq!(lang_name(Lang::English), "English");
-        assert_eq!(saver_label(Saver::Auto), "Automatic");
-        assert_eq!(effects_label(Effects::Lite), "Reduced");
-        assert_eq!(hand_label(Hand::Either), "Either");
-        let labels: std::collections::BTreeSet<String> =
-            SwipeAction::ALL.into_iter().map(swipe_label).collect();
-        assert_eq!(labels.len(), SwipeAction::ALL.len());
+    }
+
+    #[test]
+    fn each_theme_shows_itself_in_its_own_colours() {
+        let page = include_str!("appearance.rs");
+        assert!(page.contains(r#"Theme::Light => window("scheme-light", oled)"#));
+        assert!(page.contains(r#"Theme::Dark => window("scheme-dark", oled)"#));
+        // The pictures take the other theme's roles, black included.
+        let tokens = include_str!("../../../style/tokens.css");
+        assert!(tokens.contains(".app, .scheme-light {"));
+        assert!(tokens.contains(r#".app[data-theme="dark"], .scheme-dark {"#));
+        assert!(tokens.contains(r#".app[data-theme="dark"][data-oled], .scheme-dark.oled {"#));
+        let css = include_str!("../../../style/pages/settings.css");
+        assert!(css.contains(".theme-demo {"));
+        assert!(css.contains("background: var(--canvas); color: var(--on-surface);"));
     }
 
     #[test]

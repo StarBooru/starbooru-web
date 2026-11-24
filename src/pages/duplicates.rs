@@ -23,6 +23,7 @@ use crate::logic::duplicates::{
     resolve_request, size_of, suggested_keeper, summary, unmerge,
 };
 use crate::logic::gallery::tint;
+use crate::logic::settings::Group;
 use crate::logic::viewer::{format_duration, human_size};
 use crate::route;
 
@@ -147,7 +148,7 @@ pub fn Duplicates() -> impl IntoView {
         <div class="page duplicates">
             <div class="page-head">
                 <div class="titled">
-                    <BackButton up=route::SETTINGS />
+                    <BackButton up=Group::Library.href() />
                     <h1 class="page-title">{move || t!("dup-title")}</h1>
                 </div>
                 <div class="segmented" role="radiogroup" aria-label=move || t!("dup-matching")>

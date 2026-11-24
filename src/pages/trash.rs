@@ -27,6 +27,7 @@ use crate::logic::bulk::{
     worth_telling,
 };
 use crate::logic::layout::Place;
+use crate::logic::settings::Group;
 use crate::route;
 use crate::store;
 
@@ -302,7 +303,7 @@ pub fn Trash() -> impl IntoView {
         <div class="page trash">
             <div class="page-head">
                 <div class="titled">
-                    <BackButton up=route::SETTINGS />
+                    <BackButton up=Group::Library.href() />
                     <h1 class="page-title">{move || t!("trash-title")}</h1>
                 </div>
                 <Show when=move || !posts.with(Vec::is_empty)>

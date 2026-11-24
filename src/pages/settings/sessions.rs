@@ -121,8 +121,8 @@ pub(super) fn SessionsCard(version: RwSignal<u32>) -> impl IntoView {
     let any_other = move || list.with(|l| l.as_deref().is_some_and(others));
 
     view! {
-        <section class="card">
-            <h2 class="card-title">{move || t!("sessions-title")}</h2>
+        <section class="card" id="devices">
+            <h3 class="card-title">{move || t!("sessions-title")}</h3>
             {move || {
                 error
                     .get()

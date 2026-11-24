@@ -46,7 +46,9 @@ pub fn tab_of(path: &str) -> Option<Tab> {
         ["explore"] | ["boorus"] | ["boorus", "post"] => Some(Tab::Explore),
         ["tags"] | ["tag"] => Some(Tab::Tags),
         ["upload"] => Some(Tab::Upload),
-        ["settings"] | ["trash"] | ["duplicates"] | ["help"] | ["admin"] => Some(Tab::Settings),
+        ["settings"] | ["settings", _] | ["trash"] | ["duplicates"] | ["help"] | ["admin"] => {
+            Some(Tab::Settings)
+        }
         _ => None,
     }
 }
@@ -194,8 +196,15 @@ pub const HELP: &str = "/help";
 pub const TRASH: &str = "/trash";
 /// The duplicate finder.
 pub const DUPLICATES: &str = "/duplicates";
-/// Settings.
+/// Settings: its list of groups, each group at `/settings/<group>`
+/// (`logic::settings::Group`).
 pub const SETTINGS: &str = "/settings";
+
+/// Whether `path` is Settings, its list or one of its groups.
+pub fn is_settings(path: &str) -> bool {
+    path.strip_prefix(SETTINGS)
+        .is_some_and(|rest| rest.is_empty() || rest.starts_with('/'))
+}
 /// The administration.
 pub const ADMIN: &str = "/admin";
 /// The privacy policy and the terms, outside the shell.
@@ -259,6 +268,7 @@ mod tests {
             ("/tag", Tab::Tags),
             ("/upload", Tab::Upload),
             ("/settings", Tab::Settings),
+            ("/settings/appearance", Tab::Settings),
             ("/trash", Tab::Settings),
             ("/duplicates", Tab::Settings),
             ("/help", Tab::Settings),
@@ -274,9 +284,19 @@ mod tests {
             "/nowhere",
             "/post",
             "/post/1/2",
-            "/settings/x",
+            "/settings/a/b",
         ] {
             assert_eq!(tab_of(path), None, "{path}");
+        }
+    }
+
+    #[test]
+    fn settings_is_its_list_and_its_groups() {
+        for path in ["/settings", "/settings/", "/settings/keys"] {
+            assert!(is_settings(path), "{path}");
+        }
+        for path in ["/", "/settingsx", "/trash", "/admin/settings"] {
+            assert!(!is_settings(path), "{path}");
         }
     }
 

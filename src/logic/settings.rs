@@ -16,6 +16,150 @@ use super::upload::human_size;
 use crate::store::{Prefs, Theme};
 use crate::theme;
 
+// ---------- the groups ----------
+
+/// The groups Settings is in, in the order of its list. On a phone each is a
+/// page of its own, at `/settings/<slug>`; on a wide window the list stays
+/// beside the group open.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Group {
+    Account,
+    Appearance,
+    Viewing,
+    Battery,
+    Library,
+    Sharing,
+    About,
+}
+
+impl Group {
+    pub const ALL: [Group; 7] = [
+        Group::Account,
+        Group::Appearance,
+        Group::Viewing,
+        Group::Battery,
+        Group::Library,
+        Group::Sharing,
+        Group::About,
+    ];
+
+    pub fn slug(self) -> &'static str {
+        match self {
+            Group::Account => "account",
+            Group::Appearance => "appearance",
+            Group::Viewing => "viewing",
+            Group::Battery => "battery",
+            Group::Library => "library",
+            Group::Sharing => "sharing",
+            Group::About => "about",
+        }
+    }
+
+    pub fn parse(slug: &str) -> Option<Group> {
+        Group::ALL.into_iter().find(|g| g.slug() == slug)
+    }
+
+    /// Its address.
+    pub fn href(self) -> &'static str {
+        match self {
+            Group::Account => "/settings/account",
+            Group::Appearance => "/settings/appearance",
+            Group::Viewing => "/settings/viewing",
+            Group::Battery => "/settings/battery",
+            Group::Library => "/settings/library",
+            Group::Sharing => "/settings/sharing",
+            Group::About => "/settings/about",
+        }
+    }
+}
+
+/// The group a wide window shows beside the list at `/settings`.
+pub const FIRST: Group = Group::Appearance;
+
+/// The anchors of the cards, each with its group, and the names an older
+/// address may use for them. `""` is the top of the group.
+const ANCHORS: [(&str, Group, &str); 33] = [
+    ("account", Group::Account, "account"),
+    ("security", Group::Account, ""),
+    ("sign-in", Group::Account, "sign-in"),
+    ("signin", Group::Account, "sign-in"),
+    ("password", Group::Account, "password"),
+    ("devices", Group::Account, "devices"),
+    ("sessions", Group::Account, "devices"),
+    ("appearance", Group::Appearance, ""),
+    ("theme", Group::Appearance, "theme"),
+    ("accent", Group::Appearance, "accent"),
+    ("language", Group::Appearance, "language"),
+    ("viewing", Group::Viewing, ""),
+    ("thumbnails", Group::Viewing, "thumbnails"),
+    ("viewer", Group::Viewing, "viewer"),
+    ("people", Group::Viewing, "viewer"),
+    ("gestures", Group::Viewing, "gestures"),
+    ("hand", Group::Viewing, "hand"),
+    ("battery", Group::Battery, ""),
+    ("battery-saver", Group::Battery, "battery-saver"),
+    ("saver", Group::Battery, "battery-saver"),
+    ("effects", Group::Battery, "effects"),
+    ("library", Group::Library, "library"),
+    ("import", Group::Library, "import"),
+    ("sharing", Group::Sharing, ""),
+    ("links", Group::Sharing, "links"),
+    ("shares", Group::Sharing, "links"),
+    ("keys", Group::Sharing, "keys"),
+    ("api-keys", Group::Sharing, "keys"),
+    ("about", Group::About, "about"),
+    ("help", Group::About, "help"),
+    ("legal", Group::About, "help"),
+    ("install", Group::About, "about"),
+    ("credits", Group::About, "about"),
+];
+
+/// Where an old `/settings#anchor` leads now: the group, and the card in it
+/// to scroll to (`""` for the top).
+pub fn group_for_anchor(hash: &str) -> Option<(Group, &'static str)> {
+    let anchor = hash.trim_start_matches('#').trim().to_ascii_lowercase();
+    ANCHORS
+        .iter()
+        .find(|(name, _, _)| *name == anchor)
+        .map(|&(_, group, card)| (group, card))
+}
+
+/// The group's address, down at `card` when there's one.
+pub fn anchored(group: Group, card: &str) -> String {
+    if card.is_empty() {
+        group.href().to_owned()
+    } else {
+        format!("{}#{card}", group.href())
+    }
+}
+
+/// Where the focus goes when the group open changes on a phone, where the
+/// list and a group are pages of their own.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum FocusTo {
+    /// The title of the group that opened.
+    Title,
+    /// The list's link to the group just left.
+    Link(Group),
+}
+
+pub fn focus_after(before: Option<Group>, now: Option<Group>) -> Option<FocusTo> {
+    match (before, now) {
+        (Some(left), None) => Some(FocusTo::Link(left)),
+        (before, Some(now)) if before != Some(now) => Some(FocusTo::Title),
+        _ => None,
+    }
+}
+
+/// The letter on the account's round badge.
+pub fn initial(username: &str) -> String {
+    username
+        .chars()
+        .find(|c| c.is_alphanumeric())
+        .map(|c| c.to_uppercase().collect())
+        .unwrap_or_else(|| "?".to_owned())
+}
+
 // ---------- the accent ----------
 
 /// The accent's presets, as OKLCH hues, in the order they're offered.
@@ -617,5 +761,78 @@ mod tests {
         assert_eq!(app_version(Some("0.3.0")), "0.3.0");
         assert_eq!(app_version(Some(" ")), env!("CARGO_PKG_VERSION"));
         assert_eq!(app_version(None), env!("CARGO_PKG_VERSION"));
+    }
+
+    #[test]
+    fn every_group_has_an_address_under_settings() {
+        for group in Group::ALL {
+            assert_eq!(
+                group.href(),
+                format!("{}/{}", crate::route::SETTINGS, group.slug())
+            );
+            assert_eq!(Group::parse(group.slug()), Some(group));
+        }
+        assert_eq!(Group::parse("nowhere"), None);
+        assert_eq!(Group::parse(""), None);
+        assert!(Group::ALL.contains(&FIRST));
+    }
+
+    #[test]
+    fn an_old_anchor_lands_on_its_card() {
+        assert_eq!(group_for_anchor("#keys"), Some((Group::Sharing, "keys")));
+        assert_eq!(
+            group_for_anchor("#sessions"),
+            Some((Group::Account, "devices"))
+        );
+        assert_eq!(
+            group_for_anchor("Appearance"),
+            Some((Group::Appearance, ""))
+        );
+        assert_eq!(
+            group_for_anchor("#import"),
+            Some((Group::Library, "import"))
+        );
+        assert_eq!(group_for_anchor(""), None);
+        assert_eq!(group_for_anchor("#nothing"), None);
+        assert_eq!(anchored(Group::Sharing, "keys"), "/settings/sharing#keys");
+        assert_eq!(anchored(Group::Appearance, ""), "/settings/appearance");
+        // Every group can be reached by its own name, and every card id
+        // leads to its own group.
+        for group in Group::ALL {
+            assert_eq!(group_for_anchor(group.slug()).map(|(g, _)| g), Some(group));
+        }
+        for (_, group, card) in ANCHORS {
+            if !card.is_empty() {
+                assert_eq!(group_for_anchor(card), Some((group, card)), "{card}");
+            }
+        }
+    }
+
+    #[test]
+    fn the_focus_follows_the_page_a_phone_shows() {
+        // A group opens: its title. Back to the list: the link left.
+        assert_eq!(
+            focus_after(None, Some(Group::Library)),
+            Some(FocusTo::Title)
+        );
+        assert_eq!(
+            focus_after(Some(Group::Library), None),
+            Some(FocusTo::Link(Group::Library))
+        );
+        assert_eq!(
+            focus_after(Some(Group::Library), Some(Group::About)),
+            Some(FocusTo::Title)
+        );
+        assert_eq!(focus_after(Some(Group::About), Some(Group::About)), None);
+        assert_eq!(focus_after(None, None), None);
+    }
+
+    #[test]
+    fn the_badge_shows_the_first_letter() {
+        assert_eq!(initial("admin"), "A");
+        assert_eq!(initial("_édith"), "É");
+        assert_eq!(initial("42"), "4");
+        assert_eq!(initial("__"), "?");
+        assert_eq!(initial(""), "?");
     }
 }

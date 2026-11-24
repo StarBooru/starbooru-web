@@ -13,8 +13,8 @@ use crate::components::confirm::ConfirmButton;
 use crate::components::icons::{Ico, Icon};
 use crate::components::strength::StrengthField;
 use crate::logic::settings::{
-    MIN_PASSWORD_CHARS, check_password, identity_name, identity_times, last_way_in, role_label,
-    usage_text, wrong_current,
+    MIN_PASSWORD_CHARS, check_password, identity_name, identity_times, initial, last_way_in,
+    role_label, usage_text, wrong_current,
 };
 use crate::{api, oidc, store};
 
@@ -65,14 +65,23 @@ pub(super) fn AccountCard(info: LocalResource<Option<ServerInfo>>) -> impl IntoV
     move || {
         store::session().map(|s| {
             let role = s.user.role;
+            let badge = initial(&s.user.username);
             view! {
-                <section class="card">
-                    <h2 class="card-title">{move || t!("settings-account")}</h2>
+                <section class="card" id="account">
+                    // The badge and the name say it.
+                    <h3 class="visually-hidden">{move || t!("settings-account")}</h3>
+                    <div class="profile">
+                        <span class="avatar big" aria-hidden="true">{badge}</span>
+                        <span class="profile-name">
+                            <span class="visually-hidden">{move || t!("settings-signed-in-as")}</span>
+                            <strong class="break">{s.user.username}</strong>
+                            <span class="pill">
+                                <span class="visually-hidden">{move || t!("settings-role")} " "</span>
+                                {move || role_label(role)}
+                            </span>
+                        </span>
+                    </div>
                     <dl class="meta">
-                        <dt>{move || t!("settings-signed-in-as")}</dt>
-                        <dd class="break">{s.user.username}</dd>
-                        <dt>{move || t!("settings-role")}</dt>
-                        <dd>{move || role_label(role)}</dd>
                         {usage}
                         <dt>{move || t!("login-server")}</dt>
                         <dd class="break">{s.server}</dd>
@@ -207,8 +216,8 @@ pub(super) fn SignInCard(
         })
     };
     view! {
-        <section class="card">
-            <h2 class="card-title">{move || t!("signin-title")}</h2>
+        <section class="card" id="sign-in">
+            <h3 class="card-title">{move || t!("signin-title")}</h3>
             {move || error.get().map(|message| view! { <ErrorBanner message=message /> })}
             {rows}
             {link_button}
@@ -285,8 +294,8 @@ pub(super) fn PasswordCard(
 
     let invalid = |on: bool| if on { "true" } else { "false" };
     view! {
-        <section class="card">
-            <h2 class="card-title">{move || t!("login-password")}</h2>
+        <section class="card" id="password">
+            <h3 class="card-title">{move || t!("login-password")}</h3>
             <Show when=move || !has_password.get()>
                 <p class="muted hint">{move || t!("password-none")}</p>
             </Show>

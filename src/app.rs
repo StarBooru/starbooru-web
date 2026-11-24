@@ -95,7 +95,7 @@ fn AppRoutes() -> impl IntoView {
                 <Route path=path!("/upload") view=Upload />
                 <Route path=path!("/boorus") view=Boorus />
                 <Route path=path!("/boorus/post") view=BooruPost />
-                <Route path=path!("/settings") view=Settings />
+                <Route path=path!("/settings/:group?") view=Settings />
                 <Route path=path!("/trash") view=Trash />
                 <Route path=path!("/duplicates") view=Duplicates />
                 <Route path=path!("/help") view=Help />
@@ -246,10 +246,10 @@ mod tests {
         for name in ["--canvas", "--primary-container", "--primary"] {
             assert_eq!(
                 token(page, "#boot {", name),
-                token(css, "\n.app {", name),
+                token(css, "\n.app, .scheme-light {", name),
                 "{name}, light"
             );
-            let dark = token(css, r#".app[data-theme="dark"] {"#, name);
+            let dark = token(css, r#".app[data-theme="dark"], .scheme-dark {"#, name);
             assert_eq!(
                 token(page, r#"#boot[data-theme="dark"] {"#, name),
                 dark,
@@ -269,7 +269,11 @@ mod tests {
         assert_eq!(token(page, "#boot {", "--h"), "285");
         assert!(css.contains("--h: var(--seed-hue, 285);"));
         // Black in OLED, whether dark was picked or comes from the system.
-        let black = token(css, r#".app[data-theme="dark"][data-oled] {"#, "--canvas");
+        let black = token(
+            css,
+            r#".app[data-theme="dark"][data-oled], .scheme-dark.oled {"#,
+            "--canvas",
+        );
         assert_eq!(black, "oklch(0 0 0)");
         assert_eq!(
             token(css, r#".app[data-theme="system"][data-oled] {"#, "--canvas"),

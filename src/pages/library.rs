@@ -186,7 +186,7 @@ pub fn LibraryImportCard() -> impl IntoView {
         },
         Some(ids) if ids.is_empty() => ().into_any(),
         Some(_) => view! {
-            <h3 class="library-heading">{move || t!("library-list")}</h3>
+            <h4 class="library-heading">{move || t!("library-list")}</h4>
             <ul class="sessions library-list">
                 <For
                     each=move || ids.get().unwrap_or_default()
@@ -201,8 +201,8 @@ pub fn LibraryImportCard() -> impl IntoView {
     };
 
     view! {
-        <section class="card library">
-            <h2 class="card-title">{move || t!("library-title")}</h2>
+        <section class="card library" id="import">
+            <h3 class="card-title">{move || t!("library-title")}</h3>
             <p class="muted hint">{move || t!("library-lead")}</p>
             <p class="muted hint">{move || t!("library-left-out")}</p>
             <form class="key-form library-form" on:submit=start>

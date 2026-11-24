@@ -15,9 +15,13 @@
   /* A colour with little chroma is told apart by its lightness, so the
      primary moves that much towards the picked colour's own lightness. */
   --pull: calc(1 - var(--k));
+}
 
-  /* light role mapping. The neutral roles' chroma scales with --k; the
-     accent's roles take the picked colour's chroma where it has less. */
+/* light role mapping. The neutral roles' chroma scales with --k; the
+   accent's roles take the picked colour's chroma where it has less.
+   `.scheme-light` and `.scheme-dark` give a small preview the other theme's
+   roles (the theme choice in Settings). */
+.app, .scheme-light {
   color-scheme: light;
   --canvas: oklch(0.985 calc(0.006 * var(--k)) var(--h));
   --surface: oklch(0.965 calc(0.014 * var(--k)) var(--h));
@@ -91,7 +95,9 @@
   /* --shadow-1 as a filter, for a shape a box shadow doesn't follow. */
   --drop-1: drop-shadow(0 1px 2px oklch(0.2 calc(0.04 * var(--k)) var(--h) / 0.08)) drop-shadow(0 2px 8px oklch(0.2 calc(0.04 * var(--k)) var(--h) / 0.06));
   --shadow-2: 0 2px 4px oklch(0.2 calc(0.04 * var(--k)) var(--h) / 0.08), 0 12px 32px oklch(0.2 calc(0.04 * var(--k)) var(--h) / 0.14);
+}
 
+.app {
   --radius-s: 12px;
   --radius-m: 16px;
   --radius-l: 28px;
@@ -113,7 +119,7 @@
   transition: background-color var(--med) var(--ease), color var(--med) var(--ease);
 }
 
-.app[data-theme="dark"] {
+.app[data-theme="dark"], .scheme-dark {
   color-scheme: dark;
   --canvas: oklch(0.165 calc(0.012 * var(--k)) var(--h));
   --surface: oklch(0.205 calc(0.016 * var(--k)) var(--h));
@@ -193,7 +199,7 @@
 /* OLED: black behind everything while the app is dark. The surfaces rise
    just enough to tell cards and sheets apart, and the glass is dark enough
    that the bars melt into the black. The rest is the dark theme's. */
-.app[data-theme="dark"][data-oled] {
+.app[data-theme="dark"][data-oled], .scheme-dark.oled {
   --canvas: oklch(0 0 0);
   --surface: oklch(0.17 calc(0.014 * var(--k)) var(--h));
   --surface-2: oklch(0.21 calc(0.018 * var(--k)) var(--h));

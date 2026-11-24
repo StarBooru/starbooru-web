@@ -1,6 +1,218 @@
-/* Settings (src/pages/settings/): its choices, the accent's colours, the
+/* Settings (src/pages/settings/): the list of groups and the group open,
+   the choices drawn as what they look like, the accent's colours, the
    account and its usage, the lists of devices, sign-ins, keys and links, and
    the import of a whole library from another booru (src/pages/library.rs). */
+
+/* ---------- the list and the group ---------- */
+
+.page.settings { max-width: 720px; }
+.settings [id] { scroll-margin-top: calc(var(--bar-end) + 16px); }
+.settings-nav { min-width: 0; }
+.settings-list {
+  list-style: none; margin: 0; padding: 8px; display: grid; gap: 2px;
+  background: var(--surface); border-radius: var(--radius-l); box-shadow: var(--shadow-1);
+}
+/* The account on top, the administration at the foot, each set apart. */
+.settings-list > li:first-child { padding-bottom: 6px; margin-bottom: 4px; border-bottom: 1px solid oklch(from var(--outline) l c h / 0.4); }
+.settings-list > li.admin-row { padding-top: 6px; margin-top: 4px; border-top: 1px solid oklch(from var(--outline) l c h / 0.4); }
+.settings-link {
+  display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: 14px;
+  min-height: 64px; padding: 8px 10px 8px 8px; border-radius: var(--radius-m);
+  color: var(--on-surface); text-decoration: none;
+  transition: background-color var(--fast) var(--ease), color var(--fast) var(--ease), transform var(--fast) var(--ease-spring);
+}
+.settings-link:hover { background: var(--surface-2); }
+.settings-link:active { transform: scale(0.98); }
+.settings-link:focus-visible { outline-offset: -3px; }
+.settings-link-text { display: grid; min-width: 0; }
+.settings-link-text > span:first-child { font-weight: 600; }
+.settings-link-text .muted { font-size: 14px; }
+.settings-link > .icon:last-child { color: var(--on-surface-2); }
+/* A group's icon on a tonal disc, the same in the list and over the group. */
+.group-icon {
+  flex: none; display: grid; place-items: center; width: 40px; height: 40px; border-radius: 50%;
+  background: var(--primary-container); color: var(--on-primary-container);
+  transition: background-color var(--med) var(--ease), color var(--med) var(--ease);
+}
+.group-icon .icon { width: 22px; height: 22px; }
+/* The account's initial on a disc of the accent. */
+.avatar {
+  flex: none; display: grid; place-items: center; width: 40px; height: 40px; border-radius: 50%;
+  background: var(--primary); color: var(--on-primary); font-size: 18px; font-weight: 700; line-height: 1;
+}
+.avatar.big { width: 56px; height: 56px; font-size: 24px; }
+
+.group-head { margin-bottom: 20px; }
+.group-head .group-icon { margin: 0 10px 0 2px; }
+.group-cards { display: grid; gap: 16px; min-width: 0; }
+.group-cards .card-title { margin-top: 0; }
+.group-cards > .card { margin: 0; min-width: 0; }
+/* A group opens as a page pushed in from the side, and the list slides
+   back in after Back. */
+.settings-group { min-width: 0; animation: group-in var(--med) var(--ease); }
+.settings-nav { animation: list-in var(--med) var(--ease); }
+@keyframes group-in { from { opacity: 0; translate: 32px 0; } }
+@keyframes list-in { from { opacity: 0; translate: -32px 0; } }
+
+/* Phones and tablets: the list, or one group with its Back. */
+@media (max-width: 999px) {
+  .settings.open .settings-nav { display: none; }
+  .settings:not(.open) .settings-group { display: none; }
+}
+
+/* Wide windows: the list stays beside the group open, marked, and a group
+   comes in where it was. */
+@media (min-width: 1000px) {
+  .page.settings {
+    max-width: 1120px; display: grid; grid-template-columns: 300px minmax(0, 1fr); gap: 32px; align-items: start;
+  }
+  .settings-nav { position: sticky; top: calc(var(--bar-end) + 16px); animation: none; }
+  .settings-link-text .muted { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .settings-link > .icon:last-child { display: none; }
+  .settings-link.shown { background: var(--primary-container); color: var(--on-primary-container); }
+  .settings-link.shown .muted { color: inherit; }
+  .settings-link.shown .group-icon { background: var(--primary); color: var(--on-primary); }
+  .settings-link.shown .group-icon .icon { animation: pop var(--slow) var(--ease-spring); }
+  .group-head { margin-left: 0; }
+  .group-head .page-back { display: none; }
+  /* One name in both layouts, so a resize across them doesn't replay it. */
+  @keyframes group-in { from { opacity: 0; translate: 0 8px; } }
+}
+
+/* ---------- choices drawn as what they look like ---------- */
+
+/* Each picture is drawn in units of its own width, so it reads the same
+   at any size. */
+.picks { display: grid; grid-template-columns: repeat(3, minmax(0, 176px)); gap: 12px; }
+.picks.two { grid-template-columns: repeat(2, minmax(0, 176px)); }
+.pick {
+  position: relative; display: grid; gap: 8px; justify-items: center; min-width: 0; padding: 0; border: 0; background: none;
+  color: var(--on-surface); font: inherit; font-size: 14px; font-weight: 500; cursor: pointer;
+}
+.pick-picture {
+  position: relative; display: block; width: 100%; aspect-ratio: 4 / 3; overflow: hidden; container-type: inline-size;
+  border-radius: var(--radius-m); box-shadow: 0 0 0 1px var(--outline);
+  transition: box-shadow var(--fast) var(--ease), transform var(--fast) var(--ease-spring);
+}
+.pick:hover .pick-picture { box-shadow: 0 0 0 2px var(--outline); }
+.pick:active .pick-picture { transform: scale(0.95); }
+.pick.on .pick-picture { box-shadow: 0 0 0 3px var(--primary); }
+.pick:focus-visible { outline: none; }
+.pick:focus-visible .pick-picture { outline: 3px solid var(--primary); outline-offset: 4px; }
+.pick-label { max-width: 100%; overflow-wrap: anywhere; text-align: center; }
+.pick.on .pick-label { font-weight: 700; }
+/* The tick pops onto the choice taken. */
+.pick-tick {
+  position: absolute; z-index: 1; top: -7px; right: -7px; display: grid; place-items: center; width: 24px; height: 24px;
+  border-radius: 50%; background: var(--primary); color: var(--on-primary); box-shadow: 0 0 0 2px var(--surface);
+  opacity: 0; scale: 0.4; transition: opacity var(--fast) var(--ease), scale var(--med) var(--ease-spring);
+}
+.pick.on .pick-tick { opacity: 1; scale: 1; }
+
+/* The theme: a small window of the app in that theme's roles (tokens.css
+   gives `.scheme-light` and `.scheme-dark` their own), System split
+   corner to corner between the two. */
+.theme-demo {
+  position: absolute; inset: 0; display: block; padding: 7cqw;
+  background: var(--canvas); color: var(--on-surface);
+  transition: background-color var(--med) var(--ease);
+}
+.theme-split .theme-demo + .theme-demo { clip-path: polygon(100% 0, 100% 100%, 0 100%); }
+.demo-bar {
+  display: block; height: 10cqw; border-radius: 999px; background: var(--surface); box-shadow: var(--shadow-1);
+  background-image: radial-gradient(circle at 7cqw 50%, var(--primary) 2.4cqw, transparent 2.6cqw);
+}
+.demo-tiles { display: grid; grid-template-columns: repeat(3, 1fr); gap: 3cqw; margin-top: 5cqw; }
+.demo-tiles span { aspect-ratio: 1; border-radius: 3cqw; background: var(--surface-3); transition: background-color var(--med) var(--ease); }
+.demo-tiles .accent-tile { background: var(--primary-container); }
+.demo-nav {
+  position: absolute; left: 26cqw; right: 26cqw; bottom: 5cqw; height: 9cqw; border-radius: 999px;
+  background: var(--surface); box-shadow: var(--shadow-1);
+  background-image: linear-gradient(var(--primary), var(--primary));
+  background-size: 30% 60%; background-position: 12% 50%; background-repeat: no-repeat;
+}
+
+/* Thumbnails, spaced or edge to edge. */
+.tiles-demo {
+  position: absolute; inset: 0; display: grid; grid-template-columns: repeat(3, 1fr); grid-auto-rows: 1fr;
+  gap: 4cqw; padding: 7cqw; background: var(--canvas);
+}
+.tiles-demo span { border-radius: 4cqw; background: var(--surface-3); }
+.tiles-demo span:nth-child(2), .tiles-demo span:nth-child(6) { background: var(--primary-container); }
+.tiles-demo span:nth-child(4) { background: var(--outline); }
+.tiles-demo.flush { gap: 0; padding: 0; }
+.tiles-demo.flush span { border-radius: 0; }
+
+/* The hand: a tablet with its side navigation where the app puts it, and
+   the hand that holds it, which waves in as it's chosen. */
+.hand-demo {
+  position: absolute; inset: 0; display: grid; grid-template-columns: 15cqw 1fr; gap: 5cqw; padding: 7cqw;
+  background: var(--canvas); color: var(--on-surface-2);
+}
+.hand-demo[data-hand="right"] { grid-template-columns: 1fr 15cqw; }
+.hand-demo[data-hand="right"] .demo-rail { order: 2; }
+.demo-rail {
+  display: grid; align-content: center; justify-items: center; gap: 4cqw;
+  border-radius: 999px; background: var(--surface); box-shadow: var(--shadow-1);
+}
+.demo-rail span { width: 7cqw; height: 7cqw; border-radius: 50%; background: var(--surface-3); }
+.demo-rail span:first-child { background: var(--primary); }
+.demo-page { border-radius: 4cqw; background: var(--surface-2); }
+.demo-hand { position: absolute; bottom: 4cqw; left: 50%; translate: -50% 0; transition: color var(--fast) var(--ease); }
+.demo-hand .icon { width: 24cqw; height: 24cqw; }
+.hand-demo[data-hand="left"] .demo-hand { left: 4cqw; translate: none; scale: -1 1; }
+.hand-demo[data-hand="right"] .demo-hand { left: auto; right: 4cqw; translate: none; }
+.pick.on .demo-hand { color: var(--primary); }
+.pick.on .demo-hand .icon { animation: wave var(--slow) var(--ease-spring); transform-origin: 50% 90%; }
+@keyframes wave { 0% { transform: rotate(-16deg) scale(0.8); } 60% { transform: rotate(8deg); } }
+
+/* A swipe: the thumbnail pushed aside uncovers what it does, on the side
+   it opens, in the gallery's colours. It slides again on every change. */
+.swipe-sides { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 16px 24px; }
+.swipe-side { display: grid; gap: 10px; min-width: 0; }
+.swipe-side .field { margin: 0; }
+.swipe-demo {
+  position: relative; display: block; height: 72px; overflow: hidden; border-radius: var(--radius-m);
+  background: var(--primary-container); color: var(--on-primary-container);
+}
+.swipe-demo[data-action="delete"] { background: var(--danger-container); color: var(--on-danger-container); }
+.swipe-demo[data-action="off"] { background: var(--surface-2); color: var(--on-surface-2); }
+.swipe-demo-hint { position: absolute; top: 0; bottom: 0; display: grid; place-items: center; width: 32%; }
+.swipe-demo[data-side="left"] { --dir: -1; }
+.swipe-demo[data-side="right"] { --dir: 1; }
+.swipe-demo[data-side="left"] .swipe-demo-hint { right: 0; }
+.swipe-demo[data-side="right"] .swipe-demo-hint { left: 0; }
+.swipe-demo-hint .icon { animation: pop var(--slow) var(--ease-spring) 200ms both; }
+/* A picture's thumbnail: a sun over a hill. */
+.swipe-demo-tile {
+  position: absolute; inset: 0; border-radius: var(--radius-m); box-shadow: var(--shadow-1);
+  background: radial-gradient(circle 10px at 24% 38%, var(--primary) 95%, transparent),
+    linear-gradient(165deg, var(--surface-3) 60%, var(--outline) 60.5%);
+  translate: calc(var(--dir) * 32%) 0;
+  animation: swipe-demo 700ms var(--ease) both;
+}
+@keyframes swipe-demo { from { translate: 0 0; } }
+/* Nothing: the thumbnail gives a little and stays. */
+.swipe-demo[data-action="off"] .swipe-demo-tile { translate: 0 0; animation-name: swipe-refuse; }
+@keyframes swipe-refuse { 35% { translate: calc(var(--dir) * 8%) 0; } 70% { translate: calc(var(--dir) * -2%) 0; } }
+
+/* What a setting changes, lit up while it's in effect. */
+.does { margin-top: 16px; padding: 12px 16px; border-radius: var(--radius-m); background: var(--surface-2); transition: background-color var(--med) var(--ease); }
+.does-title { display: block; margin-bottom: 6px; font-size: 13px; font-weight: 600; color: var(--on-surface-2); }
+.does ul { display: grid; gap: 6px; margin: 0; padding: 0; list-style: none; }
+.does li { display: flex; align-items: center; gap: 10px; font-size: 14px; color: var(--on-surface-2); transition: color var(--med) var(--ease); }
+.does.live { background: var(--primary-container); }
+.does.live :is(.does-title, li) { color: var(--on-primary-container); }
+.does.live li .icon { animation: pop var(--slow) var(--ease-spring) both; }
+.does.live li:nth-child(2) .icon { animation-delay: 60ms; }
+.does.live li:nth-child(3) .icon { animation-delay: 120ms; }
+.card .segmented + .fine, .card .segmented + .hint { margin: 10px 0 0; }
+
+/* Reduced effects: the pictures stand still. Reduced motion and the
+   battery saver cut every animation short (base.css). */
+.app[data-effects="lite"] :is(.settings-group, .settings-nav, .swipe-demo-tile, .swipe-demo-hint .icon, .does li .icon, .demo-hand .icon) {
+  animation: none;
+}
 
 /* ---------- appearance ---------- */
 
@@ -42,6 +254,7 @@
   color: var(--on-surface); font: inherit; font-size: 14px; text-align: start; cursor: pointer;
   transition: opacity var(--med) var(--ease), background-color var(--fast) var(--ease);
 }
+.picks + .oled-switch { margin-top: 16px; }
 .oled-switch-text { display: grid; }
 .oled-switch-text > span:first-child { font-weight: 600; }
 .oled-switch-text .muted { font-size: 13px; }
@@ -50,10 +263,10 @@
 .oled-switch:active:not(:disabled) .switch-knob { scale: 0.92; }
 .oled-switch:disabled { opacity: 0.45; cursor: not-allowed; }
 
-/* ---------- library ---------- */
+/* ---------- switches ---------- */
 
-/* A setting among the library's links: the same row, with its switch at the
-   end, and the whole row flips it. */
+/* A setting as a row like a link's, with its switch at the end, and the
+   whole row flips it. */
 .switch-row {
   grid-template-columns: auto 1fr auto; width: calc(100% + 24px); border: 0; background: none;
   font: inherit; text-align: start; cursor: pointer;
@@ -67,6 +280,10 @@
 
 /* ---------- account ---------- */
 
+/* Who is signed in: their initial, their name and their role. */
+.profile { display: flex; align-items: center; gap: 14px; margin-bottom: 16px; }
+.profile-name { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; min-width: 0; font-size: 18px; }
+.profile .pill { max-width: none; background: var(--primary-container); color: var(--on-primary-container); }
 .usage { display: grid; gap: 6px; }
 .meter.full span { background: var(--danger); }
 .about-credits { margin-bottom: 12px; }
