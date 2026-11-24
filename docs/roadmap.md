@@ -35,12 +35,12 @@ An instance runs in one of two modes: private, as today, or public, open to othe
 
 Switching:
 
-- [ ] A switch between the two modes in Administration (server)
-- [ ] Switching is destructive, so it first offers a backup made for the switch, on by default (server). A preview shows what the new mode doesn't use; that is deleted
+- [x] A switch between the two modes in Administration (server)
+- [x] Switching is destructive, so it first offers a backup made for the switch, on by default (server). A preview shows what the new mode doesn't use; that is deleted
 
 Private mode:
 
-- [ ] Scores as likes and dislikes by default, or 0 to 5 stars as an option (server)
+- [x] Scores as likes and dislikes by default, or 0 to 5 stars as an option (server)
 - [x] Explore without Trending and Popular tags
 
 Public mode:
@@ -49,13 +49,13 @@ Public mode:
 - [ ] An account button with the profile picture beside the navigation; Upload and Settings move under it
 - [ ] A forum, in Upload's place in the navigation (server)
 - [ ] Votes on tags (server)
-- [ ] No Boorus side in Explore, and no way to turn it on (server)
-- [ ] Trending and Popular tags back in Explore (server)
-- [ ] Browsing without an account, read-only (server)
+- [x] No Boorus side in Explore, and no way to turn it on (server)
+- [x] Trending and Popular tags back in Explore (server)
+- [x] Browsing without an account, read-only (server)
 
 Both modes:
 
-- [ ] Share links set up to suit each mode: in public mode a post is shared by its own address, in private mode by a share link as today (server)
+- [x] Share links set up to suit each mode: in public mode a post is shared by its own address, in private mode by a share link as today (server)
 - [ ] A tag blacklist in Settings (server)
 - [ ] An optional home page that can be turned on or off and customised. The default, in StarBooru's look, has the logo above a search bar, over a moving background of the most popular posts rated safe (server)
 

@@ -1,13 +1,15 @@
 //! Administration, for administrators only: the server's numbers
 //! (`overview.rs`), the accounts (`accounts.rs`), the database backups
-//! (`backups.rs`), the server's settings (`server.rs`) with its AI tools
-//! (`ai.rs`), and new versions (`updates.rs`). The tab is in the address, so
+//! (`backups.rs`), the server's mode and score kind (`modes.rs`) with its
+//! settings (`server.rs`) and AI tools (`ai.rs`), and new versions
+//! (`updates.rs`). The tab is in the address, so
 //! a reload keeps it. Everyone else gets a short note and none of the
 //! requests.
 
 mod accounts;
 mod ai;
 mod backups;
+mod modes;
 mod overview;
 mod server;
 mod updates;
@@ -17,10 +19,9 @@ use leptos_router::hooks::use_query_map;
 use starbooru_core::Role;
 
 use self::accounts::Accounts;
-use self::ai::AiCard;
 use self::backups::Backups;
 use self::overview::Overview;
-use self::server::{BinCard, ServerCard};
+use self::server::ServerTab;
 use self::updates::Updates;
 use crate::components::back::BackButton;
 use crate::components::banner::Spinner;
@@ -96,14 +97,7 @@ fn AdminTabs() -> impl IntoView {
             Tab::Accounts => view! { <Accounts /> }.into_any(),
             Tab::Backups => view! { <Backups /> }.into_any(),
             Tab::Updates => view! { <Updates /> }.into_any(),
-            Tab::Server => {
-                view! {
-                    <ServerCard />
-                    <BinCard />
-                    <AiCard />
-                }
-                    .into_any()
-            }
+            Tab::Server => view! { <ServerTab /> }.into_any(),
         }}
     }
 }

@@ -30,7 +30,9 @@ src/
   main.rs       loads the store, picks the language, mounts the app
   app.rs        theme, OLED, accent and language on the root, and the routes
   route.rs      the navigation's tabs, which tab a path is under, search addresses
-  api.rs        the shared Client, api::call (a 401 signs out), errors in words
+  api.rs        the shared Client, a session's or a guest's without a token, api::call (a 401 signs out),
+                  errors in words
+  instance.rs   what the server is (private or public, likes or stars) from /info, and whether it takes guests
   oidc.rs       sign-in through the identity provider, and linking it to the account, away and back to /oidc
   store.rs      session, preferences, the gallery's place in each search and the posts opened, in localStorage
   theme.rs      the accent as hue, chroma and lightness (--seed-*), the browser's bar colour (theme-color)
@@ -44,7 +46,8 @@ src/
                   admin/ the administration's tabs, legal.rs the privacy policy and the terms
   components/   icons, brand, snackbar, tiles and their swipes, downloads, the tag box and its grip, a tag's menu,
                   the button that asks "Sure?", the links to the legal pages, the menu that looks a picture up on
-                  other sites, the video player, the Back button of the pages under a tab, Markdown as elements
+                  other sites, the video player, the Back button of the pages under a tab, Markdown as elements,
+                  the five stars of a vote, and what stands in for a page a guest or a public server can't use
   logic/        pure Rust with unit tests: server addresses, the gallery's lists and layout, zoom, the viewer's
                   tags, people, details and file names, the video player's clock, seek bar, keys and resting
                   controls, the word at the caret, the tag editor's text and who may edit,
@@ -54,15 +57,17 @@ src/
                   lifetimes, the days a picked end date takes, addresses and expiry text, reverse search's copy to
                   send and how each site gets it, Settings' groups and old anchors, accent, lists and password checks, swipes, the
                   administration's limits, chart, form checks and AI requests, the pages a tab went through,
-                  a small Markdown reader, and updates: the notice's rule, an update's steps, the reasons a
-                  server can't update itself and the hour of automatic updates
+                  a small Markdown reader, updates: the notice's rule, an update's steps, the reasons a
+                  server can't update itself and the hour of automatic updates, stars: a press, the keys, the
+                  average and the tallies shown before the server answers, and modes: what a switch lists, why it
+                  was refused, which screen someone without a session gets and where a sign-in comes back to
 locales/        en.ftl, it.ftl
 style/          tokens.css, base.css, shell.css, player.css, pages/<page>.css
 assets/         the icons, the web app manifest and the service worker (sw.js), copied to the root as they are
 index.html      Trunk's entry, with the loading screen
 ```
 
-Routes keep the first StarBooru app's paths, so links people saved still open: `/`, `/explore`, `/post/:id`, `/tags`, `/tag`, `/upload`, `/boorus`, `/boorus/post`, `/settings` and `/settings/<group>`, `/trash`, `/duplicates`, `/help`, `/admin`, `/oidc`, `/s/:token`, `/privacy`, `/terms`. The first thirteen show inside the shell; the rest open without signing in.
+Routes keep the first StarBooru app's paths, so links people saved still open: `/`, `/explore`, `/post/:id`, `/tags`, `/tag`, `/upload`, `/boorus`, `/boorus/post`, `/settings` and `/settings/<group>`, `/trash`, `/duplicates`, `/help`, `/admin`, `/oidc`, `/s/:token`, `/privacy`, `/terms`. The first thirteen show inside the shell; the rest open without signing in. A guest on a public server gets the shell too.
 
 Settings is a list of groups (`logic::settings::Group`): Account and security, Appearance, Viewing and gestures, Battery and effects, Library, Sharing and API keys, Help and about, with the administration at the foot for administrators. From 1000 px the list stays beside the open group, and `/settings` shows Appearance; narrower, `/settings` is the list and each group is a page with a Back. An address from before the groups, `/settings#keys` or `/settings/keys`, is replaced by the group's with the card's anchor (`/settings/sharing#keys`). Choices that change looks are drawn as small pictures in the app's own roles: `tokens.css` gives `.scheme-light` and `.scheme-dark` the two themes' roles, so the theme pictures show the other theme too.
 
@@ -87,7 +92,11 @@ Component CSS uses only the role variables, never a literal colour. The navigati
 - **Long lists.** Only the tiles within a screen and a half of the view are in the DOM. A tile shows its post's main colour until the thumbnail arrives. A drag across tiles to pick them finds the tile under the pointer from the layout, by its place in the list, so tiles that scroll out of the DOM stay in the range. The tile the drag started on stays in the DOM until it ends, as a finger's events go to it.
 - **Motion.** CSS transitions and the Web Animations API. View Transitions where the browser has them, with a plain fallback. Everything heavy goes quiet under `prefers-reduced-motion` and the battery saver.
 - **Uploads.** `Client::upload_file` sends files in chunks and resends a failed one. The queue lives in a signal at the root, so it keeps going while the user moves between pages.
-- **Explore.** A private booru has no Trending or Popular tags, and every instance counts as private until the server reports a mode, so Explore shows the posts added on this day in earlier years and random picks. It asks for a one-day window, as only the two missing sections read it. While it's open, the top bar's search box narrows it (`?q=`) instead of searching the gallery.
+- **Private and public.** `instance.rs` keeps what `/info` said last: the mode, the score kind and whether guests may browse. Until it answers, a server counts as private with likes. The shell asks when it starts, `api::server_info` again every two minutes, and a switch in Administration › Server puts the new mode in at once and asks again, so every view that reads it follows. A public server counts likes whatever is stored, as the server does.
+- **Guests.** Without a session, the shell asks the server the sign-in screen would start with whether it takes guests. If it does, the pages open without signing in, and requests go out with a client that has no token; nothing is kept per account (no history, no saved searches, no uploads). The navigation has Gallery, Explore, Tags and Settings (Appearance and Help only), then Sign in. Upload, the recycle bin, the duplicates and the administration show a card that leads to sign-in instead. A vote, from the viewer or a tile's menu, asks to sign in. The sign-in screen then opens over the page with a way back, and signing in, with a password or through the identity provider (which keeps the page in its handle), stays on that page. A guest's 401 asks the server again whether it still takes guests; a 429 the client doesn't wait out says to slow down and when to try again. On a private server nothing changes: the sign-in screen comes first.
+- **Stars.** On a private server set to stars, the viewer's vote is five stars (`components/stars.rs`) with the post's average and count; the menu's like gives five, and a sort by score reads as by rating. The tallies change at once and go back if the server turns the vote down, as likes do.
+- **Sharing on a public server.** The share sheet gives the post's own address (`/post/{id}`), or several, one a line, to copy or hand to the browser's share sheet. Settings › Sharing has no list of links there.
+- **Explore.** A private server has no Trending or Popular tags, so Explore shows the posts added on this day in earlier years and random picks, and asks for a one-day window, as only the two missing sections read it. A public one leads with Trending, over the window in `?days=` (today, a week, a month or a year, a week by default), and Popular tags, and has no boorus side: the `/boorus` pages say so. While it's open, the top bar's search box narrows it (`?q=`) instead of searching the gallery.
 - **The gallery's place.** The store keeps, per account, the tile at the top of the screen in each search, with its offset, the scroll and how many posts were loaded. A saved search keeps its place however many searches come after it, up to the server's 200; the others keep the latest 30 among themselves, and a search that is no longer saved ages out with them. Until the account's saved searches arrive from the server, it keeps up to 230 places, so none of theirs is lost. Searches are matched by what they find (`logic::saved::search_key`, from the parsed query), so a chip's tidied search and an address with other spacing or term order share one place.
 - **Recently viewed.** Each post the viewer loads, previous and next included, goes first in a list of up to 60 ids kept in the store under the account's owner key; booru posts and share pages don't count, and signing out empties it. Explore shows it first, 12 at a time. The API has no way to fetch several posts by id (the search syntax has no `id:` term), so each tile is a `GET /posts/{id}`, all sent at once. Posts that come back missing or in the recycle bin leave the list quietly. A search can't narrow a list of ids, so the section steps aside while `?q=` is set. Clear empties it, with Undo in the snackbar.
 - **Other boorus.** The server searches them (`/remote/search`), keeps the accounts and relays the pictures a site won't serve to other pages. The browser keeps the last results for a few hours while the tab is open, and saving a post queues an import on the server.

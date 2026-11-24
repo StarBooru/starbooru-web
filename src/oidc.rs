@@ -22,6 +22,9 @@ pub struct Pending {
     /// signing in. The reference wrote this too.
     #[serde(default)]
     pub link: bool,
+    /// The page the sign-in started on, to come back to.
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub then: String,
 }
 
 impl Pending {
@@ -62,11 +65,12 @@ impl Why {
 #[derive(Debug, PartialEq, Eq)]
 pub enum Back {
     /// Trade the code for a session on `server`, or for the provider's
-    /// account on the one signed in when `link`.
+    /// account on the one signed in when `link`, then go to `then`.
     Finish {
         server: String,
         finish: OidcFinish,
         link: bool,
+        then: String,
     },
     /// Say why it didn't work: on the sign-in screen, or after a link on the
     /// way back to Settings.
@@ -100,6 +104,7 @@ pub fn back(query: &str, pending: Option<Pending>) -> Back {
                 handle: pending.handle,
             },
             link,
+            then: pending.then,
         },
     }
 }
@@ -122,8 +127,8 @@ pub fn link_error(status: Option<u16>, message: String) -> String {
 }
 
 /// Starts a provider sign-in on `server`: the page then leaves for the
-/// provider. An error says why it couldn't.
-pub async fn begin(server: String) -> Result<(), String> {
+/// provider, and comes back to `then`. An error says why it couldn't.
+pub async fn begin(server: String, then: String) -> Result<(), String> {
     let client = Client::new(&server).map_err(|e| api::error_text(&e, &server))?;
     let origin = page::origin().ok_or_else(|| Why::Failed.text())?;
     let start = client
@@ -135,6 +140,7 @@ pub async fn begin(server: String) -> Result<(), String> {
             server,
             handle: start.handle,
             link: false,
+            then,
         },
         &start.url,
     )
@@ -154,6 +160,7 @@ pub async fn begin_link() -> Result<(), String> {
             server,
             handle: start.handle,
             link: true,
+            then: String::new(),
         },
         &start.url,
     )
@@ -249,6 +256,7 @@ mod tests {
             server: "https://booru.example".into(),
             handle: "h4ndle".into(),
             link: false,
+            then: String::new(),
         }
     }
 
@@ -275,6 +283,14 @@ mod tests {
         );
         assert_eq!(Pending::from_json(r#"{"server":"s"}"#), None);
         assert_eq!(Pending::from_json("not json"), None);
+        // The page it started on goes along, and comes back.
+        let from_post = Pending {
+            then: "/post/5?q=cat".into(),
+            ..pending()
+        };
+        let json = from_post.to_json().unwrap();
+        assert!(json.contains(r#""then":"/post/5?q=cat""#));
+        assert_eq!(Pending::from_json(&json), Some(from_post));
     }
 
     #[test]
@@ -300,8 +316,17 @@ mod tests {
                     handle: "h4ndle".into()
                 },
                 link: false,
+                then: String::new(),
             }
         );
+        let from_post = Pending {
+            then: "/post/5".into(),
+            ..pending()
+        };
+        assert!(matches!(
+            back("?oidc_code=c0de", Some(from_post)),
+            Back::Finish { then, .. } if then == "/post/5"
+        ));
         // A link comes back to the account signed in.
         let linking = Pending {
             link: true,

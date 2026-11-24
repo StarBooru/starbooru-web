@@ -6,6 +6,7 @@ use leptos_router::components::{ParentRoute, Route, Router, Routes};
 use leptos_router::path;
 
 use crate::components::back;
+use crate::components::invite::{MembersOnly, PrivateOnly};
 use crate::components::snackbar::Snackbar;
 use crate::pages::NotFound;
 use crate::pages::admin::Admin;
@@ -75,7 +76,9 @@ pub fn App() -> impl IntoView {
     }
 }
 
-/// Every address the app has, the reference's.
+/// Every address the app has, the reference's. Uploading, the recycle bin,
+/// the duplicates and the administration need an account; the other boorus
+/// are for private servers.
 #[component]
 fn AppRoutes() -> impl IntoView {
     back::follow();
@@ -92,14 +95,20 @@ fn AppRoutes() -> impl IntoView {
                 <Route path=path!("/post/:id") view=PostView />
                 <Route path=path!("/tags") view=Tags />
                 <Route path=path!("/tag") view=TagPage />
-                <Route path=path!("/upload") view=Upload />
-                <Route path=path!("/boorus") view=Boorus />
-                <Route path=path!("/boorus/post") view=BooruPost />
+                <Route path=path!("/upload") view=|| view! { <MembersOnly><Upload /></MembersOnly> } />
+                <Route path=path!("/boorus") view=|| view! { <PrivateOnly><Boorus /></PrivateOnly> } />
+                <Route
+                    path=path!("/boorus/post")
+                    view=|| view! { <PrivateOnly><BooruPost /></PrivateOnly> }
+                />
                 <Route path=path!("/settings/:group?") view=Settings />
-                <Route path=path!("/trash") view=Trash />
-                <Route path=path!("/duplicates") view=Duplicates />
+                <Route path=path!("/trash") view=|| view! { <MembersOnly><Trash /></MembersOnly> } />
+                <Route
+                    path=path!("/duplicates")
+                    view=|| view! { <MembersOnly><Duplicates /></MembersOnly> }
+                />
                 <Route path=path!("/help") view=Help />
-                <Route path=path!("/admin") view=Admin />
+                <Route path=path!("/admin") view=|| view! { <MembersOnly><Admin /></MembersOnly> } />
             </ParentRoute>
         </Routes>
     }

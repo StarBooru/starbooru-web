@@ -13,7 +13,7 @@ use super::{figure_kind_label, query_error_text, rating_label};
 use crate::components::back::BackButton;
 use crate::components::icons::{Ico, Icon};
 use crate::logic::settings::Group;
-use crate::route;
+use crate::{instance, route};
 
 /// The examples, section by section, as the cheat sheet lists them. Each is
 /// a search that runs from its link; `sections` gives each its meaning.
@@ -129,7 +129,12 @@ fn sections() -> [(String, Vec<(&'static str, String)>); 5] {
                 SORTING,
                 [
                     t!("help-order-new"),
-                    t!("help-order-score"),
+                    // Under stars, the fair rating (`docs/api.md` › Scores).
+                    if untrack(instance::stars) {
+                        t!("help-order-rating")
+                    } else {
+                        t!("help-order-score")
+                    },
                     t!("help-order-size"),
                     t!("help-order-pixels"),
                     t!("help-order-longside"),
@@ -278,6 +283,22 @@ pub fn Help() -> impl IntoView {
                     <li>{move || t!("help-tip-terms")}</li>
                 </ul>
             </section>
+            // What this server is: who sees it, and what a vote is.
+            <section class="card">
+                <h2 class="card-title">{move || t!("help-server")}</h2>
+                <ul class="tips">
+                    <li>
+                        {move || {
+                            if instance::public() { t!("help-server-public") } else { t!("help-server-private") }
+                        }}
+                    </li>
+                    <li>
+                        {move || {
+                            if instance::stars() { t!("help-votes-stars") } else { t!("help-votes-likes") }
+                        }}
+                    </li>
+                </ul>
+            </section>
             <section class="card">
                 <h2 class="card-title">{move || t!("help-shortcuts")}</h2>
                 <dl class="syntax">{keys}</dl>
@@ -403,10 +424,18 @@ fn ratings(list: &[Rating]) -> String {
 
 fn order_phrase(order: Order) -> String {
     let d = order.descending;
+    let stars = untrack(instance::stars);
     match order.key {
         SortKey::Id if d => t!("explain-order-new"),
         SortKey::Id => t!("explain-order-old"),
         SortKey::Random => t!("explain-order-random"),
+        SortKey::Score if stars => {
+            if d {
+                t!("explain-order-rating-desc")
+            } else {
+                t!("explain-order-rating-asc")
+            }
+        }
         SortKey::Score if d => t!("explain-order-score-desc"),
         SortKey::Score => t!("explain-order-score-asc"),
         SortKey::Size if d => t!("explain-order-size-desc"),

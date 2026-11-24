@@ -1,6 +1,7 @@
-//! Share links: the sheet that makes one for a post or a selection
-//! (`sheet.rs`), the account's links for Settings (`links.rs`), and the
-//! public page a link opens without an account (`public.rs`).
+//! Share links: the sheet that makes one for a post or a selection, or on a
+//! public server gives their own addresses (`sheet.rs`), the account's links
+//! for Settings (`links.rs`), and the public page a link opens without an
+//! account (`public.rs`).
 
 mod links;
 mod public;
@@ -77,6 +78,66 @@ fn LinkField(url: String, #[prop(optional)] focus: bool) -> impl IntoView {
                 }}
                 <span class="copy-label">
                     {move || if copied.get() { t!("share-copied") } else { t!("share-copy") }}
+                </span>
+            </button>
+        </div>
+        <Show when=move || failed.get()>
+            <p class="field-error" role="alert">
+                {move || t!("share-copy-failed")}
+            </p>
+        </Show>
+    }
+}
+
+/// Several addresses, one a line, in a box to select, with a button that
+/// copies them all.
+#[component]
+fn ListField(text: String) -> impl IntoView {
+    let copied = RwSignal::new(false);
+    let failed = RwSignal::new(false);
+    let field: NodeRef<html::Textarea> = NodeRef::new();
+    let button: NodeRef<html::Button> = NodeRef::new();
+    button.on_load(|el| {
+        request_animation_frame(move || {
+            let _ = el.focus();
+        });
+    });
+    let lines = text.lines().count().clamp(2, 6);
+    let all = text.clone();
+    let copy = move |_| {
+        let text = all.clone();
+        spawn_local(async move {
+            let done = dom::copy_text(&text).await;
+            copied.try_set(done);
+            failed.try_set(!done);
+            if !done && let Some(el) = field.try_get_untracked().flatten() {
+                let _ = el.focus();
+                el.select();
+            }
+        });
+    };
+    view! {
+        <div class="list-token">
+            <textarea
+                node_ref=field
+                readonly=true
+                spellcheck="false"
+                rows=lines
+                aria-label=move || t!("share-addresses")
+                prop:value=text
+                on:focus=move |_| {
+                    if let Some(el) = field.get_untracked() {
+                        el.select();
+                    }
+                }
+            ></textarea>
+            <button node_ref=button class="btn tonal small" type="button" on:click=copy>
+                {move || {
+                    let icon = if copied.get() { Icon::Check } else { Icon::Copy };
+                    view! { <Ico icon=icon size=18 /> }
+                }}
+                <span class="copy-label">
+                    {move || if copied.get() { t!("share-copied-all") } else { t!("share-copy-all") }}
                 </span>
             </button>
         </div>

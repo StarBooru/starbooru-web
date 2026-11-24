@@ -5,7 +5,8 @@
 use percent_encoding::{AsciiSet, NON_ALPHANUMERIC, utf8_percent_encode};
 
 /// The navigation's items, five at most (the reference's design rules): a new
-/// page goes under one of these.
+/// page goes under one of these. A guest gets [`Tab::GUEST`], and a way to
+/// sign in after them.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Tab {
     Gallery,
@@ -23,6 +24,14 @@ impl Tab {
         Tab::Upload,
         Tab::Settings,
     ];
+
+    /// What a guest may use: Upload needs an account.
+    pub const GUEST: [Tab; 4] = [Tab::Gallery, Tab::Explore, Tab::Tags, Tab::Settings];
+
+    /// The items of the navigation, a guest's or an account's.
+    pub fn shown(guest: bool) -> &'static [Tab] {
+        if guest { &Tab::GUEST } else { &Tab::ALL }
+    }
 
     /// Where the item leads.
     pub fn href(self) -> &'static str {
@@ -94,6 +103,18 @@ pub fn explore(q: &str) -> String {
         EXPLORE.to_owned()
     } else {
         format!("{EXPLORE}?q={}", query_value(q))
+    }
+}
+
+/// Explore narrowed by search `q`, with Trending over a window of `days`,
+/// as a public server has it. The usual week leaves the address without one.
+pub fn explore_over(q: &str, days: u32) -> String {
+    let to = explore(q);
+    if days == starbooru_core::DEFAULT_EXPLORE_DAYS {
+        to
+    } else {
+        let sep = if to.contains('?') { '&' } else { '?' };
+        format!("{to}{sep}days={days}")
     }
 }
 
@@ -236,6 +257,11 @@ mod tests {
         assert_eq!(explore("fractal -abstract"), "/explore?q=fractal+-abstract");
         assert_eq!(explore(" fractal "), "/explore?q=fractal");
         assert_eq!(explore("a&b"), "/explore?q=a%26b");
+        // A public server's Trending keeps its window.
+        assert_eq!(explore_over("", 7), "/explore");
+        assert_eq!(explore_over("", 30), "/explore?days=30");
+        assert_eq!(explore_over(" fractal ", 1), "/explore?q=fractal&days=1");
+        assert_eq!(explore_over("a&b", 365), "/explore?q=a%26b&days=365");
         for path in ["/explore", "/explore/", "explore"] {
             assert!(is_explore(path), "{path}");
         }
@@ -298,6 +324,15 @@ mod tests {
         for path in ["/", "/settingsx", "/trash", "/admin/settings"] {
             assert!(!is_settings(path), "{path}");
         }
+    }
+
+    #[test]
+    fn a_guest_has_no_upload_and_room_to_sign_in() {
+        assert_eq!(Tab::shown(false), Tab::ALL);
+        assert_eq!(Tab::shown(true), Tab::GUEST);
+        assert!(!Tab::GUEST.contains(&Tab::Upload));
+        // The sign-in item comes after them, within the five.
+        assert!(Tab::GUEST.len() < 5);
     }
 
     #[test]

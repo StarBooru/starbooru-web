@@ -1,7 +1,9 @@
 //! The frame every page lives in: floating capsules for the brand and the
 //! search, and a slider for the navigation that sits at the top right of a
 //! wide window, stands up as a rail at the side of a narrower one and floats
-//! at the bottom of a phone (`style/shell.css` has the breakpoints).
+//! at the bottom of a phone (`style/shell.css` has the breakpoints). A guest
+//! on a server that takes them gets the same frame, with what a guest can
+//! use and a way to sign in in the navigation.
 
 use std::cmp::Ordering;
 
@@ -17,44 +19,78 @@ use super::explore;
 use super::login::Login;
 use super::search_demo::{SearchDemo, plays_on};
 use crate::activity::{self, Activity};
-use crate::api;
+use crate::components::banner::Spinner;
 use crate::components::brand::{Mark, Wordmark};
 use crate::components::icons::{Ico, Icon};
 use crate::dom::{self, caret_of};
 use crate::logic::boorus;
-use crate::logic::explore::tidy;
+use crate::logic::explore::{tidy, window};
+use crate::logic::modes::{Screen, screen};
 use crate::logic::search::{
     Hint, Latest, ListKey, REMOTE_PAUSE_MS, TYPING_PAUSE_MS, complete, list_key, short_count,
     still_fitting, utf16_index, word_at,
 };
 use crate::route::{self, Tab};
-use crate::store;
 use crate::updates::UpdateNotice;
+use crate::{api, instance, store};
 
-/// The pages under the navigation, or the sign-in screen while no one is
-/// signed in.
+/// The pages under the navigation for someone signed in, or for a guest on
+/// a server that takes guests; otherwise the sign-in screen.
 #[component]
 pub fn Shell() -> impl IntoView {
-    view! {
-        <Show when=store::signed_in fallback=Login>
-            <Frame />
-        </Show>
+    // Without a session, whether this server takes guests. Signing in ends a
+    // guest's wish to.
+    Effect::new(move |_| {
+        if store::signed_in() {
+            instance::stop_asking();
+        } else {
+            untrack(instance::ask_guests);
+        }
+    });
+    // Back, or another page, takes a guest away from the sign-in screen.
+    let location = use_location();
+    Effect::watch(
+        move || (location.pathname.get(), location.search.get()),
+        |_, _, _| instance::stop_asking(),
+        false,
+    );
+    let shown = Memo::new(|_| {
+        screen(
+            store::signed_in(),
+            instance::guests(),
+            instance::asked().is_some(),
+        )
+    });
+    move || match shown.get() {
+        Screen::Waiting => view! {
+            <div class="center-page shell-waiting">
+                <Spinner />
+            </div>
+        }
+        .into_any(),
+        Screen::Member => view! { <Frame guest=false /> }.into_any(),
+        Screen::Guest => view! { <Frame guest=true /> }.into_any(),
+        Screen::SignIn => view! { <Login /> }.into_any(),
     }
 }
 
 #[component]
-fn Frame() -> impl IntoView {
+fn Frame(guest: bool) -> impl IntoView {
     // Whether the session kept from last time still works. A token signed out
     // elsewhere or past its 90 days signs out here, with a note on the
     // sign-in screen, instead of failing on every page.
-    let owner = store::owner();
-    spawn_local(async move {
-        if let Ok(user) = api::call(|c| async move { c.me().await }).await
-            && store::owner() == owner
-        {
-            store::update_user(user);
-        }
-    });
+    if !guest {
+        let owner = store::owner();
+        spawn_local(async move {
+            if let Ok(user) = api::call(|c| async move { c.me().await }).await
+                && store::owner() == owner
+            {
+                store::update_user(user);
+            }
+        });
+    }
+    // What the server is now: its mode and what a vote is.
+    instance::refresh();
     let location = use_location();
     let path = location.pathname;
     let here = Memo::new(move |_| path.with(|p| route::tab_of(p)));
@@ -79,14 +115,14 @@ fn Frame() -> impl IntoView {
                 <Wordmark height=19 />
             </a>
             <SearchBox />
-            <NavSlider place="nav-top" here=here />
+            <NavSlider place="nav-top" here=here guest=guest />
         </header>
         <main class="content">
             <UpdateNotice />
             <Outlet />
         </main>
-        <NavSlider place="nav-bottom" here=here />
-        <Activity />
+        <NavSlider place="nav-bottom" here=here guest=guest />
+        {(!guest).then(|| view! { <Activity /> })}
     }
 }
 
@@ -96,26 +132,31 @@ fn Frame() -> impl IntoView {
 #[derive(Clone, Debug, PartialEq, Eq)]
 enum Scope {
     Collection,
-    Explore,
+    /// With the window of a public server's Trending, when the page has one.
+    Explore(Option<u32>),
     Boorus(String),
 }
 
-fn scope_of(path: &str, s: Option<String>) -> Scope {
+/// What the box searches at `path`, whose address has the booru browser's
+/// sites in `s` and Explore's window in `days`.
+fn scope_of(path: &str, s: Option<String>, days: Option<String>) -> Scope {
     if path == route::BOORUS || path.starts_with("/boorus/") {
         Scope::Boorus(s.unwrap_or_default())
     } else if route::is_explore(path) {
-        Scope::Explore
+        Scope::Explore(days.map(|d| window(Some(&d))))
     } else {
         Scope::Collection
     }
 }
 
 /// Where a search typed in the box goes. On the boorus it goes to the sites
-/// the page searched, or else to those chosen last.
+/// the page searched, or else to those chosen last; on Explore it keeps the
+/// window.
 fn search_href(scope: &Scope, q: &str, last_sites: &[String]) -> String {
     match scope {
         Scope::Collection => route::gallery(q),
-        Scope::Explore => route::explore(&tidy(q)),
+        Scope::Explore(None) => route::explore(&tidy(q)),
+        Scope::Explore(Some(days)) => route::explore_over(&tidy(q), *days),
         Scope::Boorus(s) => {
             let sites = boorus::sites_param(&boorus::chosen_sites(s, last_sites));
             route::boorus(&boorus::tidy_query(q), &sites)
@@ -127,9 +168,9 @@ fn search_href(scope: &Scope, q: &str, last_sites: &[String]) -> String {
 /// Explore's own, the booru browser's as its address carries it, and the
 /// last one elsewhere.
 fn shown_search(path: &str, q: Option<String>, last: &str) -> String {
-    match scope_of(path, None) {
+    match scope_of(path, None, None) {
         Scope::Boorus(_) => boorus::from_address(&q.unwrap_or_default()),
-        Scope::Explore => q.unwrap_or_default(),
+        Scope::Explore(_) => q.unwrap_or_default(),
         Scope::Collection if route::has_search(path) => q.unwrap_or_default(),
         Scope::Collection => last.to_owned(),
     }
@@ -139,7 +180,7 @@ fn shown_search(path: &str, q: Option<String>, last: &str) -> String {
 fn placeholder(scope: &Scope) -> String {
     match scope {
         Scope::Collection => t!("search-placeholder"),
-        Scope::Explore => t!("explore-search"),
+        Scope::Explore(_) => t!("explore-search"),
         Scope::Boorus(_) => t!("boorus-search"),
     }
 }
@@ -148,7 +189,7 @@ fn placeholder(scope: &Scope) -> String {
 fn label(scope: &Scope) -> String {
     match scope {
         Scope::Collection => t!("search-label"),
-        Scope::Explore => t!("explore-search"),
+        Scope::Explore(_) => t!("explore-search"),
         Scope::Boorus(_) => t!("boorus-search"),
     }
 }
@@ -156,7 +197,7 @@ fn label(scope: &Scope) -> String {
 /// Suggestions kept from a moment ago for `typed` in `scope`.
 fn kept(scope: &Scope, typed: &str) -> Option<Vec<Hint>> {
     match scope {
-        Scope::Collection | Scope::Explore => api::kept_tags(typed),
+        Scope::Collection | Scope::Explore(_) => api::kept_tags(typed),
         Scope::Boorus(s) => {
             let site = boorus::completing_site(s, &store::prefs_untracked().booru_sites)?;
             api::kept_remote_tags(&site, typed)
@@ -167,7 +208,7 @@ fn kept(scope: &Scope, typed: &str) -> Option<Vec<Hint>> {
 /// How long the typing pauses before `scope` is asked.
 fn pause(scope: &Scope) -> i32 {
     match scope {
-        Scope::Collection | Scope::Explore => TYPING_PAUSE_MS,
+        Scope::Collection | Scope::Explore(_) => TYPING_PAUSE_MS,
         Scope::Boorus(_) => REMOTE_PAUSE_MS,
     }
 }
@@ -176,7 +217,7 @@ fn pause(scope: &Scope) -> i32 {
 /// tags; on the boorus, the first site chosen completes them.
 async fn suggest(scope: Scope, typed: String) -> Vec<Hint> {
     match scope {
-        Scope::Collection | Scope::Explore => api::tag_hints(typed).await,
+        Scope::Collection | Scope::Explore(_) => api::tag_hints(typed).await,
         Scope::Boorus(s) => {
             match boorus::completing_site(&s, &store::prefs_untracked().booru_sites) {
                 Some(site) => api::remote_tag_hints(site, typed).await,
@@ -222,7 +263,14 @@ fn SearchBox() -> impl IntoView {
         let q = query.with(|q| q.get("q"));
         path.with(|p| last.with(|last| shown_search(p, q, last)))
     });
-    let scope = Memo::new(move |_| path.with(|p| scope_of(p, query.with(|q| q.get("s")))));
+    let scope = Memo::new(move |_| {
+        let (s, days) = query.with(|q| (q.get("s"), q.get("days")));
+        match path.with(|p| scope_of(p, s, days)) {
+            // A public server has no boorus: the box searches the collection.
+            Scope::Boorus(_) if instance::public() => Scope::Collection,
+            scope => scope,
+        }
+    });
     let text = RwSignal::new(current.get_untracked());
     let focused = RwSignal::new(false);
     // Typing opens the list; Escape, a choice and leaving close it.
@@ -492,15 +540,27 @@ fn SearchBox() -> impl IntoView {
     }
 }
 
-/// The navigation's items in order, with their icons and names.
-fn items() -> [(Tab, Icon, String); 5] {
-    [
-        (Tab::Gallery, Icon::Gallery, t!("nav-gallery")),
-        (Tab::Explore, Icon::Explore, t!("nav-explore")),
-        (Tab::Tags, Icon::Label, t!("nav-tags")),
-        (Tab::Upload, Icon::Upload, t!("nav-upload")),
-        (Tab::Settings, Icon::Tune, t!("nav-settings-tab")),
-    ]
+/// A tab's icon and name in the navigation.
+fn item(tab: Tab) -> (Icon, String) {
+    match tab {
+        Tab::Gallery => (Icon::Gallery, t!("nav-gallery")),
+        Tab::Explore => (Icon::Explore, t!("nav-explore")),
+        Tab::Tags => (Icon::Label, t!("nav-tags")),
+        Tab::Upload => (Icon::Upload, t!("nav-upload")),
+        Tab::Settings => (Icon::Tune, t!("nav-settings-tab")),
+    }
+}
+
+/// The navigation's items in order, with their icons and names: a guest's,
+/// or an account's.
+fn items(guest: bool) -> Vec<(Tab, Icon, String)> {
+    Tab::shown(guest)
+        .iter()
+        .map(|&tab| {
+            let (icon, label) = item(tab);
+            (tab, icon, label)
+        })
+        .collect()
 }
 
 /// Which way the thumb went: `next` when it moved on to a later item, `back`
@@ -515,12 +575,14 @@ fn way(was: usize, at: usize, last: &'static str) -> &'static str {
 }
 
 /// `place` is the class that says where this copy of the navigation shows:
-/// `nav-top` or `nav-bottom`, which also makes the rail.
+/// `nav-top` or `nav-bottom`, which also makes the rail. A guest's ends with
+/// Sign in, where an account's Settings holds the account.
 #[component]
-fn NavSlider(place: &'static str, here: Memo<Option<Tab>>) -> impl IntoView {
+fn NavSlider(place: &'static str, here: Memo<Option<Tab>>, guest: bool) -> impl IntoView {
+    let tabs = Tab::shown(guest);
     let index = move || {
         here.get()
-            .and_then(|tab| Tab::ALL.iter().position(|t| *t == tab))
+            .and_then(|tab| tabs.iter().position(|t| *t == tab))
     };
     // Where the thumb stands and the way it last went. With no item selected
     // it keeps its place, out of sight.
@@ -529,7 +591,7 @@ fn NavSlider(place: &'static str, here: Memo<Option<Tab>>) -> impl IntoView {
         let at = index().unwrap_or(was);
         (at, way(was, at, last_way))
     });
-    let cells = Tab::ALL.len();
+    let cells = tabs.len() + usize::from(guest);
     // The gallery goes back to the search it showed last, and Explore to
     // where it was left.
     let last = Memo::new(|_| store::last_search());
@@ -551,7 +613,7 @@ fn NavSlider(place: &'static str, here: Memo<Option<Tab>>) -> impl IntoView {
                 </span>
             </span>
             {move || {
-                items()
+                items(guest)
                     .into_iter()
                     .map(|(tab, icon, label)| {
                         let active = move || here.get() == Some(tab);
@@ -595,7 +657,28 @@ fn NavSlider(place: &'static str, here: Memo<Option<Tab>>) -> impl IntoView {
                     })
                     .collect_view()
             }}
+            {guest.then(|| view! { <SignInItem /> })}
         </nav>
+    }
+}
+
+/// A guest's way to an account, last in the navigation: it opens the
+/// sign-in screen over the page, which comes back here signed in.
+#[component]
+fn SignInItem() -> impl IntoView {
+    view! {
+        <button
+            type="button"
+            class="nav-item nav-sign-in"
+            on:click=move |_| instance::ask_sign_in(None)
+        >
+            <span class="nav-icon">
+                <span class="nav-pop">
+                    <Ico icon=Icon::Login />
+                </span>
+            </span>
+            <span class="nav-label">{move || t!("guest-sign-in")}</span>
+        </button>
     }
 }
 
@@ -614,7 +697,7 @@ mod tests {
     #[test]
     fn the_box_searches_the_collection() {
         for path in ["/", "/post/3", "/tags", "/help", "/booruss", "/explorer"] {
-            assert_eq!(scope_of(path, Some("e926".into())), Scope::Collection);
+            assert_eq!(scope_of(path, Some("e926".into()), None), Scope::Collection);
         }
         assert_eq!(
             search_href(&Scope::Collection, " fractal -abstract ", &[]),
@@ -629,16 +712,31 @@ mod tests {
     #[test]
     fn on_explore_the_box_narrows_explore() {
         for path in ["/explore", "/explore/"] {
-            assert_eq!(scope_of(path, Some("e926".into())), Scope::Explore);
+            assert_eq!(
+                scope_of(path, Some("e926".into()), None),
+                Scope::Explore(None)
+            );
         }
         // Its boorus side searches the boorus.
-        assert!(matches!(scope_of("/boorus", None), Scope::Boorus(_)));
+        assert!(matches!(scope_of("/boorus", None, None), Scope::Boorus(_)));
         assert_eq!(
-            search_href(&Scope::Explore, "  fractal   -abstract ", &["e926".into()]),
+            search_href(
+                &Scope::Explore(None),
+                "  fractal   -abstract ",
+                &["e926".into()]
+            ),
             "/explore?q=fractal+-abstract"
         );
         // An empty box shows all of Explore.
-        assert_eq!(search_href(&Scope::Explore, "  ", &[]), "/explore");
+        assert_eq!(search_href(&Scope::Explore(None), "  ", &[]), "/explore");
+        // A public server's Trending keeps the window it was over.
+        let month = scope_of("/explore", None, Some("30".into()));
+        assert_eq!(month, Scope::Explore(Some(30)));
+        assert_eq!(search_href(&month, "cat", &[]), "/explore?q=cat&days=30");
+        assert_eq!(
+            search_href(&scope_of("/explore", None, Some("7".into())), "", &[]),
+            "/explore"
+        );
         // The box shows Explore's own search, not the gallery's last one.
         assert_eq!(
             shown_search("/explore", Some("fractal".into()), "sea"),
@@ -649,14 +747,14 @@ mod tests {
         assert_eq!(shown_search("/", Some("sky".into()), "sea"), "sky");
         assert_eq!(shown_search("/tags", None, "sea"), "sea");
         // The collection's tags complete it, as fast as on the gallery.
-        assert_eq!(pause(&Scope::Explore), pause(&Scope::Collection));
+        assert_eq!(pause(&Scope::Explore(None)), pause(&Scope::Collection));
     }
 
     #[test]
     fn the_empty_box_says_what_it_searches() {
         let scopes = [
             Scope::Collection,
-            Scope::Explore,
+            Scope::Explore(None),
             Scope::Boorus(String::new()),
         ];
         for (i, a) in scopes.iter().enumerate() {
@@ -671,9 +769,12 @@ mod tests {
 
     #[test]
     fn on_the_boorus_the_box_searches_the_sites_chosen() {
-        let scope = scope_of("/boorus", Some("gelbooru,e926".into()));
+        let scope = scope_of("/boorus", Some("gelbooru,e926".into()), None);
         assert_eq!(scope, Scope::Boorus("gelbooru,e926".into()));
-        assert_eq!(scope_of("/boorus/post", None), Scope::Boorus(String::new()));
+        assert_eq!(
+            scope_of("/boorus/post", None, None),
+            Scope::Boorus(String::new())
+        );
         assert_eq!(
             search_href(&scope, "  blue_sky   rating:g ", &[]),
             "/boorus?q=blue_sky+rating:g&s=gelbooru,e926"
@@ -718,7 +819,13 @@ mod tests {
 
     #[test]
     fn the_items_are_the_tabs_in_order() {
-        let tabs: Vec<Tab> = items().into_iter().map(|(tab, ..)| tab).collect();
+        let tabs: Vec<Tab> = items(false).into_iter().map(|(tab, ..)| tab).collect();
         assert_eq!(tabs, Tab::ALL);
+        let guest: Vec<Tab> = items(true).into_iter().map(|(tab, ..)| tab).collect();
+        assert_eq!(guest, Tab::GUEST);
+        // A guest's ends with the way to sign in, and has no uploads to show.
+        let source = include_str!("shell.rs");
+        assert!(source.contains("{guest.then(|| view! { <SignInItem /> })}"));
+        assert!(source.contains("{(!guest).then(|| view! { <Activity /> })}"));
     }
 }

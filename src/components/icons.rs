@@ -50,6 +50,8 @@ pub enum Icon {
     /// The gallery's layout.
     Layout,
     Link,
+    /// Signing in: an arrow into a door.
+    Login,
     Logout,
     /// Opening in a tab of its own.
     OpenInNew,
@@ -87,6 +89,8 @@ pub enum Icon {
     StarOutline,
     ThumbDown,
     ThumbUp,
+    /// Explore's Trending.
+    TrendingUp,
     /// Settings.
     Tune,
     Undo,
@@ -213,6 +217,11 @@ impl Icon {
             Icon::Link => Shape::Fill(
                 "M9.879 11.291c-.872-.872-.646-1.677.417-2.41a5.5 5.5 0 0 1 7.007.643l3.182 3.182a5.5 5.5 0 0 1-7.778 7.778l-1.06-1.06a1.5 1.5 0 0 1 2.12-2.122l1.061 1.06a2.5 2.5 0 0 0 3.536-3.535l-3.182-3.182a2.5 2.5 0 0 0-2.681-.56c-1.145.448-1.75 1.079-2.622.206M3.515 3.513a5.5 5.5 0 0 1 7.778 0l1.06 1.06a1.5 1.5 0 1 1-2.12 2.122l-1.061-1.06A2.5 2.5 0 1 0 5.636 9.17l3.182 3.182a2.5 2.5 0 0 0 2.681.56c1.145-.448 1.75-1.078 2.622-.206s.646 1.677-.418 2.41a5.5 5.5 0 0 1-7.006-.643l-3.182-3.182a5.5 5.5 0 0 1 0-7.778",
             ),
+            // Drawn for StarBooru in the same strokes: an arrow into a door.
+            Icon::Login => Shape::Stroke(
+                "2.5",
+                "M14 3.75h3.5a2.75 2.75 0 0 1 2.75 2.75v11a2.75 2.75 0 0 1-2.75 2.75H14M3.75 12h10.5m-3.75-4l4 4l-4 4",
+            ),
             Icon::Logout => Shape::EvenOdd(
                 "M3.5 6A3.5 3.5 0 0 1 7 2.5h5a1.5 1.5 0 0 1 0 3H7a.5.5 0 0 0-.5.5v12a.5.5 0 0 0 .5.5h5a1.5 1.5 0 0 1 0 3H7A3.5 3.5 0 0 1 3.5 18zm12.44 2.11a1.5 1.5 0 0 1 2.12 0l2.829 2.83a1.5 1.5 0 0 1 0 2.12l-2.828 2.83a1.5 1.5 0 1 1-2.122-2.122l.268-.268H12a1.5 1.5 0 0 1 0-3h4.207l-.268-.268a1.5 1.5 0 0 1 0-2.121",
             ),
@@ -304,6 +313,7 @@ impl Icon {
             Icon::ThumbUp => Shape::Fill(
                 "M21 8q.8 0 1.4.6T23 10v2q0 .175-.038.375t-.112.375l-3 7.05q-.225.5-.75.85T18 21h-8q-.825 0-1.412-.587T8 19V8.825q0-.4.163-.762t.437-.638l5.425-5.4q.375-.35.888-.425t.987.175t.688.7t.087.925L15.55 8zM4 21q-.825 0-1.412-.587T2 19v-9q0-.825.588-1.412T4 8t1.413.588T6 10v9q0 .825-.587 1.413T4 21",
             ),
+            Icon::TrendingUp => Shape::Stroke("3", "m3 16l6.5-6.5L14 14l6.5-6.5M17 7h4v4"),
             Icon::Tune => Shape::Fill(
                 "M11.288 20.713Q11 20.425 11 20v-4q0-.425.288-.712T12 15t.713.288T13 16v1h7q.425 0 .713.288T21 18t-.288.713T20 19h-7v1q0 .425-.288.713T12 21t-.712-.288M4 19q-.425 0-.712-.288T3 18t.288-.712T4 17h4q.425 0 .713.288T9 18t-.288.713T8 19zm3.288-4.288Q7 14.425 7 14v-1H4q-.425 0-.712-.288T3 12t.288-.712T4 11h3v-1q0-.425.288-.712T8 9t.713.288T9 10v4q0 .425-.288.713T8 15t-.712-.288M12 13q-.425 0-.712-.288T11 12t.288-.712T12 11h8q.425 0 .713.288T21 12t-.288.713T20 13zm3.288-4.288Q15 8.425 15 8V4q0-.425.288-.712T16 3t.713.288T17 4v1h3q.425 0 .713.288T21 6t-.288.713T20 7h-3v1q0 .425-.288.713T16 9t-.712-.288M4 7q-.425 0-.712-.288T3 6t.288-.712T4 5h8q.425 0 .713.288T13 6t-.288.713T12 7z",
             ),
@@ -374,7 +384,7 @@ pub fn Ico(icon: Icon, #[prop(default = 24)] size: u32) -> impl IntoView {
 mod tests {
     use super::*;
 
-    const ALL: [Icon; 68] = [
+    const ALL: [Icon; 70] = [
         Icon::Add,
         Icon::ArrowBack,
         Icon::Article,
@@ -408,6 +418,7 @@ mod tests {
         Icon::Label,
         Icon::Layout,
         Icon::Link,
+        Icon::Login,
         Icon::Logout,
         Icon::OpenInNew,
         Icon::Orientation,
@@ -434,6 +445,7 @@ mod tests {
         Icon::StarOutline,
         Icon::ThumbDown,
         Icon::ThumbUp,
+        Icon::TrendingUp,
         Icon::Tune,
         Icon::Undo,
         Icon::Upload,

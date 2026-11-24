@@ -211,6 +211,20 @@ pub fn share_url(client: &Client, token: &str) -> String {
     client.absolute(&share_path(token))
 }
 
+/// A post's own address, which a public server shares it by: its page on
+/// the server, which serves the app to anyone.
+pub fn post_url(client: &Client, id: i64) -> String {
+    client.absolute(&format!("/post/{id}"))
+}
+
+/// The addresses of several posts, one a line, to copy or share at once.
+pub fn post_urls(client: &Client, ids: &[i64]) -> String {
+    ids.iter()
+        .map(|&id| post_url(client, id))
+        .collect::<Vec<_>>()
+        .join("\n")
+}
+
 /// Whether the link has stopped working by its date.
 pub fn expired(share: &Share, now: DateTime<Utc>) -> bool {
     share.expires_at.is_some_and(|at| at <= now)
@@ -642,6 +656,19 @@ mod tests {
             share_url(&client, token),
             "http://nas.local:8080/booru/s/0123456789abcdef0123456789abcdef"
         );
+    }
+
+    #[test]
+    fn a_public_server_shares_a_post_by_its_own_address() {
+        let client = Client::new("https://booru.example/").unwrap();
+        assert_eq!(post_url(&client, 12), "https://booru.example/post/12");
+        assert_eq!(
+            post_urls(&client, &[3, 12]),
+            "https://booru.example/post/3\nhttps://booru.example/post/12"
+        );
+        assert_eq!(post_urls(&client, &[]), "");
+        let client = Client::new("http://nas.local:8080/booru").unwrap();
+        assert_eq!(post_url(&client, 5), "http://nas.local:8080/booru/post/5");
     }
 
     #[test]

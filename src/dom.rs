@@ -445,11 +445,20 @@ pub fn can_share() -> bool {
 /// Opens the browser's share sheet for `url`. Closing it without sharing
 /// rejects the promise, which is ignored like any other refusal.
 pub async fn share(title: &str, url: &str) {
+    share_as(title, "url", url).await;
+}
+
+/// The browser's share sheet for `text`, such as several addresses.
+pub async fn share_text(title: &str, text: &str) {
+    share_as(title, "text", text).await;
+}
+
+async fn share_as(title: &str, field: &str, value: &str) {
     let Some((navigator, share)) = share_api() else {
         return;
     };
     let data = js_sys::Object::new();
-    let _ = js_sys::Reflect::set(&data, &JsValue::from_str("url"), &JsValue::from_str(url));
+    let _ = js_sys::Reflect::set(&data, &JsValue::from_str(field), &JsValue::from_str(value));
     if !title.is_empty() {
         let _ = js_sys::Reflect::set(
             &data,

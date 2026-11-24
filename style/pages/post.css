@@ -179,14 +179,18 @@ html:has(.stage) { overscroll-behavior-x: none; }
 .bar-delete { margin-left: auto; }
 .bar-label { display: none; }
 /* Words beside the icons once they all fit on the row: four actions take
-   more room than three. */
+   more room than three, and five stars more than a thumb each way. */
 @container (min-width: 620px) {
-  .bar-acts:not(:has(> :nth-child(4))) .icon-btn { display: inline-flex; align-items: center; gap: 8px; width: auto; padding: 0 14px 0 10px; font: inherit; text-decoration: none; }
-  .bar-acts:not(:has(> :nth-child(4))) .bar-label { display: inline; font-size: 14px; font-weight: 600; line-height: 1; }
+  .post-bar:not(.starred) .bar-acts:not(:has(> :nth-child(4))) .icon-btn { display: inline-flex; align-items: center; gap: 8px; width: auto; padding: 0 14px 0 10px; font: inherit; text-decoration: none; }
+  .post-bar:not(.starred) .bar-acts:not(:has(> :nth-child(4))) .bar-label { display: inline; font-size: 14px; font-weight: 600; line-height: 1; }
 }
 @container (min-width: 770px) {
-  .bar-acts .icon-btn { display: inline-flex; align-items: center; gap: 8px; width: auto; padding: 0 14px 0 10px; font: inherit; text-decoration: none; }
-  .bar-acts .bar-label { display: inline; font-size: 14px; font-weight: 600; line-height: 1; }
+  .post-bar:not(.starred) .bar-acts .icon-btn { display: inline-flex; align-items: center; gap: 8px; width: auto; padding: 0 14px 0 10px; font: inherit; text-decoration: none; }
+  .post-bar:not(.starred) .bar-acts .bar-label { display: inline; font-size: 14px; font-weight: 600; line-height: 1; }
+}
+@container (min-width: 1000px) {
+  .post-bar.starred .bar-acts .icon-btn { display: inline-flex; align-items: center; gap: 8px; width: auto; padding: 0 14px 0 10px; font: inherit; text-decoration: none; }
+  .post-bar.starred .bar-acts .bar-label { display: inline; font-size: 14px; font-weight: 600; line-height: 1; }
 }
 /* A phone: the icons a little closer, so they stay on one row. */
 @container (max-width: 400px) {
@@ -297,3 +301,30 @@ html:has(.stage) { overscroll-behavior-x: none; }
 @keyframes glow-in { from { opacity: 0; } }
 @keyframes from-next { from { opacity: 0; transform: translateX(48px); } }
 @keyframes from-prev { from { opacity: 0; transform: translateX(-48px); } }
+
+/* ---------- stars (components/stars.rs) ---------- */
+
+/* Five stars light up to the one pointed at; the one given pops. The
+   average and the count sit beside them. */
+.star-vote { display: flex; align-items: center; gap: 8px; padding-right: 14px; border-radius: 999px; background: var(--surface-3); }
+.stars { display: flex; }
+.star {
+  display: grid; place-items: center; width: 40px; height: 44px; padding: 0; border: 0; border-radius: 999px;
+  background: none; color: var(--on-surface-2); cursor: pointer;
+  transition: color var(--fast) var(--ease), transform var(--med) var(--ease-spring);
+}
+.star.lit { color: var(--primary); }
+.stars.previewing .star.lit { color: oklch(from var(--primary) l c h / 0.75); }
+.star:hover:not(:disabled) { transform: scale(1.12); }
+.star:active:not(:disabled) { transform: scale(0.88); }
+.star:focus-visible { outline: 3px solid var(--primary); outline-offset: -3px; }
+.star:disabled { cursor: default; opacity: 0.5; }
+.star.given .icon { animation: pop var(--slow) var(--ease-spring); }
+.star-summary { display: flex; align-items: baseline; gap: 6px; font-size: 14px; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.star-summary strong { font-size: 16px; }
+@container (max-width: 400px) {
+  .star { width: 32px; }
+  .star .icon { width: 22px; height: 22px; }
+  .star-summary .muted { display: none; }
+}
+.app[data-effects="lite"] .star.given .icon { animation: none; }

@@ -1,6 +1,8 @@
-//! Administration › Server: the settings that override the server's
-//! environment (its name, sign-ups, how long the recycle bin keeps posts,
-//! automatic meta tags), and emptying the bin at once.
+//! Administration › Server: the mode and the score kind (`modes.rs`), the
+//! settings that override the server's environment (its name, sign-ups, how
+//! long the recycle bin keeps posts, automatic meta tags), emptying the bin
+//! at once, and the AI tools (`ai.rs`). The settings are read once for the
+//! cards that show them.
 
 use leptos::ev::SubmitEvent;
 use leptos::prelude::*;
@@ -9,6 +11,8 @@ use starbooru_core::ServerSettings;
 use starbooru_core::admin::{MAX_INSTANCE_NAME_CHARS, MAX_TRASH_DAYS};
 
 use super::Waiting;
+use super::ai::AiCard;
+use super::modes::{ModeCard, ScoreCard};
 use crate::api;
 use crate::components::banner::ErrorBanner;
 use crate::components::confirm::ConfirmButton;
@@ -18,29 +22,18 @@ use crate::logic::viewer::human_size;
 use crate::pages::trash::empty_whole_bin;
 use crate::route;
 
+/// The tab: the settings, read once, for the cards that show them.
 #[component]
-pub(super) fn ServerCard() -> impl IntoView {
-    let name = RwSignal::new(String::new());
-    let open = RwSignal::new(false);
-    let days = RwSignal::new(String::new());
-    let meta_tags = RwSignal::new(true);
-    let loaded = RwSignal::new(false);
-    let busy = RwSignal::new(false);
+pub(super) fn ServerTab() -> impl IntoView {
+    let settings = RwSignal::new(None::<ServerSettings>);
     let load_error = RwSignal::new(None::<String>);
-    let error = RwSignal::new(None::<String>);
-    let saved = RwSignal::new(false);
-    let fill = move |s: ServerSettings| {
-        name.try_set(s.name);
-        open.try_set(s.allow_registration);
-        days.try_set(s.trash_days.to_string());
-        meta_tags.try_set(s.auto_meta_tags);
-        loaded.try_set(true);
-    };
     let load = move || {
         load_error.set(None);
         spawn_local(async move {
             match api::call(|c| async move { c.admin_settings().await }).await {
-                Ok(s) => fill(s),
+                Ok(s) => {
+                    settings.try_set(Some(s));
+                }
                 Err(message) => {
                     load_error.try_set(Some(message));
                 }
@@ -49,23 +42,77 @@ pub(super) fn ServerCard() -> impl IntoView {
     };
     load();
     let retry = Callback::new(move |()| load());
-    let check =
-        Memo::new(move |_| check_settings(&name.read(), open.get(), &days.read(), meta_tags.get()));
+    view! {
+        {move || load_error.get().map(|message| view! { <ErrorBanner message=message on_retry=retry /> })}
+        <Show when=move || load_error.with(Option::is_none)>
+            <ModeCard settings=settings on_reload=retry />
+            <ScoreCard settings=settings />
+            <ServerCard settings=settings />
+        </Show>
+        <BinCard />
+        <AiCard />
+    }
+}
+
+#[component]
+fn ServerCard(settings: RwSignal<Option<ServerSettings>>) -> impl IntoView {
+    let name = RwSignal::new(String::new());
+    let open = RwSignal::new(false);
+    let days = RwSignal::new(String::new());
+    let meta_tags = RwSignal::new(true);
+    let loaded = RwSignal::new(false);
+    let busy = RwSignal::new(false);
+    let error = RwSignal::new(None::<String>);
+    let saved = RwSignal::new(false);
+    let fill = move |s: &ServerSettings| {
+        name.try_set(s.name.clone());
+        open.try_set(s.allow_registration);
+        days.try_set(s.trash_days.to_string());
+        meta_tags.try_set(s.auto_meta_tags);
+        loaded.try_set(true);
+    };
+    // The form takes the settings as they first come; a switch of mode or
+    // score kind later leaves what's typed alone.
+    Effect::new(move |_| {
+        if !loaded.get_untracked()
+            && let Some(s) = settings.get()
+        {
+            fill(&s);
+        }
+    });
+    // Sent back as they are: each has a way of its own to change.
+    let kept = Memo::new(move |_| {
+        settings.with(|s| {
+            s.as_ref()
+                .map(|s| (s.mode, s.score_kind))
+                .unwrap_or_default()
+        })
+    });
+    let check = Memo::new(move |_| {
+        check_settings(
+            &name.read(),
+            open.get(),
+            &days.read(),
+            meta_tags.get(),
+            kept.get(),
+        )
+    });
     let save = move |e: SubmitEvent| {
         e.prevent_default();
         if busy.get_untracked() {
             return;
         }
-        let Some(settings) = check.get_untracked().request else {
+        let Some(request) = check.get_untracked().request else {
             return;
         };
         busy.set(true);
         error.set(None);
         saved.set(false);
         spawn_local(async move {
-            match api::call(move |c| async move { c.set_admin_settings(&settings).await }).await {
+            match api::call(move |c| async move { c.set_admin_settings(&request).await }).await {
                 Ok(s) => {
-                    fill(s);
+                    fill(&s);
+                    settings.try_set(Some(s));
                     saved.try_set(true);
                     api::forget_server_answers();
                 }
@@ -77,18 +124,12 @@ pub(super) fn ServerCard() -> impl IntoView {
         });
     };
     let invalid = |bad: bool| if bad { "true" } else { "false" };
-    let waiting = move || {
-        load_error
-            .with(Option::is_none)
-            .then(|| view! { <Waiting /> })
-    };
 
     view! {
         <section class="card">
             <h2 class="card-title">{move || t!("admin-tab-server")}</h2>
             <p class="muted hint">{move || t!("admin-server-lead")}</p>
-            {move || load_error.get().map(|message| view! { <ErrorBanner message=message on_retry=retry /> })}
-            <Show when=move || loaded.get() fallback=waiting>
+            <Show when=move || loaded.get() fallback=|| view! { <Waiting /> }>
                 <form on:submit=save on:input=move |_| saved.set(false)>
                     <label class="field">
                         <span>{move || t!("admin-name")}</span>
@@ -161,7 +202,7 @@ pub(super) fn ServerCard() -> impl IntoView {
 /// What the recycle bin holds, a way to it, and emptying it at once, which
 /// asks first and says how many posts go.
 #[component]
-pub(super) fn BinCard() -> impl IntoView {
+fn BinCard() -> impl IntoView {
     let stats = LocalResource::new(|| api::call(|c| async move { c.admin_stats().await }));
     let busy = RwSignal::new(false);
     let notice = RwSignal::new(None::<String>);

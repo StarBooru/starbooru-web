@@ -65,6 +65,17 @@ terms-title = Terms of Service
 ## Errors
 
 error-session-expired = Your session has expired. Sign in again.
+error-slow-down = That's a lot of browsing in a short time for this server. Slow down and try again in a moment, or sign in to go on now.
+error-slow-down-seconds =
+    { $seconds ->
+        [one] That's a lot of browsing in a short time for this server. Slow down, and try again in 1 second, or sign in to go on now.
+       *[other] That's a lot of browsing in a short time for this server. Slow down, and try again in { $seconds } seconds, or sign in to go on now.
+    }
+error-slow-down-minutes =
+    { $minutes ->
+        [one] That's a lot of browsing in a short time for this server. Slow down, and try again in 1 minute, or sign in to go on now.
+       *[other] That's a lot of browsing in a short time for this server. Slow down, and try again in { $minutes } minutes, or sign in to go on now.
+    }
 error-unreachable = Can't reach the server at { $server }. Check the address and your connection, then try again.
 error-bad-address = That isn't a server address. Enter one like https://booru.example.com.
 error-not-a-server = { $server } answers, but it isn't a StarBooru server. Check the address.
@@ -80,6 +91,18 @@ error-rate-limited-minutes =
 login-tagline = Your private image library
 login-server-version = { $name } · v{ $version }
 login-first-user = This server has no accounts yet. The account you create now becomes the administrator.
+guest-sign-in = Sign in
+guest-sign-up = Create an account
+guest-back = Back to browsing
+guest-keep-browsing = Keep browsing without an account
+guest-invite-title = Sign in to do more
+guest-page-needs-account = This page is for people with an account on this server.
+guest-account-note = Vote, upload and save searches
+guest-account-why = With an account you can vote, upload, save searches and keep the posts you opened.
+guest-vote-why = Sign in to vote. You'll be back on this post.
+guest-needs-account = Sign in to see this. This server shows it only to people with an account.
+guest-gallery-empty = Nothing has been posted here yet.
+guest-server-closed = This server is now open only to people with an account. Sign in to go on.
 login-server = Server
 login-server-placeholder = https://booru.example.com
 login-username = Username
@@ -292,6 +315,7 @@ sort-by = Sort by
 sort-new = Newest
 sort-old = Oldest
 sort-score = Top score
+sort-rating = Top rated
 sort-updated = Recently edited
 sort-size = Largest file
 sort-size-asc = Smallest file
@@ -398,6 +422,26 @@ bulk-done-skipped = { $done }; { $skipped }.
 explore-nothing = Nothing to explore yet
 explore-nothing-body = Upload images or videos, and they show up here.
 explore-everything = Explore everything
+explore-window = Trending over
+explore-today = Today
+explore-week = Week
+explore-month = Month
+explore-year = Year
+explore-phrase-today = today
+explore-phrase-week = this week
+explore-phrase-month = this month
+explore-phrase-year = this year
+explore-phrase-days =
+    { $count ->
+        [one] in the last day
+       *[other] in the last { $count } days
+    }
+explore-trending = Trending
+explore-no-likes = No likes { $when }. Like posts and they show up here.
+explore-popular-tags = Popular tags
+explore-tags-note = on posts added { $when }
+explore-no-tags = No tagged posts were added { $when }.
+explore-added = Posts added { $when }
 nothing-matches = Nothing matches “{ $query }”.
 explore-recent = Recently viewed
 explore-recent-clear = Clear
@@ -547,6 +591,24 @@ post-upvote = Upvote
 post-downvote = Downvote
 post-votes = Votes
 post-score = Score
+stars-of =
+    { $count ->
+        [one] 1 of 5 stars
+       *[other] { $count } of 5 stars
+    }
+stars-yours = Your rating: { $stars }
+stars-none-yours = You haven't rated this yet
+stars-summary =
+    { $count ->
+        [one] Average { $average } of 5, from 1 vote
+       *[other] Average { $average } of 5, from { $count } votes
+    }
+stars-votes =
+    { $count ->
+        [one] 1 vote
+       *[other] { $count } votes
+    }
+stars-no-votes = No votes yet
 vote-failed = Couldn't save your vote: { $reason }
 post-download = Download
 download-failed = The download didn't finish. Check your connection and try again.
@@ -727,6 +789,9 @@ swipe-like = Like
 press-unlike = Remove like
 press-liked = Liked
 press-unliked = Like removed
+press-star = Give 5 stars
+press-unstar = Remove your stars
+press-starred = Gave 5 stars
 delete-failed = Couldn't move it to the recycle bin: { $reason }
 swipe-select = Select
 
@@ -901,6 +966,7 @@ help-text-not = the text read in the image doesn't have the word
 help-sorting = Sorting
 help-order-new = newest first (the default); order:old for oldest
 help-order-score = highest score first
+help-order-rating = highest rated first
 help-order-size = largest file first
 help-order-pixels = highest resolution first; order:mpixels too
 help-order-longside = longest side first
@@ -915,6 +981,11 @@ help-tips = Good to know
 help-tip-normalise = Tags are lower-cased, and spaces or repeated underscores become one _.
 help-tip-aliases = An alias finds its tag, and implied tags are added when you tag a post.
 help-tip-terms = A query holds at most 40 terms.
+help-server = This server
+help-server-private = It's private: only people with an account see its posts. A share link shows the posts you pick to anyone who has it.
+help-server-public = It's public: anyone can browse its posts, tags and Explore without an account. A post is shared by its own address.
+help-votes-likes = A vote is a like or a dislike. Press it again to take it back. order:score puts the most liked first.
+help-votes-stars = A vote is 1 to 5 stars. Press your star again to take it back. order:score puts the best rated first, and a post needs a few votes to climb.
 help-shortcuts = Keyboard shortcuts and gestures
 key-prev-next = previous or next post
 key-edit = edit tags and rating
@@ -942,6 +1013,7 @@ explain-tagged-none = Tagged with none of { $tags }
 explain-rated = Rated { $ratings }
 explain-not-rated = Not rated { $ratings }
 list-or = { $rest } or { $last }
+list-and = { $rest } and { $last }
 explain-images = Still images only
 explain-animations = Animations only
 explain-videos = Videos only
@@ -970,6 +1042,8 @@ explain-order-old = Oldest first
 explain-order-random = In random order
 explain-order-score-desc = By score, highest first
 explain-order-score-asc = By score, lowest first
+explain-order-rating-desc = By rating, highest first
+explain-order-rating-asc = By rating, lowest first
 explain-order-size-desc = By file size, largest first
 explain-order-size-asc = By file size, smallest first
 explain-order-pixels-desc = By resolution, highest first
@@ -999,6 +1073,7 @@ privacy-server-content = What you add: tags, the people marked in a post, rating
 privacy-server-shares = For each share link you make: the posts in it, its title, when it expires, and how many times and when it was last opened (not by whom).
 privacy-server-sites = For other sites: the searches you save on other boorus, the accounts you save for them (the login as you typed it, the key encrypted with the server’s secret), the addresses you import, kept for 7 days after they finish, and each library import with its counts until you remove it.
 privacy-server-limits = To slow down password guessing, the server counts failed sign-ins per account and per network address, and sign-ups per address. These counts are kept in memory for at most an hour and never written to disk.
+privacy-server-guest-limits = On a public server, the server counts the requests of people browsing without an account by their network address, to keep any one of them from asking too fast. These counts are kept in memory for a minute and never written to disk.
 privacy-device = What stays on your device
 privacy-device-storage = This app keeps one entry in the browser’s local storage: the server address, your sign-in token, your username and role, your preferences (such as the theme, the language, the gallery’s layout and the boorus you added by address), where the gallery was in your last 30 searches, and the last 60 posts you opened.
 privacy-device-sign-in = While you sign in through an identity provider, the tab keeps a one-time handle in its session storage, removed when you come back.
@@ -1014,6 +1089,7 @@ privacy-not-done-library = While a whole library is being imported, the key you 
 privacy-not-done-logs = File contents, the text read in images, passwords and tokens are never written to the server’s logs.
 privacy-who-sees = Who can see your posts
 privacy-who-sees-body = Everyone with an account on this server can see the posts on it, and download the original files with anything they hold, such as where a photo was taken. A post shows its score, not who voted. Media links handed to the app are signed and expire, so a copied link stops working within 12 hours. If you make a share link, anyone who has it can see the posts in it, without their tags, until it expires or you remove it.
+privacy-who-sees-public = On a public server, people without an account can see its posts, tags and Explore too, and download the files, but not the recycle bin, and not who voted. They can't vote, upload or save anything. A post is shared there by its own address, which anyone can open.
 privacy-keeping = Keeping and deleting
 privacy-keeping-bin = Deleted posts go to the recycle bin. From there an administrator, or whoever uploaded them, can erase them with their files, and the operator can have the bin emptied by itself after a set number of days.
 privacy-keeping-sessions = Sessions end when you sign out, after 90 days, or when you sign out other devices in Settings. Changing your password signs out every other device; API keys keep working until you remove them or they expire.
@@ -1037,6 +1113,9 @@ terms-warranty-body = StarBooru is provided as is, without warranty of any kind.
 
 explore-collection = Collection
 boorus-search = Search boorus
+boorus-not-here = No other boorus here
+boorus-not-here-body = This server is public, so it doesn't browse other boorus.
+boorus-not-here-back = Back to Explore
 boorus-sites = Sites
 boorus-site = Site
 boorus-site-remove = Remove { $site }
@@ -1162,6 +1241,19 @@ share-link = Share link
 share-copy = Copy link
 share-copied = Copied
 share-copy-failed = Couldn't copy the link. It's selected, so copy it from your keyboard or menu.
+share-address-title =
+    { $count ->
+        [one] Share this post
+       *[other] Share { $count } posts
+    }
+share-address-lead =
+    { $count ->
+        [one] This server is public: anyone with this address can see the post, without an account.
+       *[other] This server is public: anyone with these addresses can see the posts, without an account.
+    }
+share-addresses = Addresses
+share-copy-all = Copy all
+share-copied-all = Copied
 share-native = Share via…
 share-done = Done
 share-close = Close
@@ -1275,6 +1367,76 @@ admin-delete-confirm = Delete { $name } for good?
 admin-delete-note = Deleting removes the account, its votes, saved searches and keys. Its posts stay.
 admin-deleted = Account { $name } deleted.
 admin-server-lead = These apply at once and override the server's environment variables.
+mode-title = Who can see this server
+mode-private = Private
+mode-public = Public
+mode-private-means = Only people with an account can see posts. Share links work again, and other boorus can be set up.
+mode-public-means = Anyone can browse posts, tags and Explore without an account. Votes become likes, and a post is shared by its own address.
+mode-switch-to = Switch to { $mode }
+mode-delete-and-switch = Delete and switch
+mode-switch-without-backup = Switch without a backup
+mode-switching = Switching to { $mode }…
+mode-now = The server is { $mode } now.
+mode-done = Done
+mode-nothing = Nothing is deleted or converted.
+mode-deletes = Switching deletes { $what } for good.
+mode-backup-first = Back up the database first
+mode-backup-hint = Recommended. The backup is listed under Backups.
+mode-backup-made = Backup { $name } is under Backups
+mode-step-backup = Backing up the database
+mode-step-switch = Switching to { $mode }
+mode-keep-open = Keep this page open. A large database takes a while to back up.
+mode-backup-unavailable = This server can't make backups, as pg_dump is missing. You can still switch without one.
+mode-backup-running = Another backup is being made. Try again once it's done.
+mode-backup-failed = The backup failed, so nothing was changed. Try again, or switch without a backup.
+mode-switch-running = Another switch is under way. Wait for it to finish.
+mode-same = The server is in that mode already. This page now shows it.
+scores-title = What a vote is
+scores-likes = Likes
+scores-stars = Stars
+scores-likes-means = A vote is a like or a dislike, and posts are sorted by likes minus dislikes.
+scores-stars-means = A vote is 1 to 5 stars, and posts are sorted by a fair rating of their stars.
+scores-switch-to = Switch to { $kind }
+scores-now = Votes are { $kind } now.
+scores-public-likes = A public server counts likes. Switch to private to vote with stars.
+change-share-links =
+    { $count ->
+        [one] 1 share link
+       *[other] { $count } share links
+    }
+change-booru-accounts =
+    { $count ->
+        [one] 1 saved booru account
+       *[other] { $count } saved booru accounts
+    }
+change-remote-searches =
+    { $count ->
+        [one] 1 saved booru search
+       *[other] { $count } saved booru searches
+    }
+change-star-votes =
+    { $count ->
+        [one] 1 star vote
+       *[other] { $count } star votes
+    }
+change-three-stars =
+    { $count ->
+        [one] 1 vote of 3 stars
+       *[other] { $count } votes of 3 stars
+    }
+change-like-votes =
+    { $count ->
+        [one] 1 like or dislike
+       *[other] { $count } likes and dislikes
+    }
+change-fate-deleted = will be deleted
+change-done-deleted = deleted
+change-fate-likes = will become likes and dislikes: 4 or 5 stars a like, 1 or 2 a dislike
+change-done-likes = became likes and dislikes
+change-fate-neither = will be deleted, as 3 stars is neither a like nor a dislike
+change-done-neither = deleted, as 3 stars is neither a like nor a dislike
+change-fate-stars = will become stars: a like 5, a dislike 1
+change-done-stars = became stars
 admin-name = Server name
 admin-name-hint = Shown on the sign-in page.
 admin-name-error = Give the server a name of 1 to { $max } characters.

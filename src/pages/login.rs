@@ -1,5 +1,7 @@
 //! The sign-in screen, which the shell shows while no one is signed in, and
-//! `/oidc`, where a sign-in through the identity provider comes back to.
+//! `/oidc`, where a sign-in through the identity provider comes back to. On
+//! a server that takes guests it shows only when asked for, over the page
+//! the guest was on, with the way back to it; signing in stays on that page.
 
 use leptos::ev::SubmitEvent;
 use leptos::prelude::*;
@@ -9,15 +11,15 @@ use leptos_router::hooks::{use_location, use_navigate};
 use starbooru_client::{Client, ClientError};
 use starbooru_core::{Credentials, ServerInfo, password_is_weak};
 
-use crate::api;
 use crate::components::brand::{Mark, Wordmark};
 use crate::components::icons::{Ico, Icon};
 use crate::components::legal::LegalLinks;
 use crate::components::strength::StrengthField;
 use crate::logic::address::normalize_server;
+use crate::logic::modes::{Guests, back_to};
 use crate::logic::settings::Group;
 use crate::oidc::{self, Back};
-use crate::store;
+use crate::{api, instance, store};
 
 #[component]
 pub fn Login() -> impl IntoView {
@@ -25,11 +27,19 @@ pub fn Login() -> impl IntoView {
     let username = RwSignal::new(String::new());
     let password = RwSignal::new(String::new());
     let info = RwSignal::new(None::<ServerInfo>);
-    let creating = RwSignal::new(false);
+    // What a guest asked for: an account of their own, and why.
+    let asked = untrack(instance::asked).unwrap_or_default();
+    let creating = RwSignal::new(asked.create);
     let busy = RwSignal::new(false);
     let error = RwSignal::new(None::<String>);
     // Why this screen is showing, such as a session that expired.
     let note = RwSignal::new(store::take_sign_in_note());
+    // What a guest pressed that needs an account, such as a vote.
+    let why = asked.why;
+    // A guest came from a page, and can go back to it.
+    let browsing = Memo::new(|_| instance::guests() == Guests::Welcome);
+    let wants_account = asked.create;
+    let location = use_location();
     // Only the answer for the latest address counts.
     let probes = StoredValue::new(0u32);
 
@@ -52,7 +62,7 @@ pub fn Login() -> impl IntoView {
             }
             match result {
                 Ok(i) => {
-                    creating.set(!i.has_users);
+                    creating.set(!i.has_users || (wants_account && i.registration_open));
                     info.set(Some(i));
                     error.set(None);
                 }
@@ -121,9 +131,15 @@ pub fn Login() -> impl IntoView {
         note.set(None);
         error.set(None);
         busy.set(true);
+        // The provider comes back to this page, as a password sign-in stays.
+        let here = format!(
+            "{}{}",
+            location.pathname.get_untracked(),
+            location.search.get_untracked()
+        );
         spawn_local(async move {
             // Done, the page is on its way to the provider and stays busy.
-            if let Err(e) = oidc::begin(url).await {
+            if let Err(e) = oidc::begin(url, here).await {
                 busy.set(false);
                 error.set(Some(e));
             }
@@ -159,6 +175,17 @@ pub fn Login() -> impl IntoView {
         <div class="login-page">
             <div class="aurora" aria-hidden="true"></div>
             <form class="login-card glass" on:submit=submit>
+                <Show when=move || browsing.get()>
+                    <button
+                        type="button"
+                        class="icon-btn login-back"
+                        title=move || t!("guest-back")
+                        aria-label=move || t!("guest-back")
+                        on:click=move |_| instance::stop_asking()
+                    >
+                        <Ico icon=Icon::ArrowBack />
+                    </button>
+                </Show>
                 <div class="login-brand">
                     <span class="logo">
                         <Mark height=40 />
@@ -176,6 +203,14 @@ pub fn Login() -> impl IntoView {
                 <Show when=first_user>
                     <div class="banner info">{move || t!("login-first-user")}</div>
                 </Show>
+                {why
+                    .map(|text| {
+                        view! {
+                            <div class="banner info login-why" role="status">
+                                <span class="break">{text}</span>
+                            </div>
+                        }
+                    })}
                 <label class="field">
                     <span>{move || t!("login-server")}</span>
                     <input
@@ -286,6 +321,15 @@ pub fn Login() -> impl IntoView {
                         }}
                     </button>
                 </Show>
+                <Show when=move || browsing.get()>
+                    <button
+                        class="btn text wide"
+                        type="button"
+                        on:click=move |_| instance::stop_asking()
+                    >
+                        {move || t!("guest-keep-browsing")}
+                    </button>
+                </Show>
                 <LegalLinks />
             </form>
         </div>
@@ -348,6 +392,7 @@ pub fn OidcReturn() -> impl IntoView {
                 server,
                 finish,
                 link: false,
+                then,
             } => {
                 let go = go.clone();
                 spawn_local(async move {
@@ -359,7 +404,8 @@ pub fn OidcReturn() -> impl IntoView {
                         Ok(auth) => store::sign_in(server, auth),
                         Err(e) => store::set_sign_in_note(oidc::finish_error(&e, &server)),
                     }
-                    go("/");
+                    // Back to the page the sign-in started on.
+                    go(back_to(&then).unwrap_or("/"));
                 });
             }
         });

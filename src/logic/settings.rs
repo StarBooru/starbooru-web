@@ -8,7 +8,7 @@ use chrono::{DateTime, Local, Utc};
 use starbooru_core::color::Rgb;
 use starbooru_core::keys::{ApiKeyError, MAX_API_KEY_DAYS, MAX_API_KEY_NAME_CHARS, clean_api_key};
 use starbooru_core::{
-    ApiKey, Identity, NewApiKey, Role, ServerInfo, SessionInfo, SignInMethods, Usage, User,
+    ApiKey, Identity, Mode, NewApiKey, Role, ServerInfo, SessionInfo, SignInMethods, Usage, User,
 };
 
 use super::library::ago;
@@ -70,6 +70,22 @@ impl Group {
             Group::Sharing => "/settings/sharing",
             Group::About => "/settings/about",
         }
+    }
+}
+
+impl Group {
+    /// Whether a guest has it: how the app looks, the help and legal pages,
+    /// and the account's, which invites one.
+    pub fn for_guests(self) -> bool {
+        matches!(self, Group::Account | Group::Appearance | Group::About)
+    }
+
+    /// The groups in the list, a guest's or an account's.
+    pub fn shown(guest: bool) -> Vec<Group> {
+        Group::ALL
+            .into_iter()
+            .filter(|g| !guest || g.for_guests())
+            .collect()
     }
 }
 
@@ -256,8 +272,11 @@ pub fn usage_text(u: &Usage) -> String {
 /// The cards Settings shows besides the ones everyone has.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct Sections {
-    /// The import of a whole library, unless the server never reaches out.
+    /// The import of a whole library, unless the server never reaches out;
+    /// on a public server, for administrators only.
     pub library_import: bool,
+    /// The links shared, which a public server has none of.
+    pub shares: bool,
     /// The way to the administration, for administrators.
     pub admin: bool,
     /// The ways to sign in, where there's a provider to link or an identity
@@ -271,9 +290,12 @@ pub fn sections(
     methods: Option<&SignInMethods>,
 ) -> Sections {
     let provider = info.is_some_and(|i| i.oidc.is_some());
+    let admin = user.role == Role::Admin;
+    let public = info.is_some_and(|i| i.mode == Mode::Public);
     Sections {
-        library_import: info.is_some_and(|i| i.url_import),
-        admin: user.role == Role::Admin,
+        library_import: info.is_some_and(|i| i.url_import) && (admin || !public),
+        shares: !public,
+        admin,
         sign_in: provider || methods.is_some_and(|m| !m.identities.is_empty()),
     }
 }
@@ -480,6 +502,9 @@ mod tests {
             url_import,
             oidc: oidc.map(str::to_owned),
             video_editing: false,
+            mode: Mode::Private,
+            score_kind: starbooru_core::ScoreKind::Likes,
+            guests: false,
         }
     }
 
@@ -596,7 +621,13 @@ mod tests {
     fn an_admin_sees_more_than_a_user() {
         let plain = info(false, None);
         let user_view = sections(&user("user"), Some(&plain), None);
-        assert_eq!(user_view, Sections::default());
+        assert_eq!(
+            user_view,
+            Sections {
+                shares: true,
+                ..Sections::default()
+            }
+        );
         let admin_view = sections(&user("admin"), Some(&plain), None);
         assert!(admin_view.admin);
         assert!(!admin_view.library_import && !admin_view.sign_in);
@@ -612,6 +643,29 @@ mod tests {
         // Before the server answers, nothing that depends on it.
         let waiting = sections(&user("admin"), None, None);
         assert!(waiting.admin && !waiting.library_import && !waiting.sign_in);
+    }
+
+    #[test]
+    fn a_public_server_has_no_share_links_and_imports_for_admins() {
+        let public = ServerInfo {
+            mode: Mode::Public,
+            ..info(true, None)
+        };
+        let user_view = sections(&user("user"), Some(&public), None);
+        assert!(!user_view.shares && !user_view.library_import);
+        let admin_view = sections(&user("admin"), Some(&public), None);
+        assert!(!admin_view.shares && admin_view.library_import);
+        assert!(sections(&user("user"), Some(&info(true, None)), None).shares);
+    }
+
+    #[test]
+    fn a_guest_has_the_groups_of_this_device_and_an_invitation() {
+        assert_eq!(Group::shown(false), Group::ALL);
+        assert_eq!(
+            Group::shown(true),
+            [Group::Account, Group::Appearance, Group::About]
+        );
+        assert!(FIRST.for_guests());
     }
 
     #[test]

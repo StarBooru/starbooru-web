@@ -64,3 +64,15 @@
   padding: 2px 8px; border-radius: 999px; font-size: 12px; font-weight: 700; font-variant-numeric: tabular-nums;
   background: var(--scrim); color: var(--on-scrim);
 }
+
+/* A public server's Trending and Popular tags: the window where the sides
+   would be, and each tag with how many posts it gained. */
+.explore-window .seg { min-width: 64px; }
+.section-head > .muted { font-size: 14px; }
+.chip.trend { gap: 8px; text-decoration: none; }
+.trend-count { font-size: 12px; font-weight: 700; color: var(--primary); font-variant-numeric: tabular-nums; }
+.chip.trend:hover .trend-count { color: inherit; }
+@media (max-width: 760px) {
+  .explore-window { display: flex; flex: 1 1 auto; }
+  .explore-window .seg { flex: 1 1 0; min-width: 0; padding: 0 6px; }
+}

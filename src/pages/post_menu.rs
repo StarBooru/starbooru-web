@@ -4,7 +4,8 @@
 //! the gallery, select it for a mass edit or move it to the recycle bin. A long press on a phone opens it too
 //! where the browser reports one as a right click, and so do Shift+F10 and
 //! the menu key on a focused tile. In the gallery a tile swiped aside does
-//! what Settings › Gestures says, from the same actions.
+//! what Settings › Gestures says, from the same actions. Under stars the like
+//! gives five; a guest's menu has what reads, and a like asks to sign in.
 
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -20,7 +21,6 @@ use web_sys::MouseEvent;
 
 use super::share::ShareSheet;
 use super::{gallery, trash};
-use crate::api;
 use crate::components::download;
 use crate::components::icons::Icon;
 use crate::components::menu::{self, ActionMenu, MenuAt, MenuItem};
@@ -29,10 +29,34 @@ use crate::components::snackbar::{notify, notify_undo};
 use crate::components::swipe::watch as watch_swipes;
 use crate::dom;
 use crate::logic::reverse::offered;
+use crate::logic::stars::next_stars;
 use crate::logic::swipe::{Side, action};
 use crate::logic::viewer::download_name;
-use crate::logic::votes::next_vote;
+use crate::logic::votes::{Ballot, next_vote};
 use crate::store::SwipeAction;
+use crate::{api, instance};
+
+/// The stars the menu's like gives, on a server that counts stars.
+const LIKE_STARS: u8 = starbooru_core::MAX_STARS;
+
+/// What a like from the menu sends: a like, or under stars all five, and
+/// pressed again it takes the vote back.
+fn like_ballot(post: &Post, stars: bool) -> Ballot {
+    if stars {
+        Ballot::Stars(next_stars(post.my_stars, LIKE_STARS))
+    } else {
+        Ballot::Like(next_vote(post.my_vote, 1))
+    }
+}
+
+/// Whether the post has the menu's like from this account.
+fn has_like(post: &Post, stars: bool) -> bool {
+    if stars {
+        post.my_stars == LIKE_STARS
+    } else {
+        post.my_vote > 0
+    }
+}
 
 /// The tiles whose right click opens the menu.
 const TILES: &str = r#"[data-press="post"] [data-post]"#;
@@ -74,9 +98,21 @@ pub fn PostPress(
     let sharing = RwSignal::new(None::<i64>);
     // The post whose picture is being looked up, and where its menu was.
     let reversing = RwSignal::new(None::<(Arc<Post>, MenuAt)>);
-    // Votes cast from here. The lists the tiles come from aren't asked for
-    // again, and the menu should still say which way the next press goes.
-    let votes = StoredValue::new(HashMap::<i64, i16>::new());
+    // Votes cast from here, a like and stars. The lists the tiles come from
+    // aren't asked for again, and the menu should still say which way the
+    // next press goes.
+    let votes = StoredValue::new(HashMap::<i64, (i16, u8)>::new());
+    // A guest reads: no selection, no recycle bin, and a like asks to sign in.
+    let guest = untrack(instance::guest);
+    let on_select = on_select.filter(|_| !guest);
+    let on_deleted = on_deleted.filter(|_| !guest);
+    let mine = move |post: &mut Arc<Post>| {
+        if let Some((vote, stars)) = votes.with_value(|v| v.get(&post.id).copied()) {
+            let p = Arc::make_mut(post);
+            p.my_vote = vote;
+            p.my_stars = stars;
+        }
+    };
     let watch = web_sys::window().and_then(|w| w.document()).map(|doc| {
         dom::listen(&doc, "contextmenu", false, move |e| {
             let Some((id, href, at)) = e.dyn_ref::<MouseEvent>().and_then(pressed) else {
@@ -86,9 +122,7 @@ pub fn PostPress(
                 return;
             };
             e.prevent_default();
-            if let Some(vote) = votes.with_value(|v| v.get(&id).copied()) {
-                Arc::make_mut(&mut post).my_vote = vote;
-            }
+            mine(&mut post);
             open.set(Some(Open { post, href, at }));
         })
     });
@@ -107,22 +141,34 @@ pub fn PostPress(
     });
     let like = Callback::new(move |post: Arc<Post>| {
         open.set(None);
+        if guest {
+            instance::ask_sign_in(Some(t!("guest-vote-why")));
+            return;
+        }
         let id = post.id;
-        let vote = next_vote(post.my_vote, 1);
+        let ballot = like_ballot(&post, instance::stars());
         spawn_local(async move {
-            match api::call(move |c| async move { c.vote(id, vote).await }).await {
+            let sent = api::call(move |c| async move {
+                match ballot {
+                    Ballot::Like(value) => c.vote(id, value).await,
+                    Ballot::Stars(stars) => c.vote_stars(id, stars).await,
+                }
+            })
+            .await;
+            match sent {
                 Ok(fresh) => {
-                    let _ = votes.try_update_value(|v| v.insert(id, fresh.my_vote));
+                    let _ =
+                        votes.try_update_value(|v| v.insert(id, (fresh.my_vote, fresh.my_stars)));
                     let fresh = Arc::new(fresh);
                     gallery::update_post(Arc::clone(&fresh));
                     // The page may have gone meanwhile.
                     if let Some(voted) = on_voted {
                         voted.try_run(fresh);
                     }
-                    notify(if vote > 0 {
-                        t!("press-liked")
-                    } else {
-                        t!("press-unliked")
+                    notify(match ballot {
+                        Ballot::Like(1..) => t!("press-liked"),
+                        Ballot::Stars(1..) => t!("press-starred"),
+                        Ballot::Like(_) | Ballot::Stars(_) => t!("press-unliked"),
                     });
                 }
                 Err(message) => notify(t!("vote-failed", reason = message)),
@@ -153,9 +199,7 @@ pub fn PostPress(
             let Some(mut post) = find.run(id) else {
                 return;
             };
-            if let Some(vote) = votes.with_value(|v| v.get(&id).copied()) {
-                Arc::make_mut(&mut post).my_vote = vote;
-            }
+            mine(&mut post);
             match action(side, swipe.get_untracked()) {
                 SwipeAction::Off => {}
                 SwipeAction::Like => like.run(post),
@@ -190,7 +234,14 @@ pub fn PostPress(
 
     let menu = move || {
         let Open { post, href, at } = open.get()?;
-        let liked = post.my_vote > 0;
+        let stars = instance::stars();
+        let liked = has_like(&post, stars);
+        let like_label = move || match (stars, liked) {
+            (false, false) => t!("swipe-like"),
+            (false, true) => t!("press-unlike"),
+            (true, false) => t!("press-star"),
+            (true, true) => t!("press-unstar"),
+        };
         let reverse = offered(&post).then(|| {
             let post = Arc::clone(&post);
             view! {
@@ -260,8 +311,8 @@ pub fn PostPress(
                     })
                 />
                 <MenuItem
-                    icon=Icon::ThumbUp
-                    label=move || if liked { t!("press-unlike") } else { t!("swipe-like") }
+                    icon=if stars { Icon::Star } else { Icon::ThumbUp }
+                    label=like_label
                     on_click=Callback::new(move |()| like.run(Arc::clone(&voted)))
                 />
                 {select}
@@ -315,6 +366,31 @@ fn open_tab(href: &str) {
 
 #[cfg(test)]
 mod tests {
+    use super::*;
+
+    fn post(my_vote: i16, my_stars: u8) -> Post {
+        serde_json::from_value(serde_json::json!({
+            "id": 1, "kind": "image", "mime": "image/png", "file_size": 1, "width": 1,
+            "height": 1, "sha256": "00", "rating": "safe", "score": 0, "my_vote": my_vote,
+            "my_stars": my_stars, "source": null, "tags": [],
+            "created_at": "2026-11-24T00:00:00Z", "deleted": false, "file_url": "/media/x",
+            "thumb_url": null
+        }))
+        .unwrap()
+    }
+
+    #[test]
+    fn the_menus_like_is_five_stars_under_stars() {
+        assert_eq!(like_ballot(&post(0, 0), false), Ballot::Like(1));
+        assert_eq!(like_ballot(&post(1, 0), false), Ballot::Like(0));
+        assert_eq!(like_ballot(&post(0, 0), true), Ballot::Stars(5));
+        assert_eq!(like_ballot(&post(1, 4), true), Ballot::Stars(5));
+        assert_eq!(like_ballot(&post(1, 5), true), Ballot::Stars(0));
+        assert!(has_like(&post(1, 0), false));
+        assert!(!has_like(&post(1, 4), true));
+        assert!(has_like(&post(1, 5), true));
+    }
+
     #[test]
     fn the_menu_opens_for_tiles_under_a_press_area() {
         let source = include_str!("post_menu.rs");

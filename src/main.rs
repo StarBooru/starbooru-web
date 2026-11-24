@@ -9,6 +9,7 @@ mod components;
 mod dom;
 mod files;
 mod install;
+mod instance;
 mod logic;
 mod oidc;
 mod pace;

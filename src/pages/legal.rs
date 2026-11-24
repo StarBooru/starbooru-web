@@ -56,6 +56,7 @@ const PRIVACY: Doc = Doc {
                 || t!("privacy-server-shares"),
                 || t!("privacy-server-sites"),
                 || t!("privacy-server-limits"),
+                || t!("privacy-server-guest-limits"),
             ])],
         },
         Section {
@@ -84,7 +85,10 @@ const PRIVACY: Doc = Doc {
         Section {
             id: "who-can-see-your-posts",
             heading: || t!("privacy-who-sees"),
-            body: &[Block::Text(|| t!("privacy-who-sees-body"))],
+            body: &[
+                Block::Text(|| t!("privacy-who-sees-body")),
+                Block::Text(|| t!("privacy-who-sees-public")),
+            ],
         },
         Section {
             id: "keeping-and-deleting",

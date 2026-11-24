@@ -42,8 +42,8 @@ use crate::logic::gallery::{
     single_tag, sorted, title, to_middle,
 };
 use crate::logic::layout::{self, Layout, TILE_GAP};
-use crate::route;
-use crate::store::{self, GalleryView, Spot};
+use crate::store::{self, GalleryView, Spot, SwipeAction};
+use crate::{instance, route};
 
 thread_local! {
     static LISTS: RefCell<Lists> = RefCell::new(Lists::default());
@@ -240,11 +240,13 @@ fn put_back(
     done();
 }
 
-/// The text of a sort menu entry.
-fn sort_label(order: &str) -> String {
+/// The text of a sort menu entry. Under `stars` a sort by score is by
+/// rating.
+fn sort_label(order: &str, stars: bool) -> String {
     match order {
         "new" => t!("sort-new"),
         "old" => t!("sort-old"),
+        "score" if stars => t!("sort-rating"),
         "score" => t!("sort-score"),
         "updated" => t!("sort-updated"),
         "size" => t!("sort-size"),
@@ -877,10 +879,16 @@ pub fn Gallery() -> impl IntoView {
         let current = posts.with_untracked(|p| p.iter().find(|p| p.id == post.id).cloned());
         super::post::opening(current.unwrap_or(post), shown_q.get_untracked());
     });
-    // What swiping a tile does (Settings › Gestures).
-    let swipe = Memo::new(|_| {
+    // What swiping a tile does (Settings › Gestures). A guest's tiles only
+    // open.
+    let guest = untrack(instance::guest);
+    let swipe = Memo::new(move |_| {
         let prefs = store::prefs();
-        (prefs.swipe_left, prefs.swipe_right)
+        if guest {
+            (SwipeAction::Off, SwipeAction::Off)
+        } else {
+            (prefs.swipe_left, prefs.swipe_right)
+        }
     });
     let tile_view = move |(index, _): (usize, i64)| {
         let post = posts.with_untracked(|p| p.get(index).cloned())?;
@@ -986,13 +994,14 @@ pub fn Gallery() -> impl IntoView {
                             }
                         })
                 }}
-                <Show when=move || q.with(|q| !q.trim().is_empty())>
+                <Show when=move || !guest && q.with(|q| !q.trim().is_empty())>
                     <SaveToggle q=q />
                 </Show>
                 <div class="page-tools">
                     <SortMenu q=q />
                     <ColorMenu q=q />
                     <ViewMenu grid=grid />
+                    <Show when=move || !guest>
                     <button
                         type="button"
                         class="icon-btn select-toggle"
@@ -1016,6 +1025,7 @@ pub fn Gallery() -> impl IntoView {
                             view! { <Ico icon=if selecting.get() { Icon::Close } else { Icon::Check } /> }
                         }}
                     </button>
+                    </Show>
                 </div>
             </div>
             <Show when=move || corrected.with(|c| !c.is_empty())>
@@ -1024,7 +1034,7 @@ pub fn Gallery() -> impl IntoView {
                     exact=Signal::derive(move || route::exact(&shown_q.get()))
                 />
             </Show>
-            <Show when=move || q.with(|q| q.trim().is_empty())>
+            <Show when=move || !guest && q.with(|q| q.trim().is_empty())>
                 <SavedList />
             </Show>
             {move || {
@@ -1051,7 +1061,13 @@ pub fn Gallery() -> impl IntoView {
                 <div class="card empty">
                     <Ico icon=Icon::Gallery size=48 />
                     {move || {
-                        if q.with(|q| q.trim().is_empty()) {
+                        if q.with(|q| q.trim().is_empty()) && guest {
+                            view! {
+                                <h2>{move || t!("gallery-empty")}</h2>
+                                <p class="muted">{move || t!("guest-gallery-empty")}</p>
+                            }
+                                .into_any()
+                        } else if q.with(|q| q.trim().is_empty()) {
                             view! {
                                 <h2>{move || t!("gallery-empty")}</h2>
                                 <p class="muted">{move || t!("gallery-empty-body")}</p>
@@ -1102,16 +1118,18 @@ pub fn Gallery() -> impl IntoView {
             </Show>
         </div>
         <ToTop selecting=selecting />
-        <DropToUpload />
-        <DragSelect
-            masonry=masonry
-            posts=posts
-            tiles=tiles
-            grid=grid
-            selecting=selecting
-            selection=selection
-            pinned=pinned
-        />
+        <Show when=move || !guest>
+            <DropToUpload />
+            <DragSelect
+                masonry=masonry
+                posts=posts
+                tiles=tiles
+                grid=grid
+                selecting=selecting
+                selection=selection
+                pinned=pinned
+            />
+        </Show>
         <PostPress
             find=find
             on_open=open
@@ -1171,7 +1189,7 @@ fn SortMenu(q: Memo<String>) -> impl IntoView {
     let options = Signal::derive(|| {
         SORTS
             .iter()
-            .map(|v| Choice::new(*v, sort_label(v)))
+            .map(|v| Choice::new(*v, sort_label(v, instance::stars())))
             .collect::<Vec<_>>()
     });
     let value = Signal::derive(move || current_sort(&q.get()).to_owned());

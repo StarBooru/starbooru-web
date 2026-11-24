@@ -33,12 +33,13 @@ use super::library::LibraryImportCard;
 use super::share::SharesCard;
 use crate::components::back::BackButton;
 use crate::components::icons::{Ico, Icon};
+use crate::components::invite::SignInCard as SignInInvite;
 use crate::components::legal::note_opener;
 use crate::logic::settings::{
     FIRST, FocusTo, Group, Sections, anchored, focus_after, group_for_anchor, initial, sections,
     version,
 };
-use crate::{api, dom, install, route, store};
+use crate::{api, dom, install, instance, route, store};
 
 /// Where this app's code lives, and the list of everyone whose work it uses.
 const REPOSITORY: &str = env!("CARGO_PKG_REPOSITORY");
@@ -196,16 +197,21 @@ pub fn Settings() -> impl IntoView {
         now
     });
 
+    let guest = untrack(instance::guest);
     let info = LocalResource::new(api::server_info);
     let methods = RwSignal::new(None::<SignInMethods>);
-    spawn_local(async move {
-        if let Ok(found) = api::call(|c| async move { c.sign_in_methods().await }).await {
-            methods.try_set(Some(found));
-        }
-    });
+    if !guest {
+        spawn_local(async move {
+            if let Ok(found) = api::call(|c| async move { c.sign_in_methods().await }).await {
+                methods.try_set(Some(found));
+            }
+        });
+    }
     let shown = Memo::new(move |_| {
         let user = store::session()?.user;
         let info = info.get().flatten();
+        // A switch of mode shows here without waiting for the page again.
+        let info = instance::info().or(info);
         Some(methods.with(|m| sections(&user, info.as_ref(), m.as_ref())))
     });
     let ctx = Ctx {
@@ -215,7 +221,7 @@ pub fn Settings() -> impl IntoView {
         shown,
     };
 
-    let rows = Group::ALL
+    let rows = Group::shown(guest)
         .into_iter()
         .map(|g| view! { <GroupLink group=g current=group open=open /> })
         .collect_view();
@@ -249,7 +255,11 @@ pub fn Settings() -> impl IntoView {
             </nav>
             {move || {
                 let group = open.get();
-                view! { <GroupPage group=group ctx=ctx /> }
+                if guest && !group.for_guests() {
+                    view! { <GuestGroup /> }.into_any()
+                } else {
+                    view! { <GroupPage group=group ctx=ctx /> }.into_any()
+                }
             }}
         </div>
     }
@@ -273,7 +283,12 @@ fn GroupLink(group: Group, current: Memo<Option<Group>>, open: Memo<Group>) -> i
     };
     let name = move || match (group, account()) {
         (Group::Account, Some(name)) => name,
+        (Group::Account, None) => t!("guest-sign-in"),
         _ => group_name(group),
+    };
+    let note = move || match (group, account()) {
+        (Group::Account, None) => t!("guest-account-note"),
+        _ => group_note(group),
     };
     view! {
         <li>
@@ -287,7 +302,7 @@ fn GroupLink(group: Group, current: Memo<Option<Group>>, open: Memo<Group>) -> i
                 {icon}
                 <span class="settings-link-text">
                     <span class="break">{name}</span>
-                    <span class="muted">{move || group_note(group)}</span>
+                    <span class="muted">{note}</span>
                 </span>
                 <Ico icon=Icon::ChevronRight />
             </a>
@@ -305,7 +320,7 @@ fn GroupPage(group: Group, ctx: Ctx) -> impl IntoView {
         Group::Viewing => view! { <ViewingGroup /> }.into_any(),
         Group::Battery => view! { <BatteryGroup /> }.into_any(),
         Group::Library => view! { <LibraryGroup ctx=ctx /> }.into_any(),
-        Group::Sharing => view! { <SharingGroup /> }.into_any(),
+        Group::Sharing => view! { <SharingGroup ctx=ctx /> }.into_any(),
         Group::About => view! { <AboutGroup /> }.into_any(),
     };
     view! {
@@ -324,9 +339,26 @@ fn GroupPage(group: Group, ctx: Ctx) -> impl IntoView {
     }
 }
 
-/// The account, its ways in, its password and the devices signed in. The
-/// shell shows the sign-in screen to no one else, but a session can end
-/// while the page is open.
+/// A group that needs an account, opened by a guest from an address.
+#[component]
+fn GuestGroup() -> impl IntoView {
+    view! {
+        <section class="settings-group" aria-labelledby=TITLE_ID>
+            <div class="titled group-head">
+                <BackButton up=route::SETTINGS />
+                <h2 id=TITLE_ID class="page-title" tabindex="-1">
+                    {move || t!("guest-sign-in")}
+                </h2>
+            </div>
+            <div class="group-cards">
+                <SignInInvite why=Signal::derive(|| t!("guest-page-needs-account")) />
+            </div>
+        </section>
+    }
+}
+
+/// The account, its ways in, its password and the devices signed in. A
+/// guest gets the way to one instead.
 #[component]
 fn AccountGroup(ctx: Ctx) -> impl IntoView {
     let provider = Signal::derive(move || ctx.info.get().flatten().and_then(|i| i.oidc));
@@ -335,17 +367,23 @@ fn AccountGroup(ctx: Ctx) -> impl IntoView {
             .then(|| view! { <SignInCard methods=ctx.methods provider=provider /> })
     };
     move || {
-        store::signed_in().then(|| {
-            view! {
-                <AccountCard info=ctx.info />
-                {sign_in}
-                <PasswordCard
-                    methods=ctx.methods
-                    on_changed=Callback::new(move |()| ctx.sessions_version.update(|v| *v += 1))
-                />
-                <SessionsCard version=ctx.sessions_version />
-            }
-        })
+        if instance::guest() {
+            return view! { <SignInInvite why=Signal::derive(|| t!("guest-account-why")) /> }
+                .into_any();
+        }
+        store::signed_in()
+            .then(|| {
+                view! {
+                    <AccountCard info=ctx.info />
+                    {sign_in}
+                    <PasswordCard
+                        methods=ctx.methods
+                        on_changed=Callback::new(move |()| ctx.sessions_version.update(|v| *v += 1))
+                    />
+                    <SessionsCard version=ctx.sessions_version />
+                }
+            })
+            .into_any()
     }
 }
 
@@ -374,13 +412,15 @@ fn LibraryGroup(ctx: Ctx) -> impl IntoView {
     }
 }
 
-/// The links shared, then the API keys.
+/// The links shared, then the API keys. A public server shares a post by
+/// its address, and has no links to list.
 #[component]
-fn SharingGroup() -> impl IntoView {
+fn SharingGroup(ctx: Ctx) -> impl IntoView {
+    let shares = move || ctx.shows(|s| s.shares).then(|| view! { <SharesCard /> });
     move || {
         store::signed_in().then(|| {
             view! {
-                <SharesCard />
+                {shares}
                 <ApiKeysCard />
             }
         })
@@ -518,7 +558,7 @@ mod tests {
             (Group::Viewing, "<ViewingGroup />"),
             (Group::Battery, "<BatteryGroup />"),
             (Group::Library, "<LibraryGroup ctx=ctx />"),
-            (Group::Sharing, "<SharingGroup />"),
+            (Group::Sharing, "<SharingGroup ctx=ctx />"),
             (Group::About, "<AboutGroup />"),
         ] {
             assert!(

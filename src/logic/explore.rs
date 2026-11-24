@@ -1,13 +1,59 @@
-//! Explore's rules that need no browser: the window it asks for, what a
-//! shuffle searches, and the years of the posts added on this day.
+//! Explore's rules that need no browser: the window it asks for, the
+//! windows a public server's Trending offers and how they read, the searches
+//! its sections lead to, what a shuffle searches, and the years of the posts
+//! added on this day.
 
 use chrono::{DateTime, Datelike, Utc};
-use starbooru_core::{Order, with_order};
+use starbooru_core::{DEFAULT_EXPLORE_DAYS, MAX_EXPLORE_DAYS, Order, with_order};
 
-/// The window sent with every request, in days. Only Trending and Popular
-/// tags read it, and a private booru shows neither, so the shortest window
-/// leaves the server the least to count.
+use super::tags::include;
+
+/// The window a private server is asked for, in days. Only Trending and
+/// Popular tags read it, and a private server leaves both empty, so the
+/// shortest window leaves it the least to count.
 pub const DAYS: u32 = 1;
+
+/// The windows a public server's Trending offers, in days.
+pub const WINDOWS: [u32; 4] = [1, 7, 30, 365];
+
+/// The window in an address's `days`: one the server takes, or a week.
+pub fn window(days: Option<&str>) -> u32 {
+    days.and_then(|d| d.trim().parse::<u32>().ok())
+        .filter(|d| (1..=MAX_EXPLORE_DAYS).contains(d))
+        .unwrap_or(DEFAULT_EXPLORE_DAYS)
+}
+
+/// The window to ask for: the address's on a public server, else the
+/// shortest.
+pub fn days_asked(public: bool, days: Option<&str>) -> u32 {
+    if public { window(days) } else { DAYS }
+}
+
+/// How a window reads: "today", "this week", … or so many days.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Span {
+    Today,
+    Week,
+    Month,
+    Year,
+    Days(u32),
+}
+
+pub fn span(days: u32) -> Span {
+    match days {
+        1 => Span::Today,
+        7 => Span::Week,
+        30 => Span::Month,
+        365 => Span::Year,
+        n => Span::Days(n),
+    }
+}
+
+/// The gallery search a popular tag leads to: Explore's search narrowed to
+/// it.
+pub fn tag_search(q: &str, tag: &str) -> String {
+    include(&tidy(q), tag)
+}
 
 /// Random picks a shuffle asks for: as many as the server sends at first.
 pub const RANDOM_COUNT: u32 = 12;
@@ -51,9 +97,45 @@ mod tests {
     }
 
     #[test]
-    fn the_window_is_the_shortest_the_server_takes() {
+    fn a_private_server_is_asked_for_the_shortest_window() {
         assert_eq!(DAYS, 1);
         assert!((1..=MAX_EXPLORE_DAYS).contains(&DAYS));
+        assert_eq!(days_asked(false, Some("30")), DAYS);
+        assert_eq!(days_asked(true, Some("30")), 30);
+        assert_eq!(days_asked(true, None), DEFAULT_EXPLORE_DAYS);
+    }
+
+    #[test]
+    fn the_window_comes_from_the_address_or_is_a_week() {
+        assert_eq!(window(None), 7);
+        assert_eq!(window(Some("30")), 30);
+        assert_eq!(window(Some(" 365 ")), 365);
+        for bad in ["0", "366", "-1", "week", ""] {
+            assert_eq!(window(Some(bad)), DEFAULT_EXPLORE_DAYS, "{bad}");
+        }
+        for days in WINDOWS {
+            assert_eq!(window(Some(&days.to_string())), days);
+        }
+    }
+
+    #[test]
+    fn each_window_reads_as_a_span() {
+        assert_eq!(span(1), Span::Today);
+        assert_eq!(span(7), Span::Week);
+        assert_eq!(span(30), Span::Month);
+        assert_eq!(span(365), Span::Year);
+        assert_eq!(span(14), Span::Days(14));
+    }
+
+    #[test]
+    fn a_popular_tag_searches_within_explores_search() {
+        assert_eq!(tag_search("", "fractal"), "fractal");
+        assert_eq!(
+            tag_search(" rating:safe ", "fractal"),
+            "rating:safe fractal"
+        );
+        // A tag left out by the search is wanted instead, not both.
+        assert_eq!(tag_search("cat -fractal", "fractal"), "cat fractal");
     }
 
     #[test]

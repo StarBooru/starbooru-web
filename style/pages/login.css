@@ -37,3 +37,7 @@
 @media (prefers-reduced-motion: reduce) {
   .aurora { animation: none; }
 }
+
+/* A guest came from a page: the way back to it, at the card's corner. */
+.login-back { position: absolute; top: 12px; left: 12px; }
+.login-why { margin-bottom: 16px; }

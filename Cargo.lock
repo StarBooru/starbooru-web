@@ -2307,8 +2307,8 @@ checksum = "6ce2be8dc25455e1f91df71bfa12ad37d7af1092ae736f3a6cd0e37bc7810596"
 
 [[package]]
 name = "starbooru-client"
-version = "0.2.0"
-source = "git+https://github.com/StarBooru/starbooru-server?tag=v0.2.0#0446d91097769b8094978ab8fd6db3ad59d9c454"
+version = "0.3.0"
+source = "git+https://github.com/StarBooru/starbooru-server?tag=v0.3.0#525eec6a9c4969d8ff62b4aceca43f825944b58e"
 dependencies = [
  "bytes",
  "chrono",
@@ -2327,8 +2327,8 @@ dependencies = [
 
 [[package]]
 name = "starbooru-core"
-version = "0.2.0"
-source = "git+https://github.com/StarBooru/starbooru-server?tag=v0.2.0#0446d91097769b8094978ab8fd6db3ad59d9c454"
+version = "0.3.0"
+source = "git+https://github.com/StarBooru/starbooru-server?tag=v0.3.0#525eec6a9c4969d8ff62b4aceca43f825944b58e"
 dependencies = [
  "chrono",
  "infer",

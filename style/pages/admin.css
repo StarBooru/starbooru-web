@@ -208,3 +208,92 @@ pre.command {
   .stat, .bar, .account-tools { animation: none; }
   .update-step:not(:last-child)::after { transition: none; }
 }
+
+/* ---------- mode and votes (src/pages/admin/modes.rs) ---------- */
+
+/* Each choice a picture: a door shut with a lock, or open with people inside
+   and guests looking in; a thumb each way, or five stars. Picking the other
+   opens the switch under the two. */
+.mode-picks { margin-bottom: 4px; }
+.mode-picture { position: absolute; inset: 0; width: 100%; height: 100%; }
+.mp-wall { fill: var(--surface-2); }
+.mp-floor { fill: var(--surface-3); }
+.mp-frame { fill: var(--outline); }
+.mp-door { fill: var(--primary-container); stroke: var(--primary); stroke-width: 1.5; }
+.mp-inside { fill: oklch(from var(--primary) l c h / 0.22); }
+.mp-knob { fill: var(--primary); }
+.mp-lock { fill: var(--primary); }
+.mp-lock-arc { fill: none; stroke: var(--primary); stroke-width: 2.4; stroke-linecap: round; }
+.mp-person { fill: var(--on-surface-2); }
+.mp-guest { fill: none; stroke: var(--primary); stroke-width: 1.6; stroke-dasharray: 3 2.2; }
+/* The one in force comes alive: guests walk up, the lock settles. */
+.pick.on .mp-guest { animation: guest-in var(--slow) var(--ease-spring) both; }
+.pick.on .mp-guest + .mp-guest { animation-delay: 80ms; }
+.pick.on .mp-lock, .pick.on .mp-lock-arc { animation: lock-in var(--slow) var(--ease-spring) both; transform-origin: 60px 49px; }
+@keyframes guest-in { from { opacity: 0; transform: translateX(12px); } }
+@keyframes lock-in { from { transform: translateY(-5px) scale(0.8); } }
+/* The one being switched to: a dashed ring, as the switch isn't done. */
+.pick.aimed:not(.on) .pick-picture { box-shadow: none; outline: 2px dashed var(--primary); outline-offset: 3px; }
+.pick:disabled { cursor: default; }
+.pick:disabled:not(.on) .pick-picture { opacity: 0.5; }
+.pick:disabled .pick-picture { transform: none; }
+
+.score-picture {
+  position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; gap: 8px;
+  background: var(--surface-2); color: var(--on-surface-2); font-weight: 700; font-variant-numeric: tabular-nums;
+}
+.sp-like { color: var(--primary); }
+.sp-stars { display: flex; gap: 1px; color: var(--primary); }
+.score-picture[data-kind="stars"] { flex-direction: column; gap: 4px; }
+.pick.on .sp-like .icon { animation: pop var(--slow) var(--ease-spring); }
+.pick.on .sp-stars .icon { animation: pop var(--slow) var(--ease-spring) both; }
+.pick.on .sp-stars .icon:nth-child(2) { animation-delay: 40ms; }
+.pick.on .sp-stars .icon:nth-child(3) { animation-delay: 80ms; }
+.pick.on .sp-stars .icon:nth-child(4) { animation-delay: 120ms; }
+.pick.on .sp-stars .icon:nth-child(5) { animation-delay: 160ms; }
+
+/* A public server counts likes: the choice is greyed and says why beside a
+   small picture of that mode. */
+.scores-locked { display: flex; align-items: center; gap: 12px; margin: 12px 0 0; font-size: 14px; color: var(--on-surface-2); }
+.scores-locked-picture { position: relative; flex: none; width: 56px; height: 42px; overflow: hidden; border-radius: var(--radius-s); }
+
+/* The switch opens under the choices, where the eye already is. */
+.mode-panel {
+  display: grid; gap: 12px; margin-top: 16px; padding: 16px; border-radius: var(--radius-m);
+  background: var(--surface-2); animation: fade-up var(--med) var(--ease);
+}
+.mode-panel > * { margin: 0; }
+.mode-panel-title { font-size: 16px; font-weight: 600; }
+.mode-panel .hint { margin: -4px 0 0; }
+.mode-panel .switch-row { margin: 0 -4px; padding: 8px 4px; }
+.mode-changes { list-style: none; display: grid; gap: 8px; padding: 0; }
+.mode-change { display: flex; align-items: center; gap: 12px; padding: 10px 12px; border-radius: var(--radius-s); background: var(--surface); }
+.mode-change-icon { position: relative; flex: none; display: grid; place-items: center; width: 36px; height: 36px; border-radius: 50%; background: var(--primary-container); color: var(--on-primary-container); }
+.mode-change.gone .mode-change-icon { background: var(--danger-container); color: var(--on-danger-container); }
+/* Struck through: these go for good. */
+.mode-change-x { position: absolute; left: 7px; right: 7px; top: 50%; height: 2px; border-radius: 1px; background: currentColor; transform: rotate(-45deg); }
+.mode-change-text { display: grid; gap: 2px; min-width: 0; font-size: 14px; }
+.mode-change-text strong { font-weight: 600; }
+.mode-nothing { display: flex; align-items: center; gap: 8px; font-size: 14px; color: var(--ok); }
+.mode-warning { display: flex; align-items: flex-start; gap: 8px; padding: 10px 12px; border-radius: var(--radius-s); background: var(--danger-container); color: var(--on-danger-container); font-size: 14px; font-weight: 600; }
+.mode-warning .icon { flex: none; }
+.mode-refused { flex-wrap: wrap; gap: 8px 12px; }
+.mode-progress { display: grid; gap: 12px; }
+.mode-progress .hint { margin: 0; }
+/* Something is happening while the server works. */
+.mode-progress-bar { position: relative; height: 4px; overflow: hidden; border-radius: 2px; background: var(--surface-3); }
+.mode-progress-bar::after {
+  content: ""; position: absolute; inset: 0 auto 0 0; width: 30%; border-radius: 2px; background: var(--primary);
+  animation: meter-sweep 1.4s var(--ease) infinite;
+}
+.mode-done { background: var(--primary-container); color: var(--on-primary-container); }
+.mode-done .mode-change { background: var(--surface); color: var(--on-surface); }
+.mode-done-head { display: flex; align-items: center; gap: 12px; font-size: 16px; }
+.mode-done-mark { display: grid; place-items: center; width: 36px; height: 36px; border-radius: 50%; background: var(--primary); color: var(--on-primary); animation: pop var(--slow) var(--ease-spring); }
+.mode-backup-link { display: flex; align-items: center; gap: 8px; font-size: 14px; font-weight: 600; color: var(--on-primary-container); text-decoration: none; }
+.mode-backup-link:hover { text-decoration: underline; }
+@media (prefers-reduced-motion: reduce) {
+  .mode-progress-bar::after { width: 100%; opacity: 0.5; animation: none; }
+}
+.app[data-saver="on"] .mode-progress-bar::after { width: 100%; opacity: 0.5; animation: none; }
+.app[data-effects="lite"] :is(.mp-guest, .mp-lock, .mp-lock-arc, .sp-like .icon, .sp-stars .icon, .mode-done-mark) { animation: none; }

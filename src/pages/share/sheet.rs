@@ -1,7 +1,8 @@
 //! The sheet that makes a link for one post or a selection: an optional
 //! title and how long it works, for a set number of days or until a day
 //! picked on a calendar, then the link to copy or hand to the browser's own
-//! share sheet.
+//! share sheet. A public server shares a post by its own address, which
+//! anyone can open: there the sheet holds the addresses at once.
 
 use std::time::Duration;
 
@@ -14,8 +15,7 @@ use starbooru_client::ClientError;
 use starbooru_core::share::MAX_SHARE_TITLE_CHARS;
 use wasm_bindgen::JsCast;
 
-use super::LinkField;
-use crate::api;
+use super::{LinkField, ListField};
 use crate::components::banner::ErrorBanner;
 use crate::components::focus::hold_focus;
 use crate::components::icons::{Ico, Icon};
@@ -24,14 +24,23 @@ use crate::dom;
 use crate::logic::share::{
     DEFAULT_LIFETIME, LIFETIMES, PICK_DAY, PickError, day_value, ends_after, ends_text, first_day,
     first_pick, last_day, lifetime_days, lifetime_label, lifetime_value, new_share,
-    pick_error_text, picked_days, share_error_text, share_url,
+    pick_error_text, picked_days, post_url, post_urls, share_error_text, share_url,
 };
+use crate::{api, instance};
 
 /// A sheet over the page that makes a link for `post_ids`, in that order,
 /// and then shows it.
 #[component]
 pub fn ShareSheet(post_ids: Vec<i64>, on_close: Callback<()>) -> impl IntoView {
     let count = post_ids.len();
+    // The posts' own addresses, on a public server.
+    let addresses = untrack(instance::public)
+        .then(api::client)
+        .flatten()
+        .map(|c| match post_ids.as_slice() {
+            [one] => Address::One(post_url(&c, *one)),
+            many => Address::Many(post_urls(&c, many)),
+        });
     let ids = StoredValue::new(post_ids);
     let title = RwSignal::new(String::new());
     let lifetime = RwSignal::new(DEFAULT_LIFETIME);
@@ -304,6 +313,28 @@ pub fn ShareSheet(post_ids: Vec<i64>, on_close: Callback<()>) -> impl IntoView {
         }
     };
 
+    let by_address = addresses.is_some();
+    let heading = move || {
+        if by_address {
+            t!("share-address-title", count = count)
+        } else {
+            t!("share-title", count = count)
+        }
+    };
+    let lead = move || {
+        if by_address {
+            t!("share-address-lead", count = count)
+        } else {
+            t!("share-lead", count = count)
+        }
+    };
+    let body = move || match addresses.clone() {
+        Some(address) => by_address_view(address, on_close).into_any(),
+        None => match made.get() {
+            Some(link) => ready(link).into_any(),
+            None => form().into_any(),
+        },
+    };
     view! {
         <div
             class="sheet-scrim"
@@ -327,7 +358,7 @@ pub fn ShareSheet(post_ids: Vec<i64>, on_close: Callback<()>) -> impl IntoView {
             >
                 <div class="sheet-head">
                     <h2 id="share-sheet-title" class="card-title">
-                        {move || t!("share-title", count = count)}
+                        {heading}
                     </h2>
                     <button
                         type="button"
@@ -339,19 +370,70 @@ pub fn ShareSheet(post_ids: Vec<i64>, on_close: Callback<()>) -> impl IntoView {
                         <Ico icon=Icon::Close />
                     </button>
                 </div>
-                <p class="muted hint">{move || t!("share-lead", count = count)}</p>
+                <p class="muted hint">{lead}</p>
                 {move || error.get().map(|message| view! { <ErrorBanner message=message /> })}
-                {move || match made.get() {
-                    Some(link) => ready(link).into_any(),
-                    None => form().into_any(),
-                }}
+                {body}
             </div>
+        </div>
+    }
+}
+
+/// What a public server shares: a post's address, or several.
+#[derive(Clone, Debug, PartialEq, Eq)]
+enum Address {
+    One(String),
+    Many(String),
+}
+
+/// The addresses to copy, and to hand to the browser's share sheet where
+/// it has one.
+fn by_address_view(address: Address, on_close: Callback<()>) -> impl IntoView {
+    let native = dom::can_share().then(|| {
+        let address = address.clone();
+        view! {
+            <button
+                class="btn tonal"
+                type="button"
+                on:click=move |_| {
+                    let address = address.clone();
+                    spawn_local(async move {
+                        match address {
+                            Address::One(url) => dom::share("", &url).await,
+                            Address::Many(list) => dom::share_text("", &list).await,
+                        }
+                    });
+                }
+            >
+                <Ico icon=Icon::Share />
+                {move || t!("share-native")}
+            </button>
+        }
+    });
+    let field = match address {
+        Address::One(url) => view! { <LinkField url=url focus=true /> }.into_any(),
+        Address::Many(list) => view! { <ListField text=list /> }.into_any(),
+    };
+    view! {
+        <div class="share-address">{field}</div>
+        <div class="row-end">
+            {native}
+            <button class="btn" type="button" on:click=move |_| on_close.run(())>
+                {move || t!("share-done")}
+            </button>
         </div>
     }
 }
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn a_public_server_shares_the_posts_own_address() {
+        let source = include_str!("sheet.rs");
+        assert!(source.contains("untrack(instance::public)"));
+        assert!(source.contains("[one] => Address::One(post_url(&c, *one))"));
+        assert!(source.contains("dom::share_text(\"\", &list)"));
+    }
+
     #[test]
     fn the_sheet_is_a_plain_card_whose_list_opens_upwards() {
         let source = include_str!("sheet.rs");

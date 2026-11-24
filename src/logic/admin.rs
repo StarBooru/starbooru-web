@@ -10,8 +10,8 @@ use starbooru_core::admin::{MAX_BACKUP_DAYS, MAX_BACKUP_KEEP, MAX_TRASH_DAYS};
 use starbooru_core::ai::MAX_AI_FIELD_CHARS;
 use starbooru_core::{
     AdminUser, AiAdminStatus, AiGeneralUpdate, AiMode, AiModelOption, AiPreset, AiTool,
-    AiToolSettings, AiToolStatus, AiToolUpdate, Backup, BackupSchedule, DayCount, Hardware,
-    ServerSettings, clean_general_update, clean_settings, clean_tool_update,
+    AiToolSettings, AiToolStatus, AiToolUpdate, Backup, BackupSchedule, DayCount, Hardware, Mode,
+    ScoreKind, ServerSettings, clean_general_update, clean_settings, clean_tool_update,
 };
 
 use super::library::ago;
@@ -232,23 +232,29 @@ pub struct SettingsCheck {
 }
 
 /// The name is 1–64 characters once its spaces are collapsed; the recycle
-/// bin keeps posts 0–3650 days.
+/// bin keeps posts 0–3650 days. The mode and the score kind go back as they
+/// were read (`kept`): each has its own way to change.
 pub fn check_settings(
     name: &str,
     allow_registration: bool,
     trash_days: &str,
     auto_meta_tags: bool,
+    kept: (Mode, ScoreKind),
 ) -> SettingsCheck {
     let days = trash_days
         .trim()
         .parse::<u32>()
         .ok()
         .filter(|d| *d <= MAX_TRASH_DAYS);
+    let (mode, score_kind) = kept;
     let settings = |trash_days| ServerSettings {
         name: name.to_owned(),
         allow_registration,
         trash_days,
         auto_meta_tags,
+        mode,
+        score_kind,
+        changes: Vec::new(),
     };
     // The days don't matter to the name's check.
     let name_ok = clean_settings(&settings(0)).is_ok();
@@ -709,7 +715,8 @@ mod tests {
 
     #[test]
     fn the_settings_form_checks_what_the_server_checks() {
-        let ok = check_settings("  My   booru ", true, " 30 ", false);
+        let kept = (Mode::Private, ScoreKind::Stars);
+        let ok = check_settings("  My   booru ", true, " 30 ", false, kept);
         assert!(ok.name_ok && ok.days_ok);
         assert_eq!(
             ok.request,
@@ -718,18 +725,32 @@ mod tests {
                 allow_registration: true,
                 trash_days: 30,
                 auto_meta_tags: false,
+                mode: Mode::Private,
+                score_kind: ScoreKind::Stars,
+                changes: Vec::new(),
             })
         );
-        assert!(check_settings("x", false, "0", true).request.is_some());
-        assert!(check_settings("x", false, "3650", true).request.is_some());
-        let long = check_settings(&"n".repeat(65), true, "0", true);
+        // A public server's mode goes back as it is, or the server refuses.
+        let public = check_settings("x", false, "0", true, (Mode::Public, ScoreKind::Likes));
+        assert_eq!(public.request.map(|r| r.mode), Some(Mode::Public));
+        assert!(
+            check_settings("x", false, "0", true, kept)
+                .request
+                .is_some()
+        );
+        assert!(
+            check_settings("x", false, "3650", true, kept)
+                .request
+                .is_some()
+        );
+        let long = check_settings(&"n".repeat(65), true, "0", true, kept);
         assert!(!long.name_ok && long.days_ok && long.request.is_none());
-        assert!(check_settings(&"é".repeat(64), true, "0", true).name_ok);
-        let empty = check_settings("   ", true, "1", true);
+        assert!(check_settings(&"é".repeat(64), true, "0", true, kept).name_ok);
+        let empty = check_settings("   ", true, "1", true, kept);
         assert!(!empty.name_ok && empty.request.is_none());
-        assert!(!check_settings("a\u{7}b", true, "1", true).name_ok);
+        assert!(!check_settings("a\u{7}b", true, "1", true, kept).name_ok);
         for days in ["3651", "-1", "", "ten", "1.5"] {
-            let check = check_settings("x", true, days, true);
+            let check = check_settings("x", true, days, true, kept);
             assert!(
                 check.name_ok && !check.days_ok && check.request.is_none(),
                 "{days}"

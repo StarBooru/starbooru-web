@@ -932,9 +932,12 @@ fn update_history(change: impl FnOnce(&mut History, &str) -> bool) {
     }
 }
 
-/// The viewer opened post `id`: it leads the history.
+/// The viewer opened post `id`: it leads the history. A guest has no
+/// account to keep one for.
 pub fn opened_post(id: i64) {
-    update_history(|h, owner| h.open(owner, id));
+    if session_untracked().is_some() {
+        update_history(|h, owner| h.open(owner, id));
+    }
 }
 
 /// The posts this account opened lately, the latest first.
@@ -1835,6 +1838,9 @@ mod tests {
         assert_eq!(opened_posts(), Vec::<i64>::new());
         // An Undo that comes after signing out puts nothing back.
         assert_eq!(put_back_opened(&cleared), None);
+        assert_eq!(HISTORY.with(|h| h.get_untracked()), History::default());
+        // Browsing as a guest keeps none.
+        opened_post(9);
         assert_eq!(HISTORY.with(|h| h.get_untracked()), History::default());
     }
 

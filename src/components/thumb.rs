@@ -22,7 +22,7 @@ use crate::logic::layout::Place;
 use crate::logic::swipe::Side;
 use crate::logic::viewer::format_duration;
 use crate::store::SwipeAction;
-use crate::{api, dom, power};
+use crate::{api, dom, instance, power};
 
 /// Where a tile goes and how big it is, for `.masonry .thumb` in
 /// `style/pages/gallery.css`: so many tile widths and so many gaps.
@@ -41,10 +41,11 @@ pub(crate) fn place_style(p: Place) -> String {
     )
 }
 
-/// The icon a swipe uncovers.
+/// The icon a swipe uncovers: under stars, a like gives five.
 fn swipe_icon(action: SwipeAction) -> Icon {
     match action {
         SwipeAction::Off => Icon::Close,
+        SwipeAction::Like if untrack(instance::stars) => Icon::Star,
         SwipeAction::Like => Icon::ThumbUp,
         SwipeAction::Select => Icon::Check,
         SwipeAction::Share => Icon::Share,

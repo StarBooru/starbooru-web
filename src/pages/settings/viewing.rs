@@ -7,6 +7,7 @@ use leptos::prelude::*;
 use super::controls::{pick, switch_row};
 use crate::components::icons::{Ico, Icon};
 use crate::components::select::{Choice, Select};
+use crate::instance;
 use crate::store::{self, Hand, Prefs, SwipeAction};
 
 fn hand_label(hand: Hand) -> String {
@@ -17,9 +18,11 @@ fn hand_label(hand: Hand) -> String {
     }
 }
 
+/// What a swipe does in words; under stars, a like gives five.
 fn swipe_label(action: SwipeAction) -> String {
     match action {
         SwipeAction::Off => t!("swipe-off"),
+        SwipeAction::Like if instance::stars() => t!("press-star"),
         SwipeAction::Like => t!("swipe-like"),
         SwipeAction::Select => t!("swipe-select"),
         SwipeAction::Share => t!("share-button"),
@@ -32,6 +35,7 @@ fn swipe_label(action: SwipeAction) -> String {
 fn swipe_icon(action: SwipeAction) -> Icon {
     match action {
         SwipeAction::Off => Icon::Close,
+        SwipeAction::Like if instance::stars() => Icon::Star,
         SwipeAction::Like => Icon::ThumbUp,
         SwipeAction::Select => Icon::Check,
         SwipeAction::Share => Icon::Share,

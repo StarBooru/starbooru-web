@@ -1,7 +1,8 @@
-//! The way to the server: one [`Client`] for the signed-in session, and what
-//! to say when a request fails. Pages make their requests through [`call`],
-//! so a session the server no longer knows signs out in one place. Answers
-//! that several pages ask for again and again are kept a little while.
+//! The way to the server: one [`Client`] for the signed-in session, or one
+//! without a token for a guest on a server that takes them, and what to say
+//! when a request fails. Pages make their requests through [`call`], so a
+//! session the server no longer knows signs out in one place. Answers that
+//! several pages ask for again and again are kept a little while.
 
 use std::cell::RefCell;
 use std::future::Future;
@@ -10,6 +11,7 @@ use chrono::{DateTime, Utc};
 use starbooru_client::{Client, ClientError};
 use starbooru_core::{AiStatus, RemoteSite, RemoteTagQuery, ServerInfo};
 
+use crate::instance;
 use crate::logic::search::{Answers, Hint, SUGGESTIONS};
 use crate::logic::upload::human_size;
 use crate::store::{self, Session};
@@ -23,28 +25,67 @@ thread_local! {
     static REMOTE_HINTS: RefCell<Answers<Hint>> = RefCell::new(Answers::default());
 }
 
-/// The client for the signed-in session, or `None` when no one is.
-pub fn client() -> Option<Client> {
-    let session = store::session_untracked()?;
-    client_for(&session)
+/// Whom the requests are for: the account signed in, or a guest on a server
+/// that lets people browse without one.
+#[derive(Clone, Debug, PartialEq)]
+enum Who {
+    Member(Session),
+    Guest(String),
 }
 
-fn client_for(session: &Session) -> Option<Client> {
+impl Who {
+    fn now() -> Option<Who> {
+        match store::session_untracked() {
+            Some(session) => Some(Who::Member(session)),
+            None => instance::guest_server().map(Who::Guest),
+        }
+    }
+
+    fn server(&self) -> &str {
+        match self {
+            Who::Member(session) => &session.server,
+            Who::Guest(server) => server,
+        }
+    }
+
+    fn token(&self) -> &str {
+        match self {
+            Who::Member(session) => &session.token,
+            Who::Guest(_) => "",
+        }
+    }
+
+    /// Whose an answer is: one account, or the guests, on one server.
+    fn owner(&self) -> String {
+        match self {
+            Who::Member(session) => owner(session),
+            Who::Guest(server) => format!("{server}|guest"),
+        }
+    }
+}
+
+/// The client for the signed-in session, or a guest's, or `None` when
+/// there's neither.
+pub fn client() -> Option<Client> {
+    client_of(&Who::now()?)
+}
+
+fn client_of(who: &Who) -> Option<Client> {
+    cached(who.server(), who.token())
+}
+
+/// The client for `server` with `token`, an empty one being a guest's.
+fn cached(server: &str, token: &str) -> Option<Client> {
     CLIENT.with_borrow_mut(|cache| {
-        if let Some((server, token, client)) = cache.as_ref()
-            && *server == session.server
-            && *token == session.token
+        if let Some((kept_server, kept_token, client)) = cache.as_ref()
+            && kept_server == server
+            && kept_token == token
         {
             return Some(client.clone());
         }
-        let client = Client::new(&session.server)
-            .ok()?
-            .with_token(Some(session.token.clone()));
-        *cache = Some((
-            session.server.clone(),
-            session.token.clone(),
-            client.clone(),
-        ));
+        let token = (!token.is_empty()).then(|| token.to_owned());
+        let client = Client::new(server).ok()?.with_token(token.clone());
+        *cache = Some((server.to_owned(), token.unwrap_or_default(), client.clone()));
         Some(client)
     })
 }
@@ -53,6 +94,7 @@ fn client_for(session: &Session) -> Option<Client> {
 pub fn forget() {
     CLIENT.with_borrow_mut(|cache| *cache = None);
     forget_server_answers();
+    instance::forget();
     forget_tags();
     REMOTE_HINTS.with_borrow_mut(|k| *k = Answers::default());
 }
@@ -120,18 +162,30 @@ where
         code: None,
         retry_after: None,
     };
-    let Some(session) = store::session_untracked() else {
+    let Some(who) = Who::now() else {
         return Err(refused(t!("error-session-expired")));
     };
-    let Some(client) = client_for(&session) else {
+    let Some(client) = client_of(&who) else {
         return Err(refused(t!("error-bad-address")));
     };
     request(client).await.map_err(|e| {
-        if e.is_unauthorized() {
-            expire(&session.token);
-        }
+        let message = match &who {
+            Who::Member(session) => {
+                if e.is_unauthorized() {
+                    expire(&session.token);
+                }
+                error_text(&e, &session.server)
+            }
+            Who::Guest(server) => {
+                // The server may have stopped taking guests.
+                if e.is_unauthorized() {
+                    instance::recheck();
+                }
+                guest_error_text(&e, server)
+            }
+        };
         Refused {
-            message: error_text(&e, &session.server),
+            message,
             missing: is_missing(&e),
             status: match &e {
                 ClientError::Api { status, .. } => Some(*status),
@@ -160,6 +214,9 @@ fn expire(token: &str) {
     if current {
         store::set_sign_in_note(t!("error-session-expired"));
         store::forget_session();
+        // On a server that takes guests, the sign-in screen still comes
+        // first, to say why.
+        instance::ask_sign_in(None);
     }
 }
 
@@ -244,15 +301,53 @@ pub fn error_text(e: &ClientError, server: &str) -> String {
     }
 }
 
+/// A guest's failed request in words: a rate limit says to slow down, and
+/// what needs an account says so.
+fn guest_error_text(e: &ClientError, server: &str) -> String {
+    match e {
+        ClientError::RateLimited { retry_after } => slow_down_text(*retry_after),
+        e if e.is_unauthorized() => t!("guest-needs-account"),
+        e => error_text(e, server),
+    }
+}
+
+/// How long a guest who asked too fast waits, as said.
+#[derive(Debug, PartialEq, Eq)]
+enum Wait {
+    Seconds(u64),
+    Minutes(u64),
+    Unknown,
+}
+
+fn wait_of(retry_after: Option<u64>) -> Wait {
+    match retry_after {
+        None => Wait::Unknown,
+        Some(s) if s < 60 => Wait::Seconds(s.max(1)),
+        Some(s) => Wait::Minutes(s.div_ceil(60)),
+    }
+}
+
+/// Too many requests without an account: slow down, when to try again, and
+/// that an account has no such limit.
+fn slow_down_text(retry_after: Option<u64>) -> String {
+    match wait_of(retry_after) {
+        Wait::Seconds(seconds) => t!("error-slow-down-seconds", seconds = seconds),
+        Wait::Minutes(minutes) => t!("error-slow-down-minutes", minutes = minutes),
+        Wait::Unknown => t!("error-slow-down"),
+    }
+}
+
 /// What the server offers (`GET /info`), asked at most every two minutes.
+/// What it says goes to the views that follow the mode (`instance.rs`).
 pub async fn server_info() -> Option<ServerInfo> {
-    let session = store::session_untracked()?;
-    let owner = owner(&session);
+    let who = Who::now()?;
+    let owner = who.owner();
     if let Some(known) = SERVER_INFO.with_borrow(|kept| kept.get(&owner, Utc::now())) {
         return Some(known);
     }
     let info = call(|c| async move { c.info().await }).await.ok()?;
     SERVER_INFO.with_borrow_mut(|kept| kept.put(owner, Utc::now(), info.clone()));
+    instance::learn(who.server(), info.clone());
     Some(info)
 }
 
@@ -545,6 +640,47 @@ mod tests {
     }
 
     #[test]
+    fn a_guest_who_asks_too_fast_hears_to_slow_down_and_when() {
+        assert_eq!(wait_of(None), Wait::Unknown);
+        assert_eq!(wait_of(Some(0)), Wait::Seconds(1));
+        assert_eq!(wait_of(Some(45)), Wait::Seconds(45));
+        assert_eq!(wait_of(Some(60)), Wait::Minutes(1));
+        assert_eq!(wait_of(Some(61)), Wait::Minutes(2));
+        let text = |retry_after| {
+            guest_error_text(
+                &ClientError::RateLimited { retry_after },
+                "https://b.example",
+            )
+        };
+        assert_eq!(
+            text(Some(45)),
+            "That's a lot of browsing in a short time for this server. Slow down, and try again in 45 seconds, or sign in to go on now."
+        );
+        assert!(text(Some(1)).contains("in 1 second,"));
+        assert!(text(Some(120)).contains("in 2 minutes,"));
+        assert!(text(None).contains("Slow down"));
+        // What needs an account says so, and the rest as for anyone.
+        assert_eq!(
+            guest_error_text(&api(401, "unauthorized", "x"), "https://b.example"),
+            "Sign in to see this. This server shows it only to people with an account."
+        );
+        assert_eq!(
+            guest_error_text(&api(404, "not_found", "no such post"), "x"),
+            "no such post"
+        );
+    }
+
+    #[test]
+    fn a_guest_has_a_client_without_a_token() {
+        let guest = Who::Guest("https://booru.example/".into());
+        let client = client_of(&guest).unwrap();
+        assert_eq!(client.base_url(), "https://booru.example");
+        assert_eq!(client.token(), None);
+        assert_eq!(guest.owner(), "https://booru.example/|guest");
+        assert_eq!(guest.token(), "");
+    }
+
+    #[test]
     fn an_answer_is_kept_two_minutes_for_one_account() {
         let now = Utc::now();
         let mut kept = Kept::new();
@@ -571,19 +707,19 @@ mod tests {
             token: "t1".into(),
             user,
         };
-        let client = client_for(&session).unwrap();
+        let client = client_of(&Who::Member(session.clone())).unwrap();
         assert_eq!(client.base_url(), "https://booru.example");
         assert_eq!(client.token(), Some("t1"));
         let other = Session {
             token: "t2".into(),
             ..session.clone()
         };
-        assert_eq!(client_for(&other).unwrap().token(), Some("t2"));
+        assert_eq!(client_of(&Who::Member(other)).unwrap().token(), Some("t2"));
         assert_eq!(owner(&session), "https://booru.example/|3");
         let nowhere = Session {
             server: "not an address".into(),
             ..session
         };
-        assert!(client_for(&nowhere).is_none());
+        assert!(client_of(&Who::Member(nowhere)).is_none());
     }
 }

@@ -42,17 +42,19 @@ use crate::components::icons::{Ico, Icon};
 use crate::components::menu::{MenuAt, beside};
 use crate::components::reverse::ReverseMenu;
 use crate::components::snackbar::{notify, notify_undo};
+use crate::components::stars::StarVote;
 use crate::components::tag_menu::TagPress;
 use crate::logic::editor::offer;
 use crate::logic::people::{PeopleShown, closes_when_off, people_shown};
 use crate::logic::reverse::offered;
+use crate::logic::stars::next_stars;
 use crate::logic::tags::may_edit_post;
 use crate::logic::viewer::{
     back_through_history, download_name, needs_original, neighbour_href, queued, shown_url,
 };
-use crate::logic::votes::{next_vote, rescored};
+use crate::logic::votes::{Ballot, Tally, next_vote};
 use crate::logic::zoom::Zoom;
-use crate::{power, route, store};
+use crate::{instance, power, route, store};
 
 /// Posts kept for the viewer to show at once: the tile just clicked and the
 /// neighbours fetched ahead.
@@ -228,11 +230,11 @@ pub fn PostView() -> impl IntoView {
     // twice.
     let asking = StoredValue::new(None::<i64>);
     // Votes show at once and go to the server one at a time, the latest
-    // press winning. `vote_before` is the post's score and vote before the first
+    // press winning. `vote_before` is the post's tallies before the first
     // press the server hasn't answered, to put back if it fails.
-    let vote_wanted = StoredValue::new(None::<(i64, i16)>);
+    let vote_wanted = StoredValue::new(None::<(i64, Ballot)>);
     let vote_sending = StoredValue::new(false);
-    let vote_before = StoredValue::new(None::<(i64, i32, i16)>);
+    let vote_before = StoredValue::new(None::<(i64, Tally)>);
 
     let navigate = SendWrapper::new(use_navigate());
     // For the notice's Undo, which outlives the page.
@@ -555,32 +557,36 @@ pub fn PostView() -> impl IntoView {
         });
     };
 
-    // Shows `score` and `vote` on post `of`, if the page still shows it.
-    let show_vote = move |of: i64, score: i32, vote: i16| {
+    // Shows `tally` on post `of`, if the page still shows it.
+    let show_vote = move |of: i64, tally: Tally| {
         post.try_update(|p| {
             if let Some(p) = p.as_mut().filter(|p| p.id == of) {
-                let p = Arc::make_mut(p);
-                p.score = score;
-                p.my_vote = vote;
+                tally.put(Arc::make_mut(p));
             }
         });
     };
     let send_votes = move || {
         vote_sending.set_value(true);
         spawn_local(async move {
-            while let Some((of, vote)) = vote_wanted.try_get_value().flatten() {
-                let result = api::call(move |c| async move { c.vote(of, vote).await }).await;
+            while let Some((of, ballot)) = vote_wanted.try_get_value().flatten() {
+                let result = api::call(move |c| async move {
+                    match ballot {
+                        Ballot::Like(value) => c.vote(of, value).await,
+                        Ballot::Stars(stars) => c.vote_stars(of, stars).await,
+                    }
+                })
+                .await;
                 let still = vote_wanted.try_get_value().flatten();
                 match result {
                     Ok(fresh) => {
                         let fresh = Arc::new(fresh);
                         keep(Arc::clone(&fresh));
                         gallery::update_post(Arc::clone(&fresh));
-                        if still != Some((of, vote)) {
+                        if still != Some((of, ballot)) {
                             // Pressed again meanwhile: that one goes next,
                             // and a failure puts back what the server has now.
                             if still.is_some_and(|(id, _)| id == of) {
-                                vote_before.try_set_value(Some((of, fresh.score, fresh.my_vote)));
+                                vote_before.try_set_value(Some((of, Tally::of(&fresh))));
                             }
                             continue;
                         }
@@ -597,12 +603,12 @@ pub fn PostView() -> impl IntoView {
                             continue;
                         }
                         vote_wanted.try_set_value(None);
-                        if let Some((_, score, mine)) = vote_before
+                        if let Some((_, tally)) = vote_before
                             .try_update_value(Option::take)
                             .flatten()
-                            .filter(|(id, ..)| *id == of)
+                            .filter(|(id, _)| *id == of)
                         {
-                            show_vote(of, score, mine);
+                            show_vote(of, tally);
                         }
                         action_error.try_set(Some(t!("vote-failed", reason = message)));
                     }
@@ -612,8 +618,14 @@ pub fn PostView() -> impl IntoView {
             vote_sending.try_set_value(false);
         });
     };
-    // Up (`1`) or down (`-1`); pressing the vote already cast takes it back.
-    let vote = Callback::new(move |pressed: i16| {
+    // Up (`1`) or down (`-1`), or star 1 to 5; pressing the vote already
+    // cast takes it back. A guest is asked to sign in first, and comes back
+    // here.
+    let cast = move |press: Ballot| {
+        if instance::guest() {
+            instance::ask_sign_in(Some(t!("guest-vote-why")));
+            return;
+        }
         let Some(p) = post.get_untracked() else {
             return;
         };
@@ -621,17 +633,23 @@ pub fn PostView() -> impl IntoView {
         if Some(p.id) != id.get_untracked() || p.deleted {
             return;
         }
-        let new = next_vote(p.my_vote, pressed);
-        if vote_before.get_value().map(|(of, ..)| of) != Some(p.id) {
-            vote_before.set_value(Some((p.id, p.score, p.my_vote)));
+        let ballot = match press {
+            Ballot::Like(pressed) => Ballot::Like(next_vote(p.my_vote, pressed)),
+            Ballot::Stars(star) => Ballot::Stars(next_stars(p.my_stars, star)),
+        };
+        let tally = Tally::of(&p);
+        if vote_before.get_value().map(|(of, _)| of) != Some(p.id) {
+            vote_before.set_value(Some((p.id, tally)));
         }
-        show_vote(p.id, rescored(p.score, p.my_vote, new), new);
+        show_vote(p.id, tally.after(ballot));
         action_error.set(None);
-        vote_wanted.set_value(Some((p.id, new)));
+        vote_wanted.set_value(Some((p.id, ballot)));
         if !vote_sending.get_value() {
             send_votes();
         }
-    });
+    };
+    let vote = Callback::new(move |pressed: i16| cast(Ballot::Like(pressed)));
+    let star = Callback::new(move |pressed: u8| cast(Ballot::Stars(pressed)));
 
     // Anyone signed in may edit a post, unless it's in the recycle bin.
     let editable = Memo::new(move |_| {
@@ -692,6 +710,9 @@ pub fn PostView() -> impl IntoView {
     });
 
     let open_editor = Callback::new(move |()| {
+        if instance::guest() {
+            return;
+        }
         let offered = post.with_untracked(|p| {
             p.as_ref()
                 .and_then(|p| offer(p, video_editing.get_untracked()))
@@ -800,6 +821,7 @@ pub fn PostView() -> impl IntoView {
                         busy=busy
                         video_editing=video_editing
                         on_vote=vote
+                        on_star=star
                         on_delete=Callback::new(move |()| delete())
                         on_edit_media=open_editor
                         on_share=share
@@ -956,44 +978,117 @@ pub fn PostView() -> impl IntoView {
 
 /// What can be done with the post, apart from looking at it: an opinion, what
 /// leaves with the file or a link to it, and, away from the rest, the one
-/// that removes it.
+/// that removes it. The opinion is a like or a dislike, or on a server that
+/// counts stars, one to five of them. A guest's shows the opinions, which
+/// ask to sign in, and nothing that changes the post.
 #[component]
 fn PostBar(
     post: Signal<Option<Arc<Post>>>,
     busy: RwSignal<bool>,
     video_editing: Signal<bool>,
     on_vote: Callback<i16>,
+    on_star: Callback<u8>,
     on_delete: Callback<()>,
     on_edit_media: Callback<()>,
     on_share: Callback<()>,
     on_reverse: Callback<MenuAt>,
 ) -> impl IntoView {
-    let bar = move || {
-        let p = post.get()?;
-        let deleted = p.deleted;
-        let edit = offer(&p, video_editing.get()).map(|kind| {
-            let icon = match kind {
-                EditKind::Video => Icon::Cut,
-                EditKind::Image => Icon::Crop,
-            };
-            let label = move || match kind {
-                EditKind::Video => t!("editor-video-short"),
-                EditKind::Image => t!("editor-image-short"),
-            };
-            view! {
+    let guest = untrack(instance::guest);
+    let stars = Memo::new(|_| instance::stars());
+    let shown = Memo::new(move |_| post.with(Option::is_some));
+    let deleted = Memo::new(move |_| post.with(|p| p.as_ref().is_some_and(|p| p.deleted)));
+    // Its own part of the bar, so the stars keep the focus as a vote
+    // changes the post.
+    let opinion = move || {
+        if !shown.get() {
+            return None;
+        }
+        if stars.get() {
+            let read = move |f: fn(&Post) -> u8| move || post.with(|p| p.as_deref().map_or(0, f));
+            return Some(
+                view! {
+                    <StarVote
+                        mine=Signal::derive(read(|p| p.my_stars))
+                        stars=Signal::derive(move || post.with(|p| p.as_ref().and_then(|p| p.stars)))
+                        votes=Signal::derive(move || post.with(|p| p.as_ref().map_or(0, |p| p.votes)))
+                        disabled=deleted
+                        on_press=on_star
+                    />
+                }
+                .into_any(),
+            );
+        }
+        let likes = move || {
+            let p = post.get()?;
+            let (up, down) = (p.my_vote > 0, p.my_vote < 0);
+            let deleted = p.deleted;
+            Some(view! {
                 <button
                     type="button"
                     class="icon-btn"
-                    title=move || t!("editor-open")
-                    aria-label=move || t!("editor-open")
-                    aria-haspopup="dialog"
-                    on:click=move |_| on_edit_media.run(())
+                    class:on=up
+                    disabled=deleted
+                    aria-pressed=up.to_string()
+                    title=move || t!("post-upvote")
+                    aria-label=move || t!("post-upvote")
+                    on:click=move |_| on_vote.run(1)
                 >
-                    <Ico icon=icon />
-                    <span class="bar-label">{label}</span>
+                    <Ico icon=Icon::ThumbUp />
                 </button>
+                <span class="score" title=move || t!("post-score")>
+                    {p.score}
+                </span>
+                <button
+                    type="button"
+                    class="icon-btn"
+                    class:on=down
+                    disabled=deleted
+                    aria-pressed=down.to_string()
+                    title=move || t!("post-downvote")
+                    aria-label=move || t!("post-downvote")
+                    on:click=move |_| on_vote.run(-1)
+                >
+                    <Ico icon=Icon::ThumbDown />
+                </button>
+            })
+        };
+        Some(
+            view! {
+                <div class="vote" role="group" aria-label=move || t!("post-votes")>
+                    {likes}
+                </div>
             }
-        });
+            .into_any(),
+        )
+    };
+    let bar = move || {
+        let p = post.get()?;
+        let deleted = p.deleted;
+        let edit = offer(&p, video_editing.get())
+            .filter(|_| !guest)
+            .map(|kind| {
+                let icon = match kind {
+                    EditKind::Video => Icon::Cut,
+                    EditKind::Image => Icon::Crop,
+                };
+                let label = move || match kind {
+                    EditKind::Video => t!("editor-video-short"),
+                    EditKind::Image => t!("editor-image-short"),
+                };
+                view! {
+                    <button
+                        type="button"
+                        class="icon-btn"
+                        title=move || t!("editor-open")
+                        aria-label=move || t!("editor-open")
+                        aria-haspopup="dialog"
+                        on:click=move |_| on_edit_media.run(())
+                    >
+                        <Ico icon=icon />
+                        <span class="bar-label">{label}</span>
+                    </button>
+                }
+            });
         let share = (!deleted).then(|| {
             view! {
                 <button
@@ -1031,7 +1126,7 @@ fn PostBar(
                 </button>
             }
         });
-        let remove = (!deleted).then(|| {
+        let remove = (!deleted && !guest).then(|| {
             view! {
                 <button
                     type="button"
@@ -1045,37 +1140,7 @@ fn PostBar(
                 </button>
             }
         });
-        let (up, down) = (p.my_vote > 0, p.my_vote < 0);
         Some(view! {
-            <div class="vote" role="group" aria-label=move || t!("post-votes")>
-                <button
-                    type="button"
-                    class="icon-btn"
-                    class:on=up
-                    disabled=deleted
-                    aria-pressed=up.to_string()
-                    title=move || t!("post-upvote")
-                    aria-label=move || t!("post-upvote")
-                    on:click=move |_| on_vote.run(1)
-                >
-                    <Ico icon=Icon::ThumbUp />
-                </button>
-                <span class="score" title=move || t!("post-score")>
-                    {p.score}
-                </span>
-                <button
-                    type="button"
-                    class="icon-btn"
-                    class:on=down
-                    disabled=deleted
-                    aria-pressed=down.to_string()
-                    title=move || t!("post-downvote")
-                    aria-label=move || t!("post-downvote")
-                    on:click=move |_| on_vote.run(-1)
-                >
-                    <Ico icon=Icon::ThumbDown />
-                </button>
-            </div>
             <div class="bar-acts">
                 <DownloadLink
                     href=absolute(&p.file_url)
@@ -1089,7 +1154,13 @@ fn PostBar(
         })
     };
     view! {
-        <div class="post-bar glass float" role="toolbar" aria-label=move || t!("post-actions")>
+        <div
+            class="post-bar glass float"
+            class:starred=move || stars.get()
+            role="toolbar"
+            aria-label=move || t!("post-actions")
+        >
+            {opinion}
             {bar}
         </div>
     }

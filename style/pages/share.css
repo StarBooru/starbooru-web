@@ -130,3 +130,14 @@ html:has(.lightbox) { overflow-y: hidden; }
   .lightbox, .lightbox img, .lightbox .player, .shared-missing { animation: none; }
   .lightbox-btn, .share-lifetime, .share-day, .share-lifetime.picking .share-day { transition: none; }
 }
+
+/* A public server's sheet: the posts' own addresses, one a line. */
+.share-address { display: grid; gap: 8px; margin-bottom: 16px; }
+.list-token { display: grid; gap: 8px; min-width: 0; }
+.list-token textarea {
+  width: 100%; min-width: 0; padding: 10px 12px; border: 1px solid var(--outline); border-radius: var(--radius-s);
+  background: var(--surface); color: var(--on-surface); font: 13px/1.6 ui-monospace, "Cascadia Code", "Roboto Mono", monospace;
+  resize: vertical; white-space: pre; overflow-x: auto;
+}
+.list-token textarea:focus { outline: none; border-color: var(--primary); box-shadow: 0 0 0 3px oklch(from var(--primary) l c h / 0.25); }
+.list-token .btn { justify-self: end; }

@@ -317,3 +317,14 @@ a.brand:hover .mark-star, a.search-home:hover .mark-star { transform: rotate(90d
   .nav-bottom .nav-item { min-height: calc(var(--rail-w) - 2 * var(--pad)); }
   .nav-bottom .nav-label { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
 }
+
+/* ---------- guests ---------- */
+
+/* A guest's way to an account, last in the navigation. */
+.nav-item.nav-sign-in { border: 0; background: none; font-family: inherit; color: var(--primary); cursor: pointer; }
+.shell-waiting { min-height: 100dvh; }
+/* What stands in for a page that needs an account. */
+.invite { max-width: 480px; margin: 0 auto; }
+.invite-mark { display: grid; place-items: center; width: 72px; height: 72px; border-radius: 50%; background: var(--primary-container); color: var(--on-primary-container); animation: pop var(--slow) var(--ease-spring); }
+.invite-actions { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; }
+.app[data-effects="lite"] .invite-mark { animation: none; }

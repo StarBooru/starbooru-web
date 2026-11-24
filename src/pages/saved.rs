@@ -61,8 +61,11 @@ fn update(change: impl FnOnce(&mut Vec<SavedSearch>)) {
 }
 
 /// Asks the server for the account's saved searches. The gallery shows the
-/// ones kept from before in the meantime.
+/// ones kept from before in the meantime. A guest has none.
 pub fn load() {
+    if store::session_untracked().is_none() {
+        return;
+    }
     let owner = store::owner();
     spawn_local(async move {
         if let Ok(list) = api::call(|c| async move { c.saved_searches().await }).await
