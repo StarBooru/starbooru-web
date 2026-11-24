@@ -23,7 +23,7 @@ use starbooru_core::{AuthResponse, User};
 
 use crate::i18n::Lang;
 use crate::logic::saved::search_key;
-use crate::logic::{address, history, spots};
+use crate::logic::{address, history, spots, updates};
 
 /// The signed-in account. Sign-in fills it in.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -291,6 +291,10 @@ pub struct Prefs {
     /// hides them: posts keep their people, and the tags those gave.
     #[serde(deserialize_with = "lenient_yes")]
     pub people: bool,
+    /// The StarBooru version each administrator hid the update notice for
+    /// (`logic::updates`). It shows again for a newer one.
+    #[serde(deserialize_with = "lenient", skip_serializing_if = "Vec::is_empty")]
+    pub dismissed_updates: Vec<DismissedUpdate>,
     /// Settings this version doesn't have yet (the reference's, or a newer
     /// version's), written back untouched.
     #[serde(flatten)]
@@ -326,9 +330,19 @@ impl Default for Prefs {
             swipe_left: SwipeAction::Off,
             swipe_right: SwipeAction::Off,
             people: true,
+            dismissed_updates: Vec::new(),
             other: Map::new(),
         }
     }
+}
+
+/// The update notice one account hid, and for which version.
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct DismissedUpdate {
+    /// `server|user id`, as [`owner`] says.
+    pub owner: String,
+    pub version: String,
 }
 
 /// Where the gallery was for one search. It remembers the tile at the top of
@@ -827,6 +841,43 @@ pub fn owner() -> String {
     session_untracked().map_or_else(String::new, |s| format!("{}|{}", s.server, s.user.id))
 }
 
+/// The version the account signed in hid the update notice for. Read
+/// inside a view, it redraws when that changes, in any tab.
+pub fn dismissed_update() -> Option<String> {
+    let owner = owner();
+    PREFS.with(|p| p.with(|p| updates::dismissed(&p.dismissed_updates, &owner).map(str::to_owned)))
+}
+
+/// What hiding the update notice replaced, for its Undo.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct HiddenUpdate {
+    owner: String,
+    before: Option<String>,
+}
+
+/// Hides the update notice until a version newer than `version` is out.
+pub fn dismiss_update(version: &str) -> HiddenUpdate {
+    let owner = owner();
+    let before = PREFS.with(|p| {
+        p.with_untracked(|p| updates::dismissed(&p.dismissed_updates, &owner).map(str::to_owned))
+    });
+    if !owner.is_empty() {
+        let version = version.to_owned();
+        update_prefs(|p| updates::set_dismissed(&mut p.dismissed_updates, &owner, Some(version)));
+    }
+    HiddenUpdate { owner, before }
+}
+
+/// Undoes [`dismiss_update`], unless someone else has signed in since.
+pub fn undo_dismiss_update(hidden: HiddenUpdate) {
+    if hidden.owner.is_empty() || hidden.owner != owner() {
+        return;
+    }
+    update_prefs(|p| {
+        updates::set_dismissed(&mut p.dismissed_updates, &hidden.owner, hidden.before)
+    });
+}
+
 fn update_memory(change: impl FnOnce(&mut GalleryMemory)) {
     let owner = owner();
     MEMORY.with(|m| m.update(|m| change(m.for_owner(&owner))));
@@ -1048,6 +1099,10 @@ mod tests {
                 swipe_left: SwipeAction::Delete,
                 swipe_right: SwipeAction::Like,
                 people: false,
+                dismissed_updates: vec![DismissedUpdate {
+                    owner: "https://booru.example|7".into(),
+                    version: "0.3.0".into(),
+                }],
                 other: Map::new(),
             },
             memory: GalleryMemory {
@@ -1095,6 +1150,10 @@ mod tests {
         assert_eq!(value["prefs"]["people"], false);
         assert_eq!(value["prefs"]["video_volume"], 0.4);
         assert_eq!(value["prefs"]["video_muted"], true);
+        assert_eq!(
+            value["prefs"]["dismissed_updates"][0],
+            serde_json::json!({"owner": "https://booru.example|7", "version": "0.3.0"})
+        );
         assert_eq!(
             value["prefs"]["boorus"][0],
             serde_json::json!({"api": "danbooru", "base": "http://nas:8000"})
@@ -1634,6 +1693,34 @@ mod tests {
             assert!(prefs.people, "{odd}");
             assert_eq!(prefs.theme, Theme::Light);
         }
+    }
+
+    #[test]
+    fn hidden_update_notices_load_from_before_they_existed() {
+        // Settings stored before the notice existed.
+        let prefs = parse(r#"{"prefs":{"theme":"dark","people":false}}"#).prefs;
+        assert!(prefs.dismissed_updates.is_empty());
+        assert!(!prefs.people);
+        // None is written while none is hidden.
+        let json = to_json(&parse(r#"{"prefs":{"theme":"dark"}}"#)).unwrap();
+        assert!(!json.contains("dismissed_updates"), "{json}");
+        // An odd value costs only itself.
+        for odd in [r#""0.3.0""#, "7", "null", r#"[{"owner":1}]"#] {
+            let prefs = parse(&format!(
+                r#"{{"prefs":{{"dismissed_updates":{odd},"theme":"light"}}}}"#
+            ))
+            .prefs;
+            assert!(prefs.dismissed_updates.is_empty(), "{odd}");
+            assert_eq!(prefs.theme, Theme::Light);
+        }
+        let prefs = parse(
+            r#"{"prefs":{"dismissed_updates":[{"owner":"s|1","version":"0.3.0","new":true}]}}"#,
+        )
+        .prefs;
+        assert_eq!(
+            updates::dismissed(&prefs.dismissed_updates, "s|1"),
+            Some("0.3.0")
+        );
     }
 
     #[test]

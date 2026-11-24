@@ -1,14 +1,16 @@
 //! Administration, for administrators only: the server's numbers
 //! (`overview.rs`), the accounts (`accounts.rs`), the database backups
-//! (`backups.rs`), and the server's settings (`server.rs`) with its AI tools
-//! (`ai.rs`). The tab is in the address, so a reload keeps it. Everyone else
-//! gets a short note and none of the requests.
+//! (`backups.rs`), the server's settings (`server.rs`) with its AI tools
+//! (`ai.rs`), and new versions (`updates.rs`). The tab is in the address, so
+//! a reload keeps it. Everyone else gets a short note and none of the
+//! requests.
 
 mod accounts;
 mod ai;
 mod backups;
 mod overview;
 mod server;
+mod updates;
 
 use leptos::prelude::*;
 use leptos_router::hooks::use_query_map;
@@ -19,10 +21,11 @@ use self::ai::AiCard;
 use self::backups::Backups;
 use self::overview::Overview;
 use self::server::{BinCard, ServerCard};
+use self::updates::Updates;
 use crate::components::back::BackButton;
 use crate::components::banner::Spinner;
 use crate::logic::admin::Tab;
-use crate::{route, store};
+use crate::{route, store, updates as versions};
 
 fn tab_label(tab: Tab) -> String {
     match tab {
@@ -30,6 +33,7 @@ fn tab_label(tab: Tab) -> String {
         Tab::Accounts => t!("admin-tab-accounts"),
         Tab::Backups => t!("admin-tab-backups"),
         Tab::Server => t!("admin-tab-server"),
+        Tab::Updates => t!("admin-tab-updates"),
     }
 }
 
@@ -62,22 +66,27 @@ pub fn Admin() -> impl IntoView {
 fn AdminTabs() -> impl IntoView {
     let query = use_query_map();
     let tab = Memo::new(move |_| query.with(|q| Tab::parse(q.get("tab").as_deref())));
-    let links = Tab::ALL
-        .into_iter()
-        .map(|t| {
-            let on = move || tab.get() == t;
-            view! {
-                <a
-                    class="seg"
-                    class:on=on
-                    href=t.href()
-                    aria-current=move || on().then_some("page")
-                >
-                    {move || tab_label(t)}
-                </a>
-            }
-        })
-        .collect_view();
+    // A server from before updates has none to show.
+    let links = move || {
+        let missing = versions::missing();
+        Tab::ALL
+            .into_iter()
+            .filter(move |t| *t != Tab::Updates || !missing)
+            .map(|t| {
+                let on = move || tab.get() == t;
+                view! {
+                    <a
+                        class="seg"
+                        class:on=on
+                        href=t.href()
+                        aria-current=move || on().then_some("page")
+                    >
+                        {move || tab_label(t)}
+                    </a>
+                }
+            })
+            .collect_view()
+    };
     view! {
         <nav class="segmented admin-tabs" aria-label=move || t!("admin-title")>
             {links}
@@ -86,6 +95,7 @@ fn AdminTabs() -> impl IntoView {
             Tab::Overview => view! { <Overview /> }.into_any(),
             Tab::Accounts => view! { <Accounts /> }.into_any(),
             Tab::Backups => view! { <Backups /> }.into_any(),
+            Tab::Updates => view! { <Updates /> }.into_any(),
             Tab::Server => {
                 view! {
                     <ServerCard />

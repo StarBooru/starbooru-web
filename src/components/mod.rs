@@ -11,6 +11,7 @@ pub mod download;
 pub mod focus;
 pub mod icons;
 pub mod legal;
+pub mod markdown;
 pub mod menu;
 pub mod player;
 pub mod rating;

@@ -17,6 +17,7 @@ mod power;
 mod route;
 mod store;
 mod theme;
+mod updates;
 
 use wasm_bindgen::JsCast;
 

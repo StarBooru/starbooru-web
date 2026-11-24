@@ -98,9 +98,9 @@ Set aside for now (owner, 2026-11-23).
 
 ## 10. Updates
 
-- [ ] Administrators see when a new StarBooru is out, with what's new, as a message in the app (server)
-- [ ] Update from the app: the server updates itself, then the app reloads on the new version (server)
-- [ ] Automatic updates, an option in Administration (server)
+- [x] Administrators see when a new StarBooru is out, with what's new, as a message in the app (server)
+- [x] Update from the app: the server updates itself, then the app reloads on the new version (server)
+- [x] Automatic updates, an option in Administration (server)
 
 ## Ideas
 

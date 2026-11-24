@@ -1,16 +1,16 @@
 //! Administration › Overview: what the server holds, the uploads of the last
-//! 30 days, and how the server runs.
+//! 30 days, and how the server runs, with a newer version when there is one.
 
 use chrono::Utc;
 use leptos::prelude::*;
 use starbooru_core::ServerStats;
 
 use super::Waiting;
-use crate::api;
 use crate::components::banner::ErrorBanner;
-use crate::logic::admin::chart;
+use crate::logic::admin::{Tab, chart};
 use crate::logic::library::ago;
 use crate::logic::viewer::human_size;
+use crate::{api, updates};
 
 #[component]
 pub(super) fn Overview() -> impl IntoView {
@@ -66,6 +66,19 @@ fn Stats(stats: ServerStats) -> impl IntoView {
     let on_off = |on: bool| if on { t!("admin-on") } else { t!("admin-off") };
     let (thumbs, import, since) = (s.video_thumbnails, s.url_import, s.started_at);
     let running = move || ago(since, Utc::now());
+    // A newer version, once the shell has heard of it.
+    let newer = move || {
+        updates::known()
+            .filter(|u| u.available)
+            .and_then(|u| u.latest)
+            .map(|l| {
+                view! {
+                    <a class="pill update-pill" href=Tab::Updates.href()>
+                        {move || t!("updates-overview-new", version = l.version.clone())}
+                    </a>
+                }
+            })
+    };
     view! {
         <div class="stat-grid">{tiles}</div>
         <section class="card">
@@ -83,7 +96,10 @@ fn Stats(stats: ServerStats) -> impl IntoView {
             <h2 class="card-title">{move || t!("admin-server-title")}</h2>
             <dl class="meta">
                 <dt>{move || t!("settings-server-version")}</dt>
-                <dd class="break">{s.version}</dd>
+                <dd class="break">
+                    {s.version}
+                    {newer}
+                </dd>
                 <dt>{move || t!("admin-running")}</dt>
                 <dd>{running}</dd>
                 <dt>{move || t!("admin-upload-limit")}</dt>

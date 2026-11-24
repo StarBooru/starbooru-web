@@ -21,8 +21,8 @@ use crate::route;
 
 // ---------- tabs ----------
 
-/// The administration's tabs, as the reference had them. The AI tools stand
-/// under Server.
+/// The administration's tabs, as the reference had them, and Updates. The
+/// AI tools stand under Server.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub enum Tab {
     #[default]
@@ -30,10 +30,17 @@ pub enum Tab {
     Accounts,
     Backups,
     Server,
+    Updates,
 }
 
 impl Tab {
-    pub const ALL: [Tab; 4] = [Tab::Overview, Tab::Accounts, Tab::Backups, Tab::Server];
+    pub const ALL: [Tab; 5] = [
+        Tab::Overview,
+        Tab::Accounts,
+        Tab::Backups,
+        Tab::Server,
+        Tab::Updates,
+    ];
 
     pub fn as_str(self) -> &'static str {
         match self {
@@ -41,6 +48,7 @@ impl Tab {
             Tab::Accounts => "accounts",
             Tab::Backups => "backups",
             Tab::Server => "server",
+            Tab::Updates => "updates",
         }
     }
 
@@ -581,6 +589,7 @@ mod tests {
         }
         assert_eq!(Tab::Overview.href(), "/admin");
         assert_eq!(Tab::Server.href(), "/admin?tab=server");
+        assert_eq!(Tab::Updates.href(), "/admin?tab=updates");
     }
 
     #[test]

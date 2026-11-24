@@ -628,6 +628,7 @@ mod tests {
             missing: false,
             status: Some(status),
             code: Some(code.into()),
+            retry_after: None,
         };
         assert_eq!(
             outcome_of(

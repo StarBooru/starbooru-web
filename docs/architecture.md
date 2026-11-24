@@ -37,13 +37,14 @@ src/
   power.rs      the battery saver: data-saver on the root, from the setting, the battery and data saver
   pace.rs       the effects: data-effects on the root, from the setting or from frame times while scrolling
   install.rs    registers the service worker, and keeps the browser's offer to install for Settings › Help and about
+  updates.rs    what the server says of new versions, for administrators, and the notice at the top of the shell
   i18n.rs       t!() over the Fluent catalogues
   pages/        one module per page; shell.rs is the frame, post/ the viewer and its media editor, share/
                   the share sheet, the list of links and the public /s/ page, settings/ the Settings groups,
                   admin/ the administration's tabs, legal.rs the privacy policy and the terms
   components/   icons, brand, snackbar, tiles and their swipes, downloads, the tag box and its grip, a tag's menu,
                   the button that asks "Sure?", the links to the legal pages, the menu that looks a picture up on
-                  other sites, the video player, the Back button of the pages under a tab
+                  other sites, the video player, the Back button of the pages under a tab, Markdown as elements
   logic/        pure Rust with unit tests: server addresses, the gallery's lists and layout, zoom, the viewer's
                   tags, people, details and file names, the video player's clock, seek bar, keys and resting
                   controls, the word at the caret, the tag editor's text and who may edit,
@@ -52,7 +53,9 @@ src/
                   results, the library import's text, the media editor's crop, turns and trim, share links'
                   lifetimes, the days a picked end date takes, addresses and expiry text, reverse search's copy to
                   send and how each site gets it, Settings' groups and old anchors, accent, lists and password checks, swipes, the
-                  administration's limits, chart, form checks and AI requests, and the pages a tab went through
+                  administration's limits, chart, form checks and AI requests, the pages a tab went through,
+                  a small Markdown reader, and updates: the notice's rule, an update's steps, the reasons a
+                  server can't update itself and the hour of automatic updates
 locales/        en.ftl, it.ftl
 style/          tokens.css, base.css, shell.css, player.css, pages/<page>.css
 assets/         the icons, the web app manifest and the service worker (sw.js), copied to the root as they are
@@ -70,8 +73,8 @@ Plain CSS, split by role. `index.html` links each file with `<link data-trunk re
 | File | Holds |
 |---|---|
 | `style/tokens.css` | Colour roles for light, dark and the system's dark, all in OKLCH from the accent's hue (`--seed-hue`) and, for a picked colour, its chroma and lightness (`--seed-chroma`, `--seed-lightness`): a grey makes a palette without a tint. `[data-oled]` blacks out the dark roles. Radii, easing, durations, shadows; `.glass` |
-| `style/base.css` | Base elements and the shared components: buttons, switches, fields and the tag box, segmented choices, chips, cards, banners, spinners, the snackbar, the tag menu, keyframes and the reduced-motion fallback |
-| `style/shell.css` | The top bar, the brand and search capsules, the navigation slider in its three places, the content area |
+| `style/base.css` | Base elements and the shared components: buttons, switches, fields and the tag box, segmented choices, chips, cards, banners, spinners, Markdown, the snackbar, the tag menu, keyframes and the reduced-motion fallback |
+| `style/shell.css` | The top bar, the brand and search capsules, the navigation slider in its three places, the content area and the update notice |
 | `style/player.css` | The video player, shared by the viewer and the share page; its narrow layouts are container queries on the player's own width |
 | `style/pages/<page>.css` | One per page, linked after the four above when the page lands |
 
@@ -95,6 +98,7 @@ Component CSS uses only the role variables, never a literal colour. The navigati
   - A file of the bundle (`/<name>.js`, `.wasm`, `.css`, `.png`, `.svg`, `.webmanifest`) comes from the cache, else from the network. The cache holds the files the last `index.html` names: each new page drops the files it no longer names, fetches the ones it names, and fetches the unhashed icons and manifest again.
   - Everything else goes to the network untouched, with no `respondWith`: `/api/`, `/media/`, `/remote/`, `/backups/`, `/healthz`, other origins (a session on another server included), and every request that isn't a GET. Nothing the API or `/media` returns is ever stored, so the cache holds no private data.
   - A new `sw.js` installs and takes over at once, and its activation deletes the app's other caches; bump `CACHE` when the worker starts keeping things another way. Offline, the shell starts and each page says it can't reach the server, as for any failed request.
+- **Updates.** For administrators only, the shell asks `GET /admin/updates` when the app starts and every 3 hours while it stays open, and keeps the answer in `updates.rs`. When a newer release is out, a pill under the top bar names it and leads to Administration › Updates; it stays off the viewers and that page. Hiding it is kept in the store per account and version, so it comes back for a newer one. A server older than 0.2.0 answers 404: the notice and the Updates tab stay away. The page shows the notes through `logic::markdown`, which builds elements and never HTML; only `http:`, `https:` and `mailto:` links survive, and pictures become their description. After Update now it asks every 1.5 s; once the run reaches `restarting` it knocks on `/info` every 2 s until the new version answers, then reloads the page, so the new version's bundle loads (navigations are network-first in the service worker).
 - **Share link end dates.** The server takes a link's lifetime in whole days from when it makes it. A day picked on the calendar becomes the days from now to the end of that day on the browser's clock, rounded up, so the link ends on the day after, at the time of day it was made.
 
 The server decides which booru pictures it relays: the previews and samples of sites that serve them only to their own pages come as its signed `/api/v1/remote/media` addresses. Everything else loads in the browser straight from the booru, as the privacy page says, so the app shows a picture only from one of those addresses or over `https:`. Anything else (`http:`, `data:`, `//host`) gets the tile's colour instead.

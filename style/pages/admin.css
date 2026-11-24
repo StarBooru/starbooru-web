@@ -1,5 +1,6 @@
 /* Administration (src/pages/admin/): its tabs, the overview's numbers and
-   upload chart, each account's tools, the AI tools, and the backups. */
+   upload chart, each account's tools, the AI tools, the backups and the
+   updates. */
 
 .admin-tabs { margin-bottom: 16px; }
 /* The tabs are links, so a reload or a new browser tab keeps the one open. */
@@ -85,11 +86,118 @@ pre.command {
 }
 .schedule-fields { display: grid; grid-template-columns: 1fr 1fr; gap: 0 16px; align-items: start; }
 
+/* ---------- updates ---------- */
+
+/* What runs, and what's newer beside it: the eye goes left to right. */
+.update-versions { display: flex; align-items: stretch; gap: 8px; margin-bottom: 14px; }
+.update-version {
+  flex: 1 1 0; display: grid; align-content: start; gap: 2px; min-width: 0;
+  padding: 12px 16px; border-radius: var(--radius-m); background: var(--surface-2);
+}
+.update-version strong { font-size: 22px; font-weight: 600; line-height: 1.25; font-variant-numeric: tabular-nums; }
+.update-version-label, .update-version-note { font-size: 13px; color: var(--on-surface-2); }
+.update-version-note { display: inline-flex; align-items: center; gap: 4px; }
+.update-version-note.ok { color: var(--ok); font-weight: 600; }
+.update-version.new { background: var(--primary-container); animation: pop-in var(--slow) var(--ease-spring) both; }
+.update-version.new :is(strong, .update-version-label, .update-version-note) { color: var(--on-primary-container); }
+.update-versions-arrow { align-self: center; color: var(--on-surface-2); animation: fade-in var(--slow) var(--ease) both; }
+.update-check { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px 16px; margin-bottom: 16px; }
+.update-check-text { display: grid; gap: 2px; min-width: 0; font-size: 14px; }
+.update-check-error { color: var(--danger); overflow-wrap: anywhere; }
+.update-check .btn { flex: none; }
+.update-check-label { font-variant-numeric: tabular-nums; }
+.update-card > .banner { margin: 0 0 12px; }
+.update-result { display: flex; align-items: center; flex-wrap: wrap; gap: 4px 8px; margin-bottom: 14px; font-size: 14px; }
+.update-result > .icon { color: var(--ok); }
+.update-result-backup { flex-basis: 100%; padding-left: 26px; font-size: 13px; color: var(--on-surface-2); }
+.update-result-backup:hover { color: var(--primary); }
+.update-action, .update-progress, .update-by-hand { padding-top: 16px; border-top: 1px solid var(--outline); }
+.update-action .banner { margin-bottom: 12px; }
+.update-offer { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px 16px; }
+/* The question takes the button's place, where the eye already is. */
+.update-confirm {
+  display: grid; gap: 8px; padding: 16px; border-radius: var(--radius-m); background: var(--surface-2);
+  font-size: 14px; animation: fade-up var(--med) var(--ease);
+}
+.update-confirm p { margin: 0; }
+.update-confirm .row-end { margin-top: 4px; }
+.update-confirm .btn .spinner { border-color: oklch(from var(--on-primary) l c h / 0.35); border-top-color: var(--on-primary); }
+
+/* The steps, down a line that fills as each one is done. */
+.update-progress-title { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; margin: 0 0 14px; font-size: 16px; font-weight: 600; }
+.update-progress-title .pill { max-width: none; }
+.update-steps { list-style: none; margin: 0; padding: 0; }
+.update-step { position: relative; display: grid; grid-template-columns: 28px minmax(0, 1fr); gap: 12px; padding-bottom: 22px; }
+.update-step:last-child { padding-bottom: 0; }
+.update-step:not(:last-child)::after {
+  content: ""; position: absolute; left: 13px; top: 31px; bottom: 3px; width: 2px; border-radius: 1px;
+  background: linear-gradient(var(--primary), var(--primary)) top / 100% 0% no-repeat, var(--surface-3);
+  transition: background-size var(--slow) var(--ease);
+}
+.update-step:is(.done, .skipped):not(:last-child)::after { background-size: 100% 100%, auto; }
+.update-step-mark {
+  display: grid; place-items: center; width: 28px; height: 28px; border-radius: 999px;
+  border: 2px solid var(--outline); background: var(--surface); color: var(--on-primary);
+}
+.update-step-mark .icon { width: 16px; height: 16px; }
+.update-step.done .update-step-mark { border-color: var(--primary); background: var(--primary); animation: pop var(--med) var(--ease-spring); }
+.update-step.now .update-step-mark { border-color: var(--primary-container); background: var(--primary-container); }
+.update-step.now .spinner.small { width: 20px; height: 20px; }
+.update-step.skipped .update-step-mark { border-color: var(--surface-3); background: var(--surface-3); color: var(--on-surface-2); }
+.update-step-text { display: grid; gap: 2px; padding-top: 3px; font-size: 14px; }
+.update-step:not(.done, .now) .update-step-text strong { font-weight: 500; color: var(--on-surface-2); }
+.update-step.now .update-step-text .muted { animation: fade-up var(--med) var(--ease); }
+.update-slow { margin: 14px 0 0; }
+/* Back on the new version, just before the reload. */
+.update-arrived {
+  display: flex; align-items: center; gap: 14px; padding: 16px; border-radius: var(--radius-m);
+  background: var(--primary-container); color: var(--on-primary-container);
+  animation: zoom-in var(--slow) var(--ease-spring);
+}
+.update-arrived-mark {
+  flex: none; display: grid; place-items: center; width: 40px; height: 40px; border-radius: 999px;
+  background: var(--primary); color: var(--on-primary); animation: pop var(--slow) var(--ease-spring);
+}
+.update-arrived-text { display: grid; gap: 2px; min-width: 0; }
+.update-arrived-text .muted { color: var(--on-primary-container); font-size: 14px; }
+
+.update-by-hand { display: grid; gap: 8px; font-size: 14px; }
+.update-by-hand p { margin: 0; overflow-wrap: anywhere; }
+.update-command { display: flex; align-items: flex-start; flex-wrap: wrap; gap: 8px; }
+.update-command pre.command { flex: 1 1 240px; min-width: 0; margin: 0; }
+.update-command .btn { flex: none; }
+.update-copy-failed { flex-basis: 100%; font-size: 13px; }
+.update-card > .update-pinned { margin: 16px 0 0; }
+.update-notes .card-title + .hint { margin-top: -6px; }
+.update-settings .switch-row:disabled { opacity: 0.5; cursor: not-allowed; }
+.update-settings .switch-row:disabled:hover { background: none; }
+.update-settings .switch-row:disabled .switch-knob { scale: 1; }
+/* The hour sits under the switch it belongs to, in line with its words. */
+.update-hour {
+  display: flex; align-items: center; flex-wrap: wrap; gap: 8px 12px; padding: 4px 0 8px 40px;
+  font-size: 14px; animation: fade-up var(--med) var(--ease);
+}
+.update-hour-label { font-weight: 600; }
+.update-hour-zone { font-size: 13px; }
+.update-settings .row-end { margin-top: 8px; }
+/* In line with the switch's words above. */
+.update-auto-off { margin: 4px 0 0; padding-left: 40px; font-size: 13px; overflow-wrap: anywhere; }
+/* The overview's version, when a newer one is out. */
+.pill.update-pill {
+  margin-left: 8px; max-width: none; vertical-align: 1px;
+  background: var(--primary-container); color: var(--on-primary-container);
+}
+.pill.update-pill:hover { text-decoration: underline; }
+
 /* ---------- phones ---------- */
 
 @media (max-width: 760px) {
   .admin-tabs, .ai-tool .segmented, .account-tools .segmented { display: flex; justify-self: stretch; }
-  .admin-tabs .seg, .ai-tool .seg, .account-tools .seg { flex: 1 1 0; }
+  .ai-tool .seg, .account-tools .seg { flex: 1 1 0; }
+  /* Five tabs: a longer name takes more of the row. */
+  .admin-tabs .seg { flex: 1 1 auto; padding: 0 4px; }
+  .update-offer .btn { flex: 1 1 100%; }
+  .update-hour, .update-auto-off { padding-left: 0; }
 }
 @media (max-width: 600px) {
   .schedule-fields { grid-template-columns: 1fr; }
@@ -98,4 +206,5 @@ pre.command {
 /* The bars and tiles appear without moving; base.css shortens the rest. */
 @media (prefers-reduced-motion: reduce) {
   .stat, .bar, .account-tools { animation: none; }
+  .update-step:not(:last-child)::after { transition: none; }
 }

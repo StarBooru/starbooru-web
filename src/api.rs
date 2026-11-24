@@ -103,6 +103,8 @@ pub struct Refused {
     pub missing: bool,
     pub status: Option<u16>,
     pub code: Option<String>,
+    /// Seconds to wait, after too many requests, when the server said.
+    pub retry_after: Option<u64>,
 }
 
 /// [`call`], with the whole of a failure.
@@ -116,6 +118,7 @@ where
         missing: false,
         status: None,
         code: None,
+        retry_after: None,
     };
     let Some(session) = store::session_untracked() else {
         return Err(refused(t!("error-session-expired")));
@@ -132,9 +135,14 @@ where
             missing: is_missing(&e),
             status: match &e {
                 ClientError::Api { status, .. } => Some(*status),
+                ClientError::RateLimited { .. } => Some(429),
                 _ => None,
             },
             code: e.code().map(str::to_owned),
+            retry_after: match &e {
+                ClientError::RateLimited { retry_after } => *retry_after,
+                _ => None,
+            },
         }
     })
 }

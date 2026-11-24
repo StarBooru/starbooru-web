@@ -185,6 +185,48 @@ a.brand:hover .mark-star, a.search-home:hover .mark-star { transform: rotate(90d
   --pad-x: 16px;
   padding: calc(var(--bar-end) + 16px) max(var(--pad-x), env(safe-area-inset-right)) 48px max(var(--pad-x), env(safe-area-inset-left));
 }
+
+/* A new StarBooru is out (updates.rs): a pill over the page, administrators
+   only. It opens the space it takes and folds it away when hidden, so the page
+   under it moves rather than jumps. A plain surface, as glass is for the bars. */
+.update-notice-slot {
+  display: grid; grid-template-rows: 1fr; margin: 0 0 14px;
+  animation: notice-open var(--slow) var(--ease-spring);
+  transition: grid-template-rows var(--med) var(--ease), margin var(--med) var(--ease), opacity var(--fast) var(--ease);
+}
+.update-notice-slot.leaving { grid-template-rows: 0fr; margin-bottom: 0; opacity: 0; }
+/* It folds with the row. */
+.update-notice-slot > .update-notice { min-height: 0; }
+.update-notice {
+  justify-self: center; display: flex; align-items: center; gap: 2px; max-width: 100%; overflow: hidden;
+  padding: 4px; border-radius: 999px;
+  background: var(--surface); color: var(--on-surface); box-shadow: var(--shadow-1);
+  animation: drop-in var(--slow) var(--ease-spring);
+}
+.update-notice-link {
+  display: flex; align-items: center; gap: 12px; min-width: 0; padding: 4px 10px 4px 4px; border-radius: 999px;
+  color: inherit; text-decoration: none; transition: background-color var(--fast) var(--ease);
+}
+.update-notice-link:hover { background: var(--surface-2); }
+.update-notice-link:active .update-notice-icon { transform: scale(0.9); }
+.update-notice-link > .icon { color: var(--on-surface-2); transition: transform var(--med) var(--ease-spring); }
+.update-notice-link:hover > .icon { transform: translateX(3px); }
+.update-notice-icon {
+  flex: none; display: grid; place-items: center; width: 36px; height: 36px; border-radius: 999px;
+  background: var(--primary-container); color: var(--on-primary-container);
+  transition: transform var(--fast) var(--ease-spring);
+}
+.update-notice-icon .icon { width: 20px; height: 20px; animation: notice-nudge 2.4s var(--ease) 600ms 2; }
+.update-notice-text { display: grid; min-width: 0; line-height: 1.3; }
+.update-notice-text strong { font-size: 14px; }
+.update-notice-text span { font-size: 13px; color: var(--on-surface-2); }
+@keyframes notice-open { from { grid-template-rows: 0fr; margin-bottom: 0; } }
+/* The arrow lifts twice, then stays. */
+@keyframes notice-nudge { 0%, 30%, 100% { transform: none; } 15% { transform: translateY(-3px); } }
+@media (prefers-reduced-motion: reduce) {
+  .update-notice-slot, .update-notice, .update-notice-icon .icon { animation: none; }
+}
+.app:is([data-saver="on"], [data-effects="lite"]) .update-notice-icon .icon { animation: none; }
 .page { max-width: 1600px; margin: 0 auto; animation: fade-up var(--med) var(--ease); }
 .page.narrow { max-width: 720px; }
 .center-page { display: grid; place-items: center; min-height: 50vh; padding: 16px; }

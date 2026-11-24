@@ -29,6 +29,7 @@ use crate::logic::search::{
 };
 use crate::route::{self, Tab};
 use crate::store;
+use crate::updates::UpdateNotice;
 
 /// The pages under the navigation, or the sign-in screen while no one is
 /// signed in.
@@ -81,6 +82,7 @@ fn Frame() -> impl IntoView {
             <NavSlider place="nav-top" here=here />
         </header>
         <main class="content">
+            <UpdateNotice />
             <Outlet />
         </main>
         <NavSlider place="nav-bottom" here=here />
