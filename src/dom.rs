@@ -264,6 +264,73 @@ pub fn reduced_motion() -> bool {
         .is_some_and(|m| m.matches())
 }
 
+/// The part of the window in view, in the coordinates of an element's
+/// `getBoundingClientRect`: the visual viewport where the browser has one
+/// (a phone's keyboard takes the rest), else the whole window.
+pub fn in_view() -> crate::logic::float::Rect {
+    use crate::logic::float::Rect;
+    let Some(window) = web_sys::window() else {
+        return Rect::default();
+    };
+    let number = |target: &JsValue, key: &str| {
+        js_sys::Reflect::get(target, &JsValue::from_str(key))
+            .ok()
+            .and_then(|v| v.as_f64())
+    };
+    let whole = || -> Option<Rect> {
+        let doc = window.document()?.document_element()?;
+        Some(Rect {
+            left: 0.0,
+            top: 0.0,
+            width: f64::from(doc.client_width()),
+            height: f64::from(doc.client_height()),
+        })
+    };
+    let visual = js_sys::Reflect::get(&window, &JsValue::from_str("visualViewport"))
+        .ok()
+        .filter(|v| v.is_object())
+        .and_then(|v| {
+            Some(Rect {
+                left: number(&v, "offsetLeft")?,
+                top: number(&v, "offsetTop")?,
+                width: number(&v, "width")?,
+                height: number(&v, "height")?,
+            })
+        })
+        .filter(|r| r.width > 0.0 && r.height > 0.0);
+    visual.or_else(whole).unwrap_or_default()
+}
+
+/// Where the shell's fixed bars are: the top bar, and the navigation (at
+/// the bottom on a phone, a rail at the side on a wide screen).
+pub fn fixed_bars() -> Vec<crate::logic::float::Rect> {
+    let Some(doc) = web_sys::window().and_then(|w| w.document()) else {
+        return Vec::new();
+    };
+    [".topbar", ".nav-bottom"]
+        .into_iter()
+        .filter_map(|s| doc.query_selector(s).ok().flatten())
+        .map(|el| {
+            let r = el.get_bounding_client_rect();
+            crate::logic::float::Rect {
+                left: r.left(),
+                top: r.top(),
+                width: r.width(),
+                height: r.height(),
+            }
+        })
+        .collect()
+}
+
+/// The visual viewport, to hear it move as a phone's keyboard comes and goes.
+pub fn visual_viewport() -> Option<web_sys::EventTarget> {
+    let window = web_sys::window()?;
+    js_sys::Reflect::get(&window, &JsValue::from_str("visualViewport"))
+        .ok()?
+        .dyn_into::<web_sys::EventTarget>()
+        .ok()
+}
+
 /// How far down the page is scrolled, and how tall the window is.
 pub fn scroll() -> (f64, f64) {
     let Some(window) = web_sys::window() else {

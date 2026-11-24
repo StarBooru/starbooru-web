@@ -168,6 +168,19 @@ impl Lists {
             .cloned()
     }
 
+    /// The first post of the results kept for search `q`: `Some(None)` when
+    /// they're known to be empty, `None` when they aren't known.
+    pub fn first(&self, q: &str, owner: &str, now: DateTime<Utc>) -> Option<Option<Arc<Post>>> {
+        self.0
+            .iter()
+            .find(|l| {
+                let age = (now - l.loaded_at).num_hours();
+                l.q == q && l.owner == owner && (0..MAX_LIST_HOURS).contains(&age)
+            })
+            .filter(|l| !l.posts.is_empty() || !l.has_more)
+            .map(|l| l.posts.first().cloned())
+    }
+
     pub fn keep(&mut self, list: List) {
         self.0.retain(|l| l.q != list.q);
         self.0.insert(0, list);
@@ -485,6 +498,20 @@ mod tests {
         let mut lists = Lists::default();
         lists.keep(list("cat", "a|1", now));
         assert!(lists.find("cat", "a|1", now).is_some());
+        assert_eq!(
+            lists.first("cat", "a|1", now).flatten().map(|p| p.id),
+            Some(1)
+        );
+        assert!(lists.first("cat", "a|2", now).is_none());
+        // Empty for good, or empty while the first page is still coming.
+        let mut none = list("none", "a|1", now);
+        none.posts.clear();
+        none.has_more = false;
+        lists.keep(none.clone());
+        assert_eq!(lists.first("none", "a|1", now), Some(None));
+        none.has_more = true;
+        lists.keep(none);
+        assert_eq!(lists.first("none", "a|1", now), None);
         assert!(lists.find("cat", "a|2", now).is_none(), "another account");
         assert!(lists.find("dog", "a|1", now).is_none());
         let later = now + chrono::Duration::hours(MAX_LIST_HOURS);

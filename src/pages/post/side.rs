@@ -40,7 +40,7 @@ fn section_label(name: &str) -> String {
     }
 }
 
-fn group_label(group: &Group) -> String {
+pub(super) fn group_label(group: &Group) -> String {
     match group {
         Group::Category(c) => category_label(*c),
         Group::Section(name) => section_label(name),

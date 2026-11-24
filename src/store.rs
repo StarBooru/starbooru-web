@@ -22,7 +22,7 @@ use starbooru_core::color::Rgb;
 use starbooru_core::{AuthResponse, User};
 
 use crate::i18n::Lang;
-use crate::logic::saved::search_key;
+use crate::logic::saved::{Kind, Placed, Sort, search_key};
 use crate::logic::{address, history, spots, updates};
 
 /// The signed-in account. Sign-in fills it in.
@@ -216,6 +216,31 @@ pub struct SavedBooru {
     pub api_key: String,
 }
 
+/// The saved searches' sort, shared by both kinds, and each kind's places.
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct SavedPrefs {
+    pub sort: Sort,
+    pub gallery: Placed,
+    pub boorus: Placed,
+}
+
+impl SavedPrefs {
+    pub fn of(&self, kind: Kind) -> &Placed {
+        match kind {
+            Kind::Gallery => &self.gallery,
+            Kind::Boorus => &self.boorus,
+        }
+    }
+
+    pub fn of_mut(&mut self, kind: Kind) -> &mut Placed {
+        match kind {
+            Kind::Gallery => &mut self.gallery,
+            Kind::Boorus => &mut self.boorus,
+        }
+    }
+}
+
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(default)]
 pub struct Prefs {
@@ -295,6 +320,10 @@ pub struct Prefs {
     /// (`logic::updates`). It shows again for a newer one.
     #[serde(deserialize_with = "lenient", skip_serializing_if = "Vec::is_empty")]
     pub dismissed_updates: Vec<DismissedUpdate>,
+    /// How the saved searches are sorted, and per kind the order the user
+    /// put them in and the ones used last (`logic::saved::sorted`).
+    #[serde(deserialize_with = "lenient")]
+    pub saved: SavedPrefs,
     /// Settings this version doesn't have yet (the reference's, or a newer
     /// version's), written back untouched.
     #[serde(flatten)]
@@ -331,6 +360,7 @@ impl Default for Prefs {
             swipe_right: SwipeAction::Off,
             people: true,
             dismissed_updates: Vec::new(),
+            saved: SavedPrefs::default(),
             other: Map::new(),
         }
     }
@@ -1106,6 +1136,14 @@ mod tests {
                     owner: "https://booru.example|7".into(),
                     version: "0.3.0".into(),
                 }],
+                saved: SavedPrefs {
+                    sort: Sort::Mine,
+                    gallery: Placed {
+                        order: vec![3, 1],
+                        recent: vec![1],
+                    },
+                    boorus: Placed::default(),
+                },
                 other: Map::new(),
             },
             memory: GalleryMemory {
@@ -1185,6 +1223,21 @@ mod tests {
         assert!(prefs.boorus.is_empty());
         assert!(prefs.booru_sites.is_empty());
         assert!(prefs.booru_dedupe);
+    }
+
+    #[test]
+    fn saved_searches_keep_their_order_and_older_state_has_none() {
+        let prefs = parse(r#"{"prefs":{"theme":"dark","people":false}}"#).prefs;
+        assert_eq!(prefs.saved, SavedPrefs::default());
+        assert_eq!(prefs.saved.sort, Sort::Recent);
+        let prefs =
+            parse(r#"{"prefs":{"saved":{"sort":"mine","boorus":{"order":[4,1,9]}}}}"#).prefs;
+        assert_eq!(prefs.saved.sort, Sort::Mine);
+        assert_eq!(prefs.saved.boorus.order, [4, 1, 9]);
+        assert!(prefs.saved.gallery.recent.is_empty());
+        let prefs = parse(r#"{"prefs":{"saved":{"sort":"best"},"theme":"dark"}}"#).prefs;
+        assert_eq!(prefs.saved, SavedPrefs::default());
+        assert_eq!(prefs.theme, Theme::Dark);
     }
 
     #[test]

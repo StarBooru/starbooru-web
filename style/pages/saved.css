@@ -1,0 +1,147 @@
+/* Saved searches, the gallery's and the boorus' (pages/saved/): the
+   "Save search" button beside a search, one row over the grid that scrolls
+   sideways and ends in the way to all of them, and the sheet with all of
+   them. A label leads with what sets a search apart; what it shares with the
+   ones like it is dimmed. */
+
+/* Beside the title: says what it does, and once pressed what it did. */
+.save-search { min-height: 36px; padding: 0 14px 0 10px; gap: 6px; font-size: 14px; }
+.save-search .icon { width: 20px; height: 20px; }
+.save-search.on { background: var(--surface-2); color: var(--primary); box-shadow: inset 0 0 0 1px var(--primary); }
+.save-search.on .icon { animation: pop var(--slow) var(--ease-spring); }
+.save-search.failed { background: var(--warn-container); color: var(--on-warn-container); }
+
+/* A label: its own terms, then the shared ones. */
+.saved-label { display: inline-flex; align-items: baseline; gap: 6px; min-width: 0; overflow: hidden; white-space: nowrap; }
+.label-lead { flex: none; max-width: 100%; overflow: hidden; text-overflow: ellipsis; font-weight: 600; }
+.label-rest { min-width: 0; overflow: hidden; text-overflow: ellipsis; font-weight: 400; font-size: 0.92em; color: var(--on-surface-2); }
+
+/* A booru search's picture: its first site's initials, and how many more. */
+.site-tile {
+  position: relative; display: grid; place-items: center; font-size: 13px; font-weight: 700; letter-spacing: 0.02em;
+  text-transform: uppercase; background: var(--surface-3); color: var(--on-surface);
+}
+.saved-pill .site-tile .more { display: none; }
+.site-tile .more {
+  position: absolute; right: 2px; bottom: 2px; padding: 0 3px; border-radius: 6px; font-size: 9px; line-height: 13px;
+  background: var(--primary); color: var(--on-primary);
+}
+.every-tile { display: grid; place-items: center; background: var(--primary-container); color: var(--on-primary-container); }
+
+/* ---------- the row over the grid ---------- */
+
+.saved-row { display: flex; align-items: center; gap: 8px; min-width: 0; margin: 0 0 12px; }
+.saved-row .saved-strip {
+  flex: 1; min-width: 0; list-style: none; margin: 0; padding: 2px; display: flex; gap: 8px;
+  overflow-x: auto; scrollbar-width: none; scroll-snap-type: x proximity; overscroll-behavior-x: contain;
+  /* The row fades at its end, where it goes on. */
+  mask-image: linear-gradient(to right, #000 calc(100% - 32px), transparent);
+}
+.saved-row .saved-strip::-webkit-scrollbar { display: none; }
+.saved-pill { flex: none; scroll-snap-align: start; animation: pop-in var(--med) var(--ease-spring) both; }
+.saved-pill:nth-child(2) { animation-delay: 20ms; }
+.saved-pill:nth-child(3) { animation-delay: 40ms; }
+.saved-pill:nth-child(n+4) { animation-delay: 60ms; }
+.saved-pill a {
+  display: flex; align-items: center; gap: 8px; height: 40px; max-width: 280px; padding: 0 14px 0 4px;
+  border: 1px solid var(--outline); border-radius: 999px; background: var(--surface); color: var(--on-surface);
+  text-decoration: none; font-size: 14px;
+  transition: background-color var(--fast) var(--ease), border-color var(--fast) var(--ease);
+}
+.saved-pill a:hover { background: var(--surface-2); border-color: var(--primary); }
+.saved-pill .preview { width: 30px; height: 30px; border-radius: 999px; font-size: 11px; }
+.saved-pill.moved a { border-color: var(--primary); }
+.saved-all {
+  flex: none; display: inline-flex; align-items: center; gap: 6px; height: 40px; padding: 0 8px 0 14px;
+  border: 0; border-radius: 999px; background: var(--primary-container); color: var(--on-primary-container);
+  font: inherit; font-size: 14px; font-weight: 600; cursor: pointer;
+  transition: transform var(--fast) var(--ease-spring), box-shadow var(--fast) var(--ease);
+}
+.saved-all:hover { box-shadow: var(--shadow-1); }
+.saved-all:active { transform: scale(0.96); }
+.saved-all .badge, .saved-sheet .badge, .saved-every .badge {
+  position: static; display: inline-grid; place-items: center; min-width: 24px; height: 22px; padding: 0 6px;
+  border-radius: 999px; background: var(--surface); color: var(--on-surface); font-size: 12px; font-weight: 700;
+  font-variant-numeric: tabular-nums; box-shadow: none;
+}
+
+/* ---------- the sheet with all of them ---------- */
+
+.saved-sheet { width: min(600px, 100%); display: flex; flex-direction: column; max-height: min(760px, calc(100dvh - 32px)); overflow: hidden; }
+.saved-sheet .sheet-head .card-title { display: inline-flex; align-items: center; gap: 8px; }
+.saved-tools { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-bottom: 8px; }
+.saved-filter {
+  flex: 1 1 220px; display: flex; align-items: center; gap: 8px; height: 40px; padding: 0 14px;
+  border: 1px solid var(--outline); border-radius: 999px; background: var(--surface); color: var(--on-surface-2);
+}
+.saved-filter:focus-within { border-color: var(--primary); box-shadow: 0 0 0 3px oklch(from var(--primary) l c h / 0.2); }
+.saved-filter input { flex: 1; min-width: 0; height: 100%; border: 0; outline: 0; background: transparent; color: var(--on-surface); font: inherit; }
+.saved-sort { flex: none; }
+.saved-none { padding: 16px 4px; }
+.saved-list {
+  list-style: none; margin: 0 -8px; padding: 0 8px 4px; display: grid; gap: 2px; overflow-y: auto; overscroll-behavior: contain;
+}
+/* A row: the search, then its controls at the end, each a 40 px target on
+   the row's centre line, 4 px apart and 4 px from the edge. The grip shows
+   in "My order" (for a mouse), just before ⋮, which keeps its place. */
+.saved-item {
+  position: relative; display: flex; align-items: center; gap: 4px; min-height: 56px; padding: 4px;
+  border-radius: var(--radius-m); transition: background-color var(--fast) var(--ease), opacity var(--fast) var(--ease);
+}
+.saved-item:hover, .saved-item:focus-within { background: var(--surface-2); }
+.saved-grip {
+  flex: none; display: grid; place-items: center; width: 40px; height: 40px; border-radius: 999px;
+  color: var(--on-surface-2); cursor: grab; opacity: 0.6;
+  transition: opacity var(--fast) var(--ease), background-color var(--fast) var(--ease);
+}
+/* Six dots, two by three. */
+.saved-grip::before {
+  content: ""; width: 12px; height: 18px;
+  background: radial-gradient(circle, currentColor 1.6px, transparent 2px) 0 0 / 6px 6px;
+}
+.saved-item:hover .saved-grip { opacity: 1; }
+.saved-grip:hover { background: var(--surface-3); color: var(--on-surface); }
+@media (pointer: coarse) { .saved-grip { display: none; } }
+.saved-list.sorting .saved-item { cursor: grabbing; }
+.saved-item.dragging { opacity: 0.4; }
+/* Where a dragged one would land: a line over it, or under the last. */
+.saved-item.drop-before::before, .saved-item.drop-after::after {
+  content: ""; position: absolute; left: 8px; right: 8px; height: 3px; border-radius: 999px; background: var(--primary);
+}
+.saved-item.drop-before::before { top: -2px; }
+.saved-item.drop-after::after { bottom: -2px; }
+.saved-item.moved { animation: saved-landed 700ms var(--ease-spring); }
+@keyframes saved-landed {
+  0% { background: var(--primary-container); transform: scale(0.97); }
+  40% { background: var(--primary-container); transform: scale(1.01); }
+  100% { transform: none; }
+}
+.saved-open {
+  flex: 1; min-width: 0; display: flex; align-items: center; gap: 12px; padding: 4px; border-radius: var(--radius-s);
+  color: var(--on-surface); text-decoration: none;
+}
+.saved-open .preview { width: 44px; height: 44px; border-radius: 12px; }
+.saved-text { flex: 1; min-width: 0; display: grid; gap: 2px; }
+.saved-text .saved-label { font-size: 15px; }
+.saved-detail { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; color: var(--on-surface-2); }
+.saved-more { flex: none; width: 40px; height: 40px; }
+.saved-rename { flex: 1; min-width: 0; padding: 2px 4px; }
+.saved-rename input {
+  width: 100%; height: 44px; padding: 0 12px; border: 2px solid var(--primary); border-radius: var(--radius-s);
+  background: var(--surface); color: var(--on-surface); font: inherit; font-weight: 600; outline: 0;
+}
+
+/* ---------- in the empty search box (shell.css has the list) ---------- */
+
+.suggestions .saved-option .saved-label { font-size: 14px; }
+.saved-every { border-top: 1px solid var(--outline); margin-top: 4px; }
+.saved-every .saved-name { font-weight: 600; color: var(--primary); }
+
+.app[data-effects="lite"] :is(.saved-pill, .saved-item.moved, .save-search.on .icon) { animation: none; }
+@media (max-width: 760px) {
+  .saved-row { margin-inline: calc(var(--pad-x, 12px) * -1); padding-inline: var(--pad-x, 12px); }
+  .saved-pill a { max-width: 70vw; }
+  .saved-all-label { display: none; }
+  .saved-all { padding: 0 6px 0 10px; }
+  .saved-sheet { max-height: calc(100dvh - 24px); }
+}

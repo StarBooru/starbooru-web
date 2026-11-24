@@ -14,9 +14,11 @@ use leptos::task::spawn_local;
 use leptos_router::NavigateOptions;
 use leptos_router::components::Outlet;
 use leptos_router::hooks::{use_location, use_navigate, use_query_map};
+use send_wrapper::SendWrapper;
 
 use super::explore;
 use super::login::Login;
+use super::saved::{self, SavedLine, SavedSheet};
 use super::search_demo::{SearchDemo, plays_on};
 use crate::activity::{self, Activity};
 use crate::components::banner::Spinner;
@@ -26,6 +28,7 @@ use crate::dom::{self, caret_of};
 use crate::logic::boorus;
 use crate::logic::explore::{tidy, window};
 use crate::logic::modes::{Screen, screen};
+use crate::logic::saved::Kind;
 use crate::logic::search::{
     Hint, Latest, ListKey, REMOTE_PAUSE_MS, TYPING_PAUSE_MS, complete, list_key, short_count,
     still_fitting, utf16_index, word_at,
@@ -123,6 +126,7 @@ fn Frame(guest: bool) -> impl IntoView {
         </main>
         <NavSlider place="nav-bottom" here=here guest=guest />
         {(!guest).then(|| view! { <Activity /> })}
+        {(!guest).then(|| view! { <SavedSheet /> })}
     }
 }
 
@@ -135,6 +139,19 @@ enum Scope {
     /// With the window of a public server's Trending, when the page has one.
     Explore(Option<u32>),
     Boorus(String),
+    /// The Tags page, which the box filters as it's typed in.
+    Tags,
+}
+
+impl Scope {
+    /// Whose saved searches the empty box offers, if any.
+    fn saved(&self) -> Option<Kind> {
+        match self {
+            Scope::Collection | Scope::Explore(_) => Some(Kind::Gallery),
+            Scope::Boorus(_) => Some(Kind::Boorus),
+            Scope::Tags => None,
+        }
+    }
 }
 
 /// What the box searches at `path`, whose address has the booru browser's
@@ -144,6 +161,8 @@ fn scope_of(path: &str, s: Option<String>, days: Option<String>) -> Scope {
         Scope::Boorus(s.unwrap_or_default())
     } else if route::is_explore(path) {
         Scope::Explore(days.map(|d| window(Some(&d))))
+    } else if route::is_tags(path) {
+        Scope::Tags
     } else {
         Scope::Collection
     }
@@ -157,6 +176,7 @@ fn search_href(scope: &Scope, q: &str, last_sites: &[String]) -> String {
         Scope::Collection => route::gallery(q),
         Scope::Explore(None) => route::explore(&tidy(q)),
         Scope::Explore(Some(days)) => route::explore_over(&tidy(q), *days),
+        Scope::Tags => route::tags(q),
         Scope::Boorus(s) => {
             let sites = boorus::sites_param(&boorus::chosen_sites(s, last_sites));
             route::boorus(&boorus::tidy_query(q), &sites)
@@ -165,12 +185,12 @@ fn search_href(scope: &Scope, q: &str, last_sites: &[String]) -> String {
 }
 
 /// The search a page shows in the box: the gallery's, a post's and
-/// Explore's own, the booru browser's as its address carries it, and the
-/// last one elsewhere.
+/// Explore's own, the booru browser's as its address carries it, the Tags
+/// page's filter, and the last search elsewhere.
 fn shown_search(path: &str, q: Option<String>, last: &str) -> String {
     match scope_of(path, None, None) {
         Scope::Boorus(_) => boorus::from_address(&q.unwrap_or_default()),
-        Scope::Explore(_) => q.unwrap_or_default(),
+        Scope::Explore(_) | Scope::Tags => q.unwrap_or_default(),
         Scope::Collection if route::has_search(path) => q.unwrap_or_default(),
         Scope::Collection => last.to_owned(),
     }
@@ -182,6 +202,7 @@ fn placeholder(scope: &Scope) -> String {
         Scope::Collection => t!("search-placeholder"),
         Scope::Explore(_) => t!("explore-search"),
         Scope::Boorus(_) => t!("boorus-search"),
+        Scope::Tags => t!("tags-filter-placeholder"),
     }
 }
 
@@ -191,6 +212,7 @@ fn label(scope: &Scope) -> String {
         Scope::Collection => t!("search-label"),
         Scope::Explore(_) => t!("explore-search"),
         Scope::Boorus(_) => t!("boorus-search"),
+        Scope::Tags => t!("tags-filter-label"),
     }
 }
 
@@ -198,6 +220,8 @@ fn label(scope: &Scope) -> String {
 fn kept(scope: &Scope, typed: &str) -> Option<Vec<Hint>> {
     match scope {
         Scope::Collection | Scope::Explore(_) => api::kept_tags(typed),
+        // The list below is the answer.
+        Scope::Tags => Some(Vec::new()),
         Scope::Boorus(s) => {
             let site = boorus::completing_site(s, &store::prefs_untracked().booru_sites)?;
             api::kept_remote_tags(&site, typed)
@@ -208,7 +232,7 @@ fn kept(scope: &Scope, typed: &str) -> Option<Vec<Hint>> {
 /// How long the typing pauses before `scope` is asked.
 fn pause(scope: &Scope) -> i32 {
     match scope {
-        Scope::Collection | Scope::Explore(_) => TYPING_PAUSE_MS,
+        Scope::Collection | Scope::Explore(_) | Scope::Tags => TYPING_PAUSE_MS,
         Scope::Boorus(_) => REMOTE_PAUSE_MS,
     }
 }
@@ -218,6 +242,7 @@ fn pause(scope: &Scope) -> i32 {
 async fn suggest(scope: Scope, typed: String) -> Vec<Hint> {
     match scope {
         Scope::Collection | Scope::Explore(_) => api::tag_hints(typed).await,
+        Scope::Tags => Vec::new(),
         Scope::Boorus(s) => {
             match boorus::completing_site(&s, &store::prefs_untracked().booru_sites) {
                 Some(site) => api::remote_tag_hints(site, typed).await,
@@ -283,10 +308,29 @@ fn SearchBox() -> impl IntoView {
     let asked = StoredValue::new(None::<String>);
     let turn = StoredValue::new(Latest::default());
     let input: NodeRef<html::Input> = NodeRef::new();
-    let expanded = Memo::new(move |_| focused.get() && open.get() && hints.with(|h| !h.is_empty()));
+    // While the box is empty, it offers the saved searches instead, the
+    // gallery's or the boorus', until Escape or a choice puts them away.
+    // The last option opens all of them.
+    let saved_open = RwSignal::new(false);
+    let saved_kind = Memo::new(move |_| scope.with(Scope::saved));
+    let saved = Memo::new(move |_| {
+        let wanted = focused.get() && saved_open.get() && text.with(|t| t.trim().is_empty());
+        match saved_kind.get() {
+            Some(kind) if wanted => saved::offered(kind),
+            _ => (Vec::new(), 0),
+        }
+    });
+    let offering = Memo::new(move |_| saved.with(|(s, _)| !s.is_empty()));
+    // On the Tags page the box filters the list as it's typed in.
+    let filtering = Memo::new(move |_| scope.with(|s| *s == Scope::Tags));
+    let filter_turn = StoredValue::new(Latest::default());
+    let expanded = Memo::new(move |_| {
+        focused.get() && (offering.get() || open.get() && hints.with(|h| !h.is_empty()))
+    });
 
     let close = move || {
         open.set(false);
+        saved_open.set(false);
         active.set(None);
     };
     // Drops the hints and any answer still on its way.
@@ -298,10 +342,16 @@ fn SearchBox() -> impl IntoView {
         hints.set(Vec::new());
         close();
     };
-    // A new page, or Back, brings its own search, and closes the list.
+    // A new page, or Back, brings its own search, and closes the list. Not
+    // the filter the Tags page was just given from here, which would undo
+    // what was typed since.
     Effect::watch(
         move || current.get(),
-        move |q, _, _| text.set(q.clone()),
+        move |q, _, _| {
+            if !(filtering.get_untracked() && focused.get_untracked()) {
+                text.set(q.clone());
+            }
+        },
         false,
     );
     Effect::watch(
@@ -378,11 +428,67 @@ fn SearchBox() -> impl IntoView {
         forget(now);
     };
 
+    // A saved search opens where it was left; the last option opens them all.
+    let go = SendWrapper::new(use_navigate());
+    let choose = Callback::new(move |i: usize| {
+        let Some(kind) = saved_kind.get_untracked() else {
+            return;
+        };
+        let item = saved.with_untracked(|(s, _)| s.get(i).map(|(s, _)| s.clone()));
+        close();
+        if let Some(input) = input.get_untracked() {
+            let _ = input.blur();
+        }
+        match item {
+            Some(item) => {
+                saved::used(&item);
+                (*go)(&saved::href(&item), NavigateOptions::default());
+            }
+            None => saved::open_sheet(kind),
+        }
+    });
+    // The Tags page's filter, once the typing pauses: in place, so Back
+    // leaves the page rather than going through every letter.
+    let go_filter = SendWrapper::new(use_navigate());
+    let set_filter = Callback::new(move |value: String| {
+        let to = route::tags(&value);
+        let replace = NavigateOptions {
+            replace: true,
+            scroll: false,
+            ..NavigateOptions::default()
+        };
+        (*go_filter)(&to, replace);
+    });
+    let filter_later = move |value: String| {
+        let Some(n) = filter_turn.try_update_value(Latest::next) else {
+            return;
+        };
+        spawn_local(async move {
+            dom::sleep(TYPING_PAUSE_MS).await;
+            let latest = filter_turn.try_with_value(|t| t.is(n)) == Some(true);
+            if latest && filtering.try_get_untracked() == Some(true) {
+                set_filter.run(value);
+            }
+        });
+    };
+    let pick = move |i: usize| {
+        if offering.get_untracked() {
+            choose.run(i);
+        } else {
+            accept(i);
+        }
+    };
+
     let on_key = move |e: KeyboardEvent| {
         if e.is_composing() {
             return;
         }
-        let count = hints.with_untracked(Vec::len);
+        let count = if offering.get_untracked() {
+            // And "All saved searches".
+            saved.with_untracked(|(s, _)| s.len() + 1)
+        } else {
+            hints.with_untracked(Vec::len)
+        };
         match list_key(
             &e.key(),
             expanded.get_untracked(),
@@ -396,7 +502,7 @@ fn SearchBox() -> impl IntoView {
             }
             ListKey::Accept(i) => {
                 e.prevent_default();
-                accept(i);
+                pick(i);
             }
             ListKey::Close => {
                 // Not the page's Escape, nor the box's own, which empties it.
@@ -413,9 +519,18 @@ fn SearchBox() -> impl IntoView {
         ev.prevent_default();
         close();
         let last_sites = store::prefs_untracked().booru_sites;
+        // On the Tags page, Enter keeps the filter as it is.
+        let options = NavigateOptions {
+            replace: filtering.get_untracked(),
+            scroll: !filtering.get_untracked(),
+            ..NavigateOptions::default()
+        };
+        filter_turn.update_value(|t| {
+            t.next();
+        });
         navigate(
             &search_href(&scope.get_untracked(), &text.get_untracked(), &last_sites),
-            NavigateOptions::default(),
+            options,
         );
         // On a phone, this puts the keyboard away.
         if let Some(input) = input.get_untracked() {
@@ -424,11 +539,73 @@ fn SearchBox() -> impl IntoView {
     };
     let clear = move |_| {
         text.set(String::new());
+        saved_open.set(true);
         if let Some(input) = input.get_untracked() {
             input.set_value("");
             let _ = input.focus();
         }
-        follow();
+        if filtering.get_untracked() {
+            filter_turn.update_value(|t| {
+                t.next();
+            });
+            set_filter.run(String::new());
+        } else {
+            follow();
+        }
+    };
+    // The pointer picks an option only by moving: one resting where the
+    // list opens doesn't choose for Enter.
+    let hover = move |i: usize| {
+        if active.get_untracked() != Some(i) {
+            active.set(Some(i));
+        }
+    };
+    let saved_list = move || {
+        let (list, all) = saved.get();
+        let last = list.len();
+        let options = list
+            .into_iter()
+            .enumerate()
+            .map(|(i, (item, label))| {
+                let on = move || active.get() == Some(i);
+                let name = item.name.clone();
+                view! {
+                    <li
+                        id=option_id(i)
+                        role="option"
+                        class="saved-option"
+                        class:active=on
+                        aria-selected=move || if on() { "true" } else { "false" }
+                        aria-label=name
+                        on:mousemove=move |_| hover(i)
+                        on:click=move |_| choose.run(i)
+                    >
+                        <SavedLine item=item label=label />
+                    </li>
+                }
+            })
+            .collect_view();
+        let on = move || active.get() == Some(last);
+        view! {
+            {options}
+            <li
+                id=option_id(last)
+                role="option"
+                class="saved-option saved-every"
+                class:active=on
+                aria-selected=move || if on() { "true" } else { "false" }
+                on:mousemove=move |_| hover(last)
+                on:click=move |_| choose.run(last)
+            >
+                <span class="preview every-tile" aria-hidden="true">
+                    <Ico icon=Icon::Layout size=20 />
+                </span>
+                <span class="saved-text">
+                    <span class="saved-name">{move || t!("saved-all")}</span>
+                </span>
+                <span class="badge">{all}</span>
+            </li>
+        }
     };
     let list = move || {
         hints
@@ -446,7 +623,7 @@ fn SearchBox() -> impl IntoView {
                         class:active=on
                         aria-selected=move || if on() { "true" } else { "false" }
                         aria-label=label
-                        on:mouseenter=move |_| active.set(Some(i))
+                        on:mousemove=move |_| hover(i)
                         on:click=move |_| accept(i)
                     >
                         <span class=format!("tag-name {class}")>{name}</span>
@@ -486,23 +663,39 @@ fn SearchBox() -> impl IntoView {
                     }
                     prop:value=move || text.get()
                     on:input=move |e| {
-                        text.set(event_target_value(&e));
+                        let value = event_target_value(&e);
+                        // Emptied: the saved searches again.
+                        saved_open.set(value.trim().is_empty());
+                        text.set(value.clone());
+                        if filtering.get_untracked() {
+                            filter_later(value);
+                            return;
+                        }
                         open.set(true);
                         follow();
                     }
                     on:keydown=on_key
                     // The caret moved to another word.
                     on:keyup=move |e: KeyboardEvent| {
-                        if matches!(e.key().as_str(), "ArrowLeft" | "ArrowRight" | "Home" | "End") {
+                        if matches!(e.key().as_str(), "ArrowLeft" | "ArrowRight" | "Home" | "End")
+                            && !filtering.get_untracked()
+                        {
                             follow();
                         }
                     }
-                    on:click=move |_| follow()
+                    on:click=move |_| {
+                        if !filtering.get_untracked() {
+                            follow();
+                        }
+                    }
                     on:focus=move |_| {
                         focused.set(true);
+                        saved_open.set(true);
                         // Coming back to the same word opens its list again.
                         asked.set_value(None);
-                        follow();
+                        if !filtering.get_untracked() {
+                            follow();
+                        }
                     }
                     on:blur=move |_| {
                         focused.set(false);
@@ -527,16 +720,39 @@ fn SearchBox() -> impl IntoView {
             <Show when=move || expanded.get()>
                 <ul
                     class="suggestions"
+                    class:saved-offers=move || offering.get()
                     id=LIST_ID
                     role="listbox"
-                    aria-label=move || t!("search-suggestions")
+                    aria-label=move || {
+                        if offering.get() { saved_heading(saved_kind.get()) } else { t!("search-suggestions") }
+                    }
                     // A press would take the focus from the box and close the list first.
                     on:mousedown=|e| e.prevent_default()
                 >
-                    {list}
+                    {move || {
+                        if offering.get() {
+                            view! {
+                                <li class="list-head" role="presentation" aria-hidden="true">
+                                    {move || saved_heading(saved_kind.get())}
+                                </li>
+                                {saved_list}
+                            }
+                                .into_any()
+                        } else {
+                            list.into_any()
+                        }
+                    }}
                 </ul>
             </Show>
         </form>
+    }
+}
+
+/// The heading of the saved searches the empty box offers.
+fn saved_heading(kind: Option<Kind>) -> String {
+    match kind {
+        Some(Kind::Boorus) => t!("saved-booru-searches"),
+        _ => t!("saved-searches"),
     }
 }
 
@@ -696,7 +912,7 @@ mod tests {
 
     #[test]
     fn the_box_searches_the_collection() {
-        for path in ["/", "/post/3", "/tags", "/help", "/booruss", "/explorer"] {
+        for path in ["/", "/post/3", "/tag", "/help", "/booruss", "/explorer"] {
             assert_eq!(scope_of(path, Some("e926".into()), None), Scope::Collection);
         }
         assert_eq!(
@@ -705,8 +921,9 @@ mod tests {
         );
         assert_eq!(search_href(&Scope::Collection, "", &[]), "/");
         assert_eq!(shown_search("/", Some("sky".into()), "sea"), "sky");
-        assert_eq!(shown_search("/tags", Some("sky".into()), "sea"), "sea");
+        assert_eq!(shown_search("/help", Some("sky".into()), "sea"), "sea");
         assert_eq!(pause(&Scope::Collection), TYPING_PAUSE_MS);
+        assert_eq!(Scope::Collection.saved(), Some(Kind::Gallery));
     }
 
     #[test]
@@ -745,9 +962,30 @@ mod tests {
         assert_eq!(shown_search("/explore", None, "sea"), "");
         // Leaving brings back the gallery's search.
         assert_eq!(shown_search("/", Some("sky".into()), "sea"), "sky");
-        assert_eq!(shown_search("/tags", None, "sea"), "sea");
+        assert_eq!(shown_search("/help", None, "sea"), "sea");
+        // The gallery's saved searches, as on the gallery.
+        assert_eq!(Scope::Explore(None).saved(), Some(Kind::Gallery));
         // The collection's tags complete it, as fast as on the gallery.
         assert_eq!(pause(&Scope::Explore(None)), pause(&Scope::Collection));
+    }
+
+    #[test]
+    fn on_the_tags_page_the_box_filters_the_tags() {
+        for path in ["/tags", "/tags/"] {
+            assert_eq!(scope_of(path, Some("e926".into()), None), Scope::Tags);
+        }
+        assert_eq!(search_href(&Scope::Tags, "  fra ", &[]), "/tags?q=fra");
+        // Cleared, it shows them all.
+        assert_eq!(search_href(&Scope::Tags, "  ", &[]), "/tags");
+        // The box shows the page's filter, not the gallery's last search.
+        assert_eq!(shown_search("/tags", Some("fra".into()), "sea"), "fra");
+        assert_eq!(shown_search("/tags", None, "sea"), "");
+        // The list is the answer: nothing to suggest, no saved searches.
+        assert_eq!(kept(&Scope::Tags, "fra"), Some(Vec::new()));
+        assert_eq!(Scope::Tags.saved(), None);
+        assert_eq!(pause(&Scope::Tags), TYPING_PAUSE_MS);
+        // A tag's own page is the collection's again.
+        assert_eq!(scope_of("/tag", None, None), Scope::Collection);
     }
 
     #[test]
@@ -756,6 +994,7 @@ mod tests {
             Scope::Collection,
             Scope::Explore(None),
             Scope::Boorus(String::new()),
+            Scope::Tags,
         ];
         for (i, a) in scopes.iter().enumerate() {
             assert!(!placeholder(a).is_empty());
@@ -794,6 +1033,8 @@ mod tests {
         assert_eq!(shown_search("/boorus/post", None, "sea"), "");
         // Each site takes so many requests: the box waits a little longer.
         assert!(pause(&scope) > TYPING_PAUSE_MS);
+        // The boorus' own saved searches.
+        assert_eq!(scope.saved(), Some(Kind::Boorus));
     }
 
     #[test]

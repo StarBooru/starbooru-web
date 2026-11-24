@@ -234,8 +234,9 @@ html:has(.stage) { overscroll-behavior-x: none; }
   margin: 0 0 6px; font-size: 12px; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase;
   color: var(--on-surface-2);
 }
-/* The tag editor (post/edit.rs), in the tags' place: the box, its offers and
-   the "did you mean", the AI's suggestions, then the rating. */
+/* The tag editor (post/edit.rs), in the tags' place: the chips, the row
+   that adds tags with the category picked and the AI's suggestions, the
+   "did you mean", then the rating. */
 .card.edit { animation: fade-in var(--med) var(--ease); }
 .edit .field { margin-bottom: 12px; }
 .edit .field:last-of-type { margin-bottom: 20px; }
@@ -245,11 +246,122 @@ html:has(.stage) { overscroll-behavior-x: none; }
 /* Each as wide as its word needs, so "questionable" fits a narrow column. */
 .edit .seg { flex: 1 1 auto; min-width: 0; padding: 0 8px; }
 .did-you-mean { display: flex; flex-direction: column; align-items: flex-start; gap: 8px; margin-bottom: 12px; font-size: 14px; }
-.suggest { display: flex; flex-direction: column; align-items: flex-start; gap: 8px; margin-bottom: 12px; }
-.suggest .row-end { align-self: stretch; }
-.suggest .banner { align-self: stretch; margin: 0; }
-.chip.suggest-new { border-style: dashed; gap: 6px; }
 .suggest-badge { font-size: 11px; font-weight: 600; text-transform: uppercase; color: var(--tertiary); }
+/* The ring and the counts say there's something to save. */
+.tag-edit { transition: box-shadow var(--med) var(--ease); }
+.tag-edit.dirty { box-shadow: 0 0 0 2px var(--primary), var(--shadow-1); }
+.tag-edit .card-head { justify-content: flex-start; }
+.tag-edit .card-head > .icon-btn { margin-left: auto; width: 40px; height: 40px; }
+.edit-status { display: inline-flex; flex-wrap: wrap; gap: 6px; }
+.diff {
+  padding: 2px 8px; border-radius: 999px; font-size: 12px; font-weight: 700; font-variant-numeric: tabular-nums;
+  animation: pop var(--med) var(--ease-spring);
+}
+.diff.added { background: var(--primary-container); color: var(--on-primary-container); }
+.diff.removed { background: var(--danger-container); color: var(--on-danger-container); }
+.diff.rated { background: var(--surface-3); color: var(--on-surface); }
+/* The chips: the card's, with their × (base.css). A new one pops in under
+   its category, filled; one the collection doesn't have yet is dashed; one
+   taken off shrinks away. */
+.tag-groups.editing { margin-bottom: 14px; }
+.edit-chip { max-width: 100%; }
+.edit-chip .chip-name { min-width: 0; overflow-wrap: anywhere; }
+.edit-chip.added {
+  border-color: var(--primary); background: var(--primary-container); color: var(--on-primary-container);
+  animation: pop-in var(--med) var(--ease-spring) both;
+}
+.edit-chip.added:is(.cat-artist, .cat-character, .cat-copyright, .cat-meta) {
+  border-color: var(--cat); background: color-mix(in srgb, var(--cat) 14%, var(--surface)); color: var(--cat);
+}
+/* Hovering keeps a chip's colours: only its × lights up. */
+.edit-chip:is(.cat-artist, .cat-character, .cat-copyright, .cat-meta):hover { color: var(--cat); }
+.edit-chip.added:hover { background: var(--primary-container); color: var(--on-primary-container); }
+.edit-chip.added:is(.cat-artist, .cat-character, .cat-copyright, .cat-meta):hover {
+  background: color-mix(in srgb, var(--cat) 14%, var(--surface)); color: var(--cat);
+}
+.edit-chip.fresh { border-style: dashed; }
+.edit-chip.bad, .edit-chip.bad:hover { border-color: var(--danger); background: var(--danger-container); color: var(--on-danger-container); }
+.edit-chip.leaving { animation: chip-out 160ms var(--ease) forwards; pointer-events: none; }
+@keyframes chip-out { to { opacity: 0; transform: scale(0.6); } }
+
+/* The row that adds tags: the category they get, by colour, over the box. */
+.tag-adder { display: grid; gap: 8px; margin-bottom: 14px; }
+.adder-head { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; }
+.cat-pick-row { display: flex; flex-wrap: wrap; align-items: center; gap: 2px; }
+.adder-head .suggest-btn { margin-left: auto; }
+/* Dots in the categories' colours; the one picked is ringed, and the box
+   says it ("Add tags as Artist"). Each names itself on hover. */
+.cat-opt {
+  display: inline-grid; place-items: center; width: 32px; height: 32px; padding: 0;
+  border: 0; border-radius: 999px; background: transparent; cursor: pointer;
+  transition: background-color var(--fast) var(--ease);
+}
+.cat-opt .cat-dot {
+  width: 14px; height: 14px;
+  transition: transform var(--fast) var(--ease-spring), box-shadow var(--fast) var(--ease);
+}
+.cat-opt:hover { background: var(--surface-2); }
+.cat-opt:hover .cat-dot { transform: scale(1.15); }
+.cat-opt.on { background: color-mix(in srgb, var(--cat) 14%, var(--surface)); }
+.cat-opt.on .cat-dot { transform: scale(1.15); box-shadow: 0 0 0 3px var(--surface), 0 0 0 5px var(--cat); }
+.cat-opt:focus-visible { outline-offset: 1px; }
+.tag-add { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.tag-add .text-box { flex: 1 1 0; min-width: 0; }
+.tag-add .text-box.one-line > textarea {
+  width: 100%; field-sizing: fixed; padding: 9px 14px; border: 1px solid var(--outline); border-radius: var(--radius-s);
+  background: var(--surface); color: var(--on-surface);
+  transition: border-color var(--fast) var(--ease), box-shadow var(--fast) var(--ease), background-color var(--fast) var(--ease);
+}
+/* The picked category tints the box. */
+.tag-add:not(.cat-general) .text-box.one-line > textarea {
+  border-color: color-mix(in srgb, var(--cat) 60%, var(--outline)); background: color-mix(in srgb, var(--cat) 6%, var(--surface));
+}
+.tag-add textarea:focus { outline: none; border-color: var(--cat, var(--primary)); box-shadow: 0 0 0 3px color-mix(in srgb, var(--cat, var(--primary)) 25%, transparent); }
+.tag-add textarea[aria-invalid="true"] { border-color: var(--danger); }
+.tag-add textarea::placeholder { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.tag-add .icon-btn { flex: none; width: 40px; height: 40px; }
+.icon-btn.tonal { background: var(--primary-container); color: var(--on-primary-container); }
+.suggest-btn { flex: none; padding: 0 14px 0 10px; gap: 6px; font-size: 14px; }
+.suggest-btn.busy .icon { animation: spin 1.2s linear infinite; }
+.tag-adder > .field-error { margin: 0; }
+.tag-adder > .banner { margin: 0; }
+/* The AI's answer, right under the row: chips to press, dashed until added. */
+.suggested {
+  display: grid; gap: 8px; padding: 10px; border: 1px dashed color-mix(in srgb, var(--tertiary) 50%, var(--outline));
+  border-radius: var(--radius-m); background: color-mix(in srgb, var(--tertiary) 5%, var(--surface));
+  animation: fade-up var(--med) var(--ease);
+}
+.suggested-title { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; color: var(--tertiary); }
+.suggested.asking .suggested-title .icon { animation: pulse 1.2s var(--ease) infinite; }
+.suggested .chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.suggested-chip { border-style: dashed; gap: 4px; padding-left: 8px; animation: pop-in var(--med) var(--ease-spring) both; }
+.suggested-chip .icon { opacity: 0.7; }
+.suggested-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 4px; }
+.suggested .hint { margin: 0; }
+.suggested .banner { margin: 0; }
+/* Save and Cancel stay in reach while the card scrolls. */
+.edit-bar {
+  position: sticky; bottom: 12px; z-index: 2; display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 4px 8px;
+  margin: 8px -10px -10px; padding: 8px; border-radius: var(--radius-l); background: var(--surface-2);
+}
+.edit-note { flex: 1 1 0; min-width: 0; display: inline-flex; align-items: center; gap: 8px; padding-left: 8px; font-size: 13px; color: var(--on-surface-2); }
+.tag-edit.dirty .edit-note { color: var(--primary); font-weight: 600; }
+.tag-edit.dirty .edit-note::before {
+  content: ""; width: 8px; height: 8px; border-radius: 999px; background: var(--primary);
+  animation: pulse 1.6s var(--ease) infinite;
+}
+.app[data-effects="lite"] :is(.edit-chip.added, .diff, .suggested, .suggested-chip) { animation: none; }
+.app[data-effects="lite"] :is(.tag-edit.dirty .edit-note::before, .suggest-btn.busy .icon, .suggested.asking .icon) { animation: none; }
+/* In one column the notices would cover Save: they go above it. */
+@media (max-width: 900px) {
+  .app:has(.edit-bar) .snackbar-slot { bottom: 96px; }
+}
+@media (max-width: 760px) {
+  .edit-bar { bottom: calc(92px + env(safe-area-inset-bottom)); }
+  .edit-chip { min-height: 36px; }
+  .cat-opt { width: 36px; height: 36px; }
+  .app:has(.edit-bar) .snackbar-slot { bottom: calc(168px + env(safe-area-inset-bottom)); }
+}
 /* The people in the picture (post/people.rs), each with tags by slot, and
    their editor in the card's place: a fieldset per person. */
 .people > .hint { margin: 0; }

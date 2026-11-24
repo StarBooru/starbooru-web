@@ -16,7 +16,6 @@
 .booru-sites .chip.warn { background: var(--warn-container); color: var(--on-warn-container); border-color: currentColor; }
 .booru-sites .chip.warn::after { content: "!"; margin-left: 6px; font-weight: 700; }
 .booru-sites .icon-btn { flex: none; }
-.boorus .saved-searches { margin-bottom: 12px; }
 @media (max-width: 760px) {
   .booru-sites {
     flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none;

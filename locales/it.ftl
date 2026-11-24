@@ -363,8 +363,30 @@ search-forget = Dimentica questa ricerca
 search-save-failed = Impossibile salvare la ricerca: { $reason }
 search-forget-failed = Impossibile dimenticare la ricerca: { $reason }
 saved-searches = Ricerche salvate
-saved-remove = Rimuovi “{ $name }”
+saved-booru-searches = Ricerche salvate sui booru
+saved-all = Tutte le ricerche salvate
+saved-all-short = Tutte
+saved-filter = Filtra le ricerche salvate
+saved-none-match = Nessuna ricerca salvata corrisponde.
+saved-sort = Ordina le ricerche salvate
+saved-sort-recent = Usate di recente
+saved-sort-newest = Più recenti
+saved-sort-name = Nome
+saved-sort-mine = Il mio ordine
+search-save-short = Salva ricerca
+search-saved = Salvata
+saved-remove = Rimuovi
 saved-removed = “{ $name }” rimossa
+saved-added = Salvata come “{ $name }”
+saved-more = Altro per “{ $name }”
+saved-rename = Rinomina
+saved-name = Nome della ricerca salvata
+saved-renamed = Rinominata in “{ $name }”
+saved-rename-failed = Impossibile rinominare la ricerca: { $reason }
+saved-move-earlier = Sposta prima
+saved-move-later = Sposta dopo
+saved-drag = Trascina per spostare
+saved-moved = “{ $name }” spostata
 
 gallery-select = Seleziona i post
 gallery-stop-selecting = Termina la selezione
@@ -698,6 +720,24 @@ post-edit-tags = Modifica i tag
 post-no-tags = Ancora nessun tag.
 post-edit-title = Modifica tag e classificazione (E)
 post-tags-hint = Metti artist:, character:, copyright: o meta: davanti a un tag per sceglierne la categoria.
+post-add-as = Aggiungi tag come { $category }
+post-add-category = Categoria dei nuovi tag
+post-add-suggested = Aggiungi { $name }
+post-tags-as-text = Modifica come testo
+post-tag-removed = { $name } rimosso
+post-tags-added =
+    { $count ->
+        [one] 1 tag aggiunto
+       *[other] { $count } tag aggiunti
+    }
+post-tags-removed =
+    { $count ->
+        [one] 1 tag rimosso
+       *[other] { $count } tag rimossi
+    }
+post-tags-unsaved = Non ancora salvato
+post-tags-no-changes = Nessuna modifica
+post-save-title = Salva (Ctrl+Invio)
 post-did-you-mean = Intendevi?
 post-replace-tag = Sostituisci { $from } con { $to }
 tag-offers = Tag che corrispondono
@@ -710,6 +750,9 @@ save = Salva
 ai-suggest = Suggerisci tag
 ai-suggesting = Chiedo all'IA…
 ai-add-all = Aggiungi tutti
+ai-suggest-short = Suggerisci
+ai-suggested = Suggeriti
+ai-dismiss = Chiudi
 ai-new-tag = nuovo
 ai-no-suggestions = Nessun suggerimento per questo post.
 ai-rating = Classificazione suggerita: { $rating }
@@ -797,8 +840,14 @@ swipe-select = Seleziona
 tags-sort = Ordina i tag
 tags-most-used = Più usati
 tags-a-z = A–Z
-tags-filter-label = Filtra i tag
-tags-filter-placeholder = Filtra per nome o alias
+tags-filter-label = Filtra i tag per nome o alias
+tags-filter-placeholder = Filtra i tag
+tags-show-all = Mostra tutti i tag
+tags-posts =
+    { $count ->
+        [one] 1 post
+       *[other] { $shown } post
+    }
 tags-any-category = Tutti
 tags-none-yet = Ancora nessun tag
 tags-none-match = Nessun tag corrisponde
@@ -812,6 +861,11 @@ tags-browse =
     }
 tags-is-alias = “{ $name }” è un alias di questo tag.
 tags-category = Categoria
+tags-category-of = { $name }: { $category }. Cambia la categoria
+tags-change-category = Cambia la categoria
+tags-recoloured = Ora { $name } è { $category }
+tags-recolour-failed = Impossibile cambiare la categoria: { $reason }
+tags-search-named = Mostra i post con il tag { $name }
 tags-tree = Posizione nell'albero
 tags-tree-hint = Cercare un tag trova anche i tag sotto di esso, e la cima dell'albero è la sezione in cui vengono raggruppati i tag di un post.
 tags-tree-top = In cima: niente sopra.

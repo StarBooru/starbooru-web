@@ -125,6 +125,22 @@ pub fn is_explore(path: &str) -> bool {
     segments.as_slice() == ["explore"]
 }
 
+/// The Tags page filtered by `q`, as the search box filters it there.
+pub fn tags(q: &str) -> String {
+    let q = q.trim();
+    if q.is_empty() {
+        TAGS.to_owned()
+    } else {
+        format!("{TAGS}?q={}", query_value(q))
+    }
+}
+
+/// Whether `path` is the Tags page, where the search box filters the tags.
+pub fn is_tags(path: &str) -> bool {
+    let segments: Vec<&str> = path.split('/').filter(|s| !s.is_empty()).collect();
+    segments.as_slice() == ["tags"]
+}
+
 /// Post `id`, opened from the gallery for search `q`, so the viewer can step
 /// through the same results. `seed` is the shuffle of an `order:random` search.
 pub fn post(id: i64, q: &str, seed: Option<i64>) -> String {
@@ -267,6 +283,19 @@ mod tests {
         }
         for path in ["/", "/explorer", "/explore/x", "/boorus", "/post/1"] {
             assert!(!is_explore(path), "{path}");
+        }
+    }
+
+    #[test]
+    fn the_tags_page_carries_its_filter() {
+        assert_eq!(tags(""), "/tags");
+        assert_eq!(tags(" fra "), "/tags?q=fra");
+        assert_eq!(tags("a&b"), "/tags?q=a%26b");
+        for path in ["/tags", "/tags/", "tags"] {
+            assert!(is_tags(path), "{path}");
+        }
+        for path in ["/tag", "/", "/tagsx", "/tags/x", "/explore"] {
+            assert!(!is_tags(path), "{path}");
         }
     }
 

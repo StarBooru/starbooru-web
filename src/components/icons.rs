@@ -9,8 +9,11 @@ pub enum Icon {
     ArrowBack,
     Article,
     ArrowUp,
+    ArrowDown,
     /// The battery saver.
     Battery,
+    Bookmark,
+    BookmarkAdd,
     /// The posts added on this day.
     Calendar,
     Check,
@@ -53,6 +56,8 @@ pub enum Icon {
     /// Signing in: an arrow into a door.
     Login,
     Logout,
+    /// Three dots in a column: the menu of what else can be done.
+    More,
     /// Opening in a tab of its own.
     OpenInNew,
     /// Proportions wider or taller.
@@ -122,6 +127,17 @@ impl Icon {
             ),
             Icon::ArrowBack => Shape::Stroke("3", "M20 12H5m6.657-6.657L5 12l6.657 6.657"),
             Icon::ArrowUp => Shape::Stroke("3", "M12 20V5m-6.657 6.657L12 5l6.657 6.657"),
+            // ArrowUp turned over.
+            Icon::ArrowDown => Shape::Stroke("3", "M12 4v15m-6.657-6.657L12 19l6.657-6.657"),
+            // A bookmark: a search kept.
+            Icon::Bookmark => Shape::Fill(
+                "M7 2.5h10A2.5 2.5 0 0 1 19.5 5v15.6a1 1 0 0 1-1.55.83L12 17.4l-5.95 4.03a1 1 0 0 1-1.55-.83V5A2.5 2.5 0 0 1 7 2.5Z",
+            ),
+            // An empty bookmark with a plus: keep this search.
+            Icon::BookmarkAdd => Shape::Stroke(
+                "2",
+                "M7 3.5h10A1.5 1.5 0 0 1 18.5 5v15l-6.5-4.4L5.5 20V5A1.5 1.5 0 0 1 7 3.5ZM12 7.5v5M9.5 10h5",
+            ),
             Icon::Article => Shape::Fill(
                 "M12 8.5a1.5 1.5 0 0 0 1.5 1.5H20v10a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h6zM9 16a1 1 0 1 0 0 2h6a1 1 0 1 0 0-2zm0-4a1 1 0 1 0 0 2h1a1 1 0 1 0 0-2zm5-9.956a2 2 0 0 1 1 .542L19.414 7a2 2 0 0 1 .541 1H14z",
             ),
@@ -221,6 +237,9 @@ impl Icon {
             Icon::Login => Shape::Stroke(
                 "2.5",
                 "M14 3.75h3.5a2.75 2.75 0 0 1 2.75 2.75v11a2.75 2.75 0 0 1-2.75 2.75H14M3.75 12h10.5m-3.75-4l4 4l-4 4",
+            ),
+            Icon::More => Shape::Fill(
+                "M12 3.5a2 2 0 1 1 0 4 2 2 0 0 1 0-4Zm0 6.5a2 2 0 1 1 0 4 2 2 0 0 1 0-4Zm0 6.5a2 2 0 1 1 0 4 2 2 0 0 1 0-4Z",
             ),
             Icon::Logout => Shape::EvenOdd(
                 "M3.5 6A3.5 3.5 0 0 1 7 2.5h5a1.5 1.5 0 0 1 0 3H7a.5.5 0 0 0-.5.5v12a.5.5 0 0 0 .5.5h5a1.5 1.5 0 0 1 0 3H7A3.5 3.5 0 0 1 3.5 18zm12.44 2.11a1.5 1.5 0 0 1 2.12 0l2.829 2.83a1.5 1.5 0 0 1 0 2.12l-2.828 2.83a1.5 1.5 0 1 1-2.122-2.122l.268-.268H12a1.5 1.5 0 0 1 0-3h4.207l-.268-.268a1.5 1.5 0 0 1 0-2.121",
@@ -384,11 +403,14 @@ pub fn Ico(icon: Icon, #[prop(default = 24)] size: u32) -> impl IntoView {
 mod tests {
     use super::*;
 
-    const ALL: [Icon; 70] = [
+    const ALL: [Icon; 74] = [
         Icon::Add,
         Icon::ArrowBack,
         Icon::Article,
         Icon::ArrowUp,
+        Icon::ArrowDown,
+        Icon::Bookmark,
+        Icon::BookmarkAdd,
         Icon::Battery,
         Icon::Calendar,
         Icon::Check,
@@ -420,6 +442,7 @@ mod tests {
         Icon::Link,
         Icon::Login,
         Icon::Logout,
+        Icon::More,
         Icon::OpenInNew,
         Icon::Orientation,
         Icon::Palette,

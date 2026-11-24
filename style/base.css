@@ -143,9 +143,21 @@ textarea { resize: none; }
 /* Tags matching the word being typed in a tag box. The first is the one Tab
    puts in. */
 .tag-offers { display: flex; flex-wrap: wrap; gap: 6px; }
-.tag-offers .chip { min-height: 30px; padding: 0 10px; gap: 6px; cursor: pointer; font: inherit; font-size: 13px; }
+.tag-offers .chip {
+  max-width: 100%; min-height: 30px; padding: 4px 10px; gap: 6px; cursor: pointer; font: inherit; font-size: 13px; text-align: left;
+}
+/* A long name wraps inside its chip rather than widening the list. */
+.tag-offers .offer-name { min-width: 0; overflow-wrap: anywhere; }
+/* Floating (tag_box.rs places it): over what's under the box, as wide as it,
+   above the Save bar and the notices; it scrolls when the room runs out. */
+.tag-offers.floating {
+  position: fixed; z-index: 46; margin: 0; padding: 8px; align-content: flex-start;
+  overflow-y: auto; overscroll-behavior: contain;
+  background: var(--surface); border: 1px solid var(--outline); border-radius: var(--radius-m); box-shadow: var(--shadow-2);
+  animation: fade-in var(--fast) var(--ease);
+}
 .tag-offers .chip:first-child { background: var(--primary-container); color: var(--on-primary-container); }
-.tag-offers .count { color: var(--on-surface-2); font-variant-numeric: tabular-nums; font-size: 12px; font-weight: 400; }
+.tag-offers .count { flex: none; color: var(--on-surface-2); font-variant-numeric: tabular-nums; font-size: 12px; font-weight: 400; }
 
 /* A box and its button on one line, to add a name to a list. */
 .inline-add { display: flex; gap: 8px; margin-top: 16px; }
@@ -201,18 +213,40 @@ button.chip:disabled:not(.on) { opacity: 0.6; }
 button.chip:disabled:hover { background: var(--surface-2); color: var(--on-surface); transform: none; }
 .chip.on { background: var(--primary-container); color: var(--on-primary-container); border-color: var(--primary); font-weight: 600; }
 .chip.on:disabled:hover { background: var(--primary-container); color: var(--on-primary-container); }
-/* A chip with a button that takes it away. */
-.chip.removable { gap: 2px; padding-right: 4px; }
+/* A chip with a button that takes it away: the button is the chip's own
+   right end, its full height with the chip's corners, behind a hairline.
+   Hovering it tints that end and edges the chip in red; its focus ring is
+   the chip's. */
+.chip.removable { gap: 6px; padding-right: 0; overflow: hidden; }
 .chip.removable:hover { background: var(--surface-2); color: var(--on-surface); transform: none; }
 .chip.removable a { color: inherit; text-decoration: none; }
 .chip.removable a:hover { text-decoration: underline; }
 .chip-x {
-  display: inline-grid; place-items: center; width: 26px; height: 26px; padding: 0; border: 0; border-radius: 6px;
+  flex: none; align-self: stretch; display: inline-grid; place-items: center; width: 30px; margin: 0; padding: 0;
+  border: 0; border-left: 1px solid color-mix(in srgb, currentColor 18%, transparent); border-radius: 0 7px 7px 0;
   background: transparent; color: var(--on-surface-2); cursor: pointer;
+  transition: background-color var(--fast) var(--ease), color var(--fast) var(--ease);
 }
-.chip-x .icon { width: 18px; height: 18px; }
-.chip-x:hover:not(:disabled) { background: var(--danger-container); color: var(--on-danger-container); }
+.chip-x .icon { width: 16px; height: 16px; }
+.chip-x:hover:not(:disabled), .chip-x:focus-visible { background: var(--danger-container); color: var(--on-danger-container); }
+.chip-x:focus-visible { outline: none; }
+.chip.removable:has(.chip-x:hover:not(:disabled)) { border-color: var(--danger); }
+.chip.removable:has(.chip-x:focus-visible) { border-color: var(--danger); outline: 3px solid var(--primary); outline-offset: 2px; }
 .chip-x:disabled { opacity: 0.45; cursor: default; }
+
+/* The picture of what a search finds (components/preview.rs): its first
+   post, over that post's colour while it comes. */
+
+.preview {
+  position: relative; flex: none; display: block; width: 48px; height: 48px; overflow: hidden; border-radius: 12px;
+  background: var(--tint, color-mix(in srgb, var(--cat, var(--primary)) 18%, var(--surface-2)));
+}
+.preview img {
+  display: block; width: 100%; height: 100%; object-fit: cover; opacity: 0;
+  transition: opacity var(--med) var(--ease), transform var(--med) var(--ease);
+}
+.preview.loaded img { opacity: 1; }
+.preview.empty { background: var(--surface-3); }
 
 /* A small label, such as a tag's category. */
 .pill {

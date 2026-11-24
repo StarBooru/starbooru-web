@@ -1,47 +1,148 @@
-/* The Tags page and a tag's own page (pages/tags.rs). */
+/* The Tags page and a tag's own page (pages/tags/). Each category has its
+   colour, `--cat`, for its dot, its badge and a tag's name. */
 
-.tags-page { max-width: 960px; }
+.cat-general { --cat: var(--primary); }
+.cat-artist { --cat: var(--cat-artist); }
+.cat-character { --cat: var(--cat-character); }
+.cat-copyright { --cat: var(--cat-copyright); }
+.cat-meta { --cat: var(--cat-meta); }
+
+.cat-dot { flex: none; width: 10px; height: 10px; border-radius: 999px; background: var(--cat, var(--on-surface-2)); }
+.cat-all .cat-dot {
+  background: conic-gradient(var(--cat-artist) 0 20%, var(--cat-character) 0 40%, var(--cat-copyright) 0 60%,
+    var(--cat-meta) 0 80%, var(--primary) 0);
+}
+
+/* The categories, as tabs that also say which colour is which. */
+.cat-tabs { display: flex; flex-wrap: wrap; gap: 8px; }
+.cat-tab {
+  display: inline-flex; align-items: center; gap: 8px; min-height: 36px; padding: 0 14px 0 12px;
+  border: 1px solid var(--outline); border-radius: 999px; background: var(--surface);
+  color: var(--on-surface); font: inherit; font-size: 14px; cursor: pointer;
+  transition: background-color var(--fast) var(--ease), border-color var(--fast) var(--ease),
+    transform var(--fast) var(--ease-spring);
+}
+.cat-tab:hover:not(:disabled) { background: var(--surface-2); }
+.cat-tab:active:not(:disabled) { transform: scale(0.95); }
+.cat-tab.on {
+  border-color: var(--cat, var(--primary)); font-weight: 600;
+  background: color-mix(in srgb, var(--cat, var(--primary)) 16%, var(--surface));
+}
+.cat-tab.on .cat-dot { animation: pop var(--slow) var(--ease-spring); }
+.cat-tab:disabled { cursor: default; }
+.cat-tab:disabled:not(.on) { opacity: 0.55; }
+
+/* ---------- the Tags page ---------- */
+
+.tags-page { max-width: 1200px; }
 .tags-page .page-head { margin-bottom: 12px; }
 .tags-page .page-head .page-title { margin: 0; }
-.tag-filter { max-width: 480px; margin-bottom: 12px; }
-.tag-kinds { margin-bottom: 16px; }
 /* The labels are written as they should read; capitalising every word is for the ratings. */
 .tags-page .seg { text-transform: none; }
+.tags-page .cat-tabs { margin-bottom: 16px; }
 
-/* ---------- the list ---------- */
-
-.tag-list { list-style: none; margin: 0; padding: 8px; display: grid; }
-.tag-row {
-  display: grid; grid-template-columns: minmax(0, 1fr) auto 6ch; align-items: center; gap: 12px;
-  min-height: 48px; padding: 0 12px; border-radius: var(--radius-s);
-  color: var(--on-surface); text-decoration: none;
-  transition: background-color var(--fast) var(--ease);
+.tag-grid {
+  list-style: none; margin: 0; padding: 0; display: grid; gap: 12px;
+  grid-template-columns: repeat(auto-fill, minmax(min(300px, 100%), 1fr));
 }
-.tag-row:hover { background: var(--surface-2); }
-.tag-row .tag-name { font-weight: 600; overflow-wrap: anywhere; }
-.tag-row .tag-name.cat-artist { color: var(--cat-artist); }
-.tag-row .tag-name.cat-character { color: var(--cat-character); }
-.tag-row .tag-name.cat-copyright { color: var(--cat-copyright); }
-.tag-row .tag-name.cat-meta { color: var(--cat-meta); }
-.tag-row .pill { max-width: none; }
-.tag-row .count { text-align: right; color: var(--on-surface-2); font-variant-numeric: tabular-nums; }
-.tag-list li + li .tag-row { border-top: 1px solid oklch(from var(--outline) l c h / 0.4); }
-.tag-list + .sentinel { margin-top: 0; }
+/* A tag's card: a picture, the name in its category's colour and how many
+   posts have it. The badge names the category. */
+.tag-card {
+  position: relative; display: flex; align-items: center; gap: 4px; min-width: 0; padding: 8px 6px 8px 8px;
+  border-radius: var(--radius-m); background: var(--surface-2); color: var(--on-surface);
+  animation: fade-up var(--med) var(--ease) both; animation-delay: calc(min(var(--i), 24) * 18ms);
+  transition: background-color var(--fast) var(--ease), box-shadow var(--fast) var(--ease);
+}
+.tag-card:hover { background: var(--surface-3); }
+.tag-card:focus-within { box-shadow: 0 0 0 2px var(--outline); }
+.tag-main {
+  flex: 1; min-width: 0; display: flex; align-items: center; gap: 12px; padding: 2px 4px 2px 4px;
+  border-radius: var(--radius-s); color: inherit; text-decoration: none;
+}
+.tag-main .preview { width: 56px; height: 56px; }
+.tag-card:hover .preview img { transform: scale(1.06); }
+.tag-text { flex: 1; min-width: 0; display: grid; gap: 4px; }
+.tag-card .tag-name { font-weight: 600; font-size: 15px; overflow-wrap: anywhere; line-height: 1.25; }
+.tag-card:not(.cat-general) .tag-name { color: var(--cat); }
+.tag-count { font-size: 13px; color: var(--on-surface-2); font-variant-numeric: tabular-nums; }
+.tag-actions { flex: none; display: flex; flex-direction: column; align-items: flex-end; gap: 2px; }
+.tag-actions .icon-btn { width: 40px; height: 40px; }
+.cat-badge {
+  display: inline-flex; align-items: center; gap: 6px; height: 28px; padding: 0 10px; border: 0; border-radius: 999px;
+  background: color-mix(in srgb, var(--cat) 14%, var(--surface-2)); color: var(--on-surface);
+  font: inherit; font-size: 12px; font-weight: 600; white-space: nowrap;
+}
+button.cat-badge { cursor: pointer; transition: background-color var(--fast) var(--ease), transform var(--fast) var(--ease-spring); }
+button.cat-badge:hover { background: color-mix(in srgb, var(--cat) 26%, var(--surface-2)); }
+button.cat-badge:active { transform: scale(0.94); }
+.cat-badge .cat-dot { width: 8px; height: 8px; }
+.tag-grid + .sentinel { margin-top: 0; }
+/* The category menu: each choice in its colour. */
+.cat-pick { grid-template-columns: 20px minmax(0, 1fr) 20px; }
+.cat-pick .cat-dot { width: 12px; height: 12px; justify-self: center; }
+.cat-pick[aria-checked="true"] { background: color-mix(in srgb, var(--cat) 14%, var(--surface)); }
+.cat-pick .icon { color: var(--cat); }
 
 /* ---------- a tag's page ---------- */
 
 .tag-page { max-width: 1200px; }
-.tag-page .page-head { margin-bottom: 16px; }
-.tag-page .page-head .page-title { margin: 0; }
+.tag-hero {
+  display: grid; grid-template-columns: minmax(0, 280px) minmax(0, 1fr); gap: 24px; align-items: center;
+  margin-bottom: 16px; padding: 16px; border-radius: var(--radius-l);
+  background: color-mix(in srgb, var(--cat) 10%, var(--surface));
+  border: 1px solid color-mix(in srgb, var(--cat) 30%, var(--outline));
+  animation: fade-in var(--med) var(--ease);
+  transition: background-color var(--med) var(--ease), border-color var(--med) var(--ease);
+}
+.hero-shots {
+  display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; aspect-ratio: 1;
+  border-radius: var(--radius-m); overflow: hidden; background: color-mix(in srgb, var(--cat) 18%, var(--surface-2));
+}
+.hero-shots[data-count="1"] { grid-template-columns: 1fr; }
+.hero-shots[data-count="2"] > .shot { grid-row: span 2; }
+.hero-shots[data-count="3"] > .shot:first-child { grid-row: span 2; }
+.hero-shots.empty { display: none; }
+.shot { position: relative; display: block; min-height: 0; overflow: hidden; background: var(--tint, var(--surface-3)); animation: zoom-in var(--slow) var(--ease) both; }
+.shot:nth-child(2) { animation-delay: 60ms; }
+.shot:nth-child(3) { animation-delay: 120ms; }
+.shot:nth-child(4) { animation-delay: 180ms; }
+.shot img { display: block; width: 100%; height: 100%; object-fit: cover; opacity: 0; transition: opacity var(--med) var(--ease), transform var(--med) var(--ease); }
+.shot.loaded img { opacity: 1; }
+.shot:hover img { transform: scale(1.05); }
+.tag-hero:has(.hero-shots.empty) { grid-template-columns: minmax(0, 1fr); }
+.hero-text { display: grid; gap: 16px; justify-items: start; min-width: 0; }
+.hero-text .titled { margin: 0 0 0 -10px; }
+.tag-title { font-size: 34px; }
+.tag-hero:not(.cat-general) .tag-title { color: var(--cat); }
+.hero-text .banner { margin: 0; justify-self: stretch; }
+
 .tag-cards { display: grid; gap: 16px; grid-template-columns: repeat(auto-fit, minmax(min(340px, 100%), 1fr)); align-items: start; }
 .tag-cards .card + .card { margin-top: 0; }
+.card-title.with-icon { display: flex; align-items: center; gap: 8px; }
+.card-title.with-icon .icon { color: var(--primary); }
 .tag-trail { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 6px; margin-bottom: 12px; }
 .tag-trail .sep { color: var(--on-surface-2); }
 .tag-trail .here { font-weight: 600; overflow-wrap: anywhere; }
 .sub-title { margin: 16px 0 8px; font-size: 14px; font-weight: 600; }
 .merge-confirm { margin: 16px 0 0; }
+.tag-cards .chips > * { animation: pop-in var(--med) var(--ease-spring) both; }
+
+/* Still: no lift on hover. */
+@media (prefers-reduced-motion: reduce) {
+  .tag-card:hover .preview img, .shot:hover img { transform: none; }
+}
+.app[data-saver="on"] :is(.tag-card:hover .preview img, .shot:hover img) { transform: none; }
+.app[data-effects="lite"] :is(.tag-card, .shot, .tag-cards .chips > *) { animation: none; }
 
 @media (max-width: 760px) {
-  .tag-row { grid-template-columns: minmax(0, 1fr) auto 5ch; gap: 8px; padding: 0 8px; }
-  .tag-list { padding: 4px; }
+  .tag-grid { gap: 8px; }
+  .tag-main .preview { width: 48px; height: 48px; }
+  .tag-hero { grid-template-columns: minmax(0, 1fr); gap: 16px; padding: 12px; }
+  /* A row of squares. */
+  .hero-shots { aspect-ratio: 4; grid-template-columns: repeat(4, minmax(0, 1fr)); }
+  .hero-shots[data-count="1"] { aspect-ratio: 2; grid-template-columns: 1fr; }
+  .hero-shots[data-count="2"] { aspect-ratio: 2; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .hero-shots[data-count="3"] { aspect-ratio: 3; grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .hero-shots > .shot { grid-row: auto !important; }
+  .tag-title { font-size: 28px; }
 }

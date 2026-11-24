@@ -7,7 +7,6 @@
 mod accounts;
 mod grid;
 mod post;
-mod searches;
 mod sites;
 
 use std::cell::RefCell;
@@ -32,11 +31,11 @@ use wasm_bindgen::JsCast;
 use self::accounts::load_accounts;
 use self::grid::{RemoteThumb, SaveBar};
 pub use self::post::BooruPost;
-use self::searches::{SaveSearch, SavedList};
 use self::sites::{SiteChips, SitesSheet};
 use super::bad_tag_text;
 use super::explore::{self, Sides};
 use super::gallery::{self, Grid, ToTop, ViewMenu};
+use super::saved::{self, SaveToggle, SavedRow};
 use crate::activity;
 use crate::api;
 use crate::components::banner::{ErrorBanner, Spinner};
@@ -50,6 +49,7 @@ use crate::logic::boorus::results::{
 use crate::logic::boorus::{chosen_sites, from_address, site_key, sites_param, tidy_query};
 use crate::logic::jobs::by_source;
 use crate::logic::layout;
+use crate::logic::saved::Kind;
 use crate::route;
 use crate::store;
 
@@ -345,6 +345,7 @@ pub fn Boorus() -> impl IntoView {
         save_error.set(None);
         loading.set(false);
         set_last(&q, &sites);
+        saved::seen(Kind::Boorus, &q, &sites);
         if let Some(kept) = kept_for(&q, &sites) {
             loaded_at.set_value(kept.loaded_at);
             error.set(
@@ -472,7 +473,7 @@ pub fn Boorus() -> impl IntoView {
     // device moves there first.
     let accounts = RwSignal::new(Vec::<BooruAccount>::new());
     load_accounts(accounts);
-    searches::load();
+    saved::load(Kind::Boorus);
 
     // Notes where the page is before leaving it for a post, and that the
     // post's Back can go back through history to it.
@@ -641,7 +642,7 @@ pub fn Boorus() -> impl IntoView {
                 </h1>
                 <Sides boorus=true />
                 <div class="page-tools">
-                    <SaveSearch q=q sites=sites />
+                    <SaveToggle kind=Kind::Boorus q=q sites=sites />
                     <Show when=move || many.get()>
                         <button
                             type="button"
@@ -691,7 +692,7 @@ pub fn Boorus() -> impl IntoView {
                 on_sheet=Callback::new(move |()| sheet.set(true))
             />
             <Show when=move || q.with(String::is_empty)>
-                <SavedList />
+                <SavedRow kind=Kind::Boorus />
             </Show>
             {move || {
                 error.get().map(|message| view! { <ErrorBanner message=message on_retry=again /> })

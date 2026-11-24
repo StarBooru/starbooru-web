@@ -110,6 +110,20 @@ a.brand:hover .mark-star, a.search-home:hover .mark-star { transform: rotate(90d
 .suggestions .cat-character { color: var(--cat-character); }
 .suggestions .cat-copyright { color: var(--cat-copyright); }
 .suggestions .cat-meta { color: var(--cat-meta); }
+/* While the box is empty: the saved searches, each with its picture. */
+.suggestions .list-head {
+  justify-content: flex-start; align-items: center; gap: 6px; padding: 6px 14px 4px; cursor: default;
+  font-size: 12px; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; color: var(--on-surface-2);
+}
+.suggestions .list-head:hover { background: none; }
+.suggestions .saved-option { align-items: center; justify-content: flex-start; padding: 6px 14px 6px 6px; }
+.saved-option .preview { width: 40px; height: 40px; border-radius: 14px; }
+.saved-option .saved-text { flex: 1; min-width: 0; display: grid; gap: 1px; }
+.saved-offers .saved-option { animation: menu-item-in var(--med) var(--ease) both; }
+.saved-offers .saved-option:nth-child(3) { animation-delay: 20ms; }
+.saved-offers .saved-option:nth-child(4) { animation-delay: 40ms; }
+.saved-offers .saved-option:nth-child(n+5) { animation-delay: 60ms; }
+.app[data-effects="lite"] .saved-offers .saved-option { animation: none; }
 
 /* ---------- navigation ---------- */
 

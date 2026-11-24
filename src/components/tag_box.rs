@@ -4,6 +4,8 @@
 //! of the word, Escape puts them away. A category prefix (`artist:mi`) stays
 //! and the rest is completed. The grip in the corner makes the box taller.
 //! A one-line box has no grip, and Enter sends its form as a field's would.
+//! A floating box's offers float over what's under it, by its edges, and
+//! over it when there's no room under (`logic::float`).
 
 use leptos::ev::{KeyboardEvent, PointerEvent};
 use leptos::html;
@@ -11,7 +13,8 @@ use leptos::prelude::*;
 use leptos::task::spawn_local;
 
 use crate::api;
-use crate::dom::{self, caret_of};
+use crate::dom::{self, Watch, caret_of};
+use crate::logic::float::{Float, Rect, clear_of, float_by, in_sight};
 use crate::logic::search::{
     Hint, Latest, TYPING_PAUSE_MS, complete, short_count, still_fitting, tag_word_at, utf16_index,
 };
@@ -45,8 +48,14 @@ pub fn TagBox(
     /// Its name, where no `label` names it.
     #[prop(optional, into)]
     label: Option<Signal<String>>,
+    /// The offers float over what's under the box instead of pushing it.
+    #[prop(optional)]
+    floating: bool,
 ) -> impl IntoView {
     let area = area.unwrap_or_default();
+    let offers_el: NodeRef<html::Div> = NodeRef::new();
+    // Where floating offers go, once measured.
+    let place = RwSignal::new(None::<Float>);
     // Offers only follow typing: none for the tags the box opened with.
     let typing = RwSignal::new(false);
     let hints = RwSignal::new(Vec::<Hint>::new());
@@ -168,6 +177,98 @@ pub fn TagBox(
         }
     };
 
+    // Floating offers follow the box: placed once they're drawn, as they
+    // change, and as the page scrolls or the window (or a phone's keyboard)
+    // changes size. Placing again once is enough, after the first measure
+    // set their width.
+    let reposition = move || -> bool {
+        let (Some(Some(field)), Some(Some(list))) =
+            (area.try_get_untracked(), offers_el.try_get_untracked())
+        else {
+            return false;
+        };
+        let r = field.get_bounding_client_rect();
+        let field = Rect {
+            left: r.left(),
+            top: r.top(),
+            width: r.width(),
+            height: r.height(),
+        };
+        // What's in view and not under the top bar or the navigation.
+        let view = clear_of(dom::in_view(), field, &dom::fixed_bars());
+        // A box scrolled out of sight takes its offers with it.
+        let now =
+            in_sight(field, view).then(|| float_by(field, view, f64::from(list.scroll_height())));
+        let changed = place.try_get_untracked() != Some(now);
+        if changed {
+            place.try_set(now);
+        }
+        changed
+    };
+    // Next frame, once drawn, and the one after if that changed the width.
+    let place_soon = move || {
+        request_animation_frame(move || {
+            if reposition() {
+                request_animation_frame(move || {
+                    reposition();
+                });
+            }
+        });
+    };
+    let pending = StoredValue::new(false);
+    let follow_page = move |_: web_sys::Event| {
+        if pending.try_get_value() == Some(false) {
+            pending.set_value(true);
+            request_animation_frame(move || {
+                if pending.try_set_value(false).is_none() {
+                    reposition();
+                }
+            });
+        }
+    };
+    let watches = StoredValue::new(Vec::<Watch>::new());
+    Effect::new(move |_| {
+        if !floating {
+            return;
+        }
+        shown.track();
+        if expanded.get() {
+            place_soon();
+            if watches.with_value(Vec::is_empty) {
+                let mut now = Vec::new();
+                if let Some(window) = web_sys::window() {
+                    // Captured, so a scrolling column moves it too.
+                    now.push(dom::listen_capture(&window, "scroll", follow_page));
+                    now.push(dom::listen(&window, "resize", true, follow_page));
+                }
+                if let Some(visual) = dom::visual_viewport() {
+                    now.push(dom::listen(&visual, "resize", true, follow_page));
+                    now.push(dom::listen(&visual, "scroll", true, follow_page));
+                }
+                watches.set_value(now);
+            }
+        } else {
+            watches.update_value(Vec::clear);
+            place.set(None);
+        }
+    });
+    on_cleanup(move || {
+        watches.try_update_value(Vec::clear);
+    });
+    let float_style = move || {
+        if !floating {
+            return None;
+        }
+        Some(match place.get() {
+            Some(f) => format!(
+                "left: {:.1}px; top: {:.1}px; width: {:.1}px; max-height: {:.1}px",
+                f.left, f.top, f.width, f.max_height
+            ),
+            // Hidden until placed, so it never shows anywhere else.
+            None => "visibility: hidden".to_owned(),
+        })
+    };
+
     let options_of = list_id.clone();
     let list = move || {
         shown
@@ -189,7 +290,7 @@ pub fn TagBox(
                         on:mousedown=|e| e.prevent_default()
                         on:click=move |_| accept(i)
                     >
-                        {name}
+                        <span class="offer-name">{name}</span>
                         {count.map(|n| view! { <span class="count">{short_count(n)}</span> })}
                     </button>
                 }
@@ -238,10 +339,12 @@ pub fn TagBox(
                     }
                 }
                 on:click=move |_| follow()
+                // Also as the box leaves the page with the focus in it, when
+                // its signals may be gone already.
                 on:blur=move |_| {
-                    typing.set(false);
+                    typing.try_set(false);
                     if let Some(blur) = on_blur {
-                        blur.run(());
+                        blur.try_run(());
                     }
                 }
             ></textarea>
@@ -250,6 +353,10 @@ pub fn TagBox(
         <Show when=move || expanded.get()>
             <div
                 class="tag-offers"
+                class:floating=floating
+                class:above=move || place.with(|p| p.is_some_and(|p| p.above))
+                style=float_style
+                node_ref=offers_el
                 id=list_id.clone()
                 role="listbox"
                 aria-label=move || t!("tag-offers")

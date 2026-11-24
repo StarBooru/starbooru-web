@@ -363,8 +363,30 @@ search-forget = Forget this search
 search-save-failed = Couldn't save the search: { $reason }
 search-forget-failed = Couldn't forget the search: { $reason }
 saved-searches = Saved searches
-saved-remove = Remove “{ $name }”
+saved-booru-searches = Saved booru searches
+saved-all = All saved searches
+saved-all-short = All
+saved-filter = Filter saved searches
+saved-none-match = No saved search matches.
+saved-sort = Sort saved searches
+saved-sort-recent = Used last
+saved-sort-newest = Newest
+saved-sort-name = Name
+saved-sort-mine = My order
+search-save-short = Save search
+search-saved = Saved
+saved-remove = Remove
 saved-removed = Removed “{ $name }”
+saved-added = Saved as “{ $name }”
+saved-more = More for “{ $name }”
+saved-rename = Rename
+saved-name = Name of the saved search
+saved-renamed = Renamed to “{ $name }”
+saved-rename-failed = Couldn't rename the search: { $reason }
+saved-move-earlier = Move earlier
+saved-move-later = Move later
+saved-drag = Drag to move
+saved-moved = Moved “{ $name }”
 
 gallery-select = Select posts
 gallery-stop-selecting = Stop selecting
@@ -701,6 +723,24 @@ post-edit-tags = Edit tags
 post-no-tags = No tags yet.
 post-edit-title = Edit tags and rating (E)
 post-tags-hint = Prefix a tag with artist:, character:, copyright: or meta: to set its category.
+post-add-as = Add tags as { $category }
+post-add-category = Category of new tags
+post-add-suggested = Add { $name }
+post-tags-as-text = Edit as text
+post-tag-removed = Removed { $name }
+post-tags-added =
+    { $count ->
+        [one] 1 tag added
+       *[other] { $count } tags added
+    }
+post-tags-removed =
+    { $count ->
+        [one] 1 tag removed
+       *[other] { $count } tags removed
+    }
+post-tags-unsaved = Not saved yet
+post-tags-no-changes = No changes
+post-save-title = Save (Ctrl+Enter)
 post-did-you-mean = Did you mean?
 post-replace-tag = Replace { $from } with { $to }
 tag-offers = Matching tags
@@ -713,6 +753,9 @@ save = Save
 ai-suggest = Suggest tags
 ai-suggesting = Asking the AI…
 ai-add-all = Add all
+ai-suggest-short = Suggest
+ai-suggested = Suggested
+ai-dismiss = Dismiss
 ai-new-tag = new
 ai-no-suggestions = No suggestions for this post.
 ai-rating = Suggested rating: { $rating }
@@ -800,8 +843,14 @@ swipe-select = Select
 tags-sort = Sort tags
 tags-most-used = Most used
 tags-a-z = A–Z
-tags-filter-label = Filter tags
-tags-filter-placeholder = Filter by name or alias
+tags-filter-label = Filter tags by name or alias
+tags-filter-placeholder = Filter tags
+tags-show-all = Show all tags
+tags-posts =
+    { $count ->
+        [one] 1 post
+       *[other] { $shown } posts
+    }
 tags-any-category = All
 tags-none-yet = No tags yet
 tags-none-match = No tags match
@@ -815,6 +864,11 @@ tags-browse =
     }
 tags-is-alias = “{ $name }” is an alias of this tag.
 tags-category = Category
+tags-category-of = { $name }: { $category }. Change the category
+tags-change-category = Change the category
+tags-recoloured = { $name } is now { $category }
+tags-recolour-failed = Couldn't change the category: { $reason }
+tags-search-named = Show posts tagged { $name }
 tags-tree = Place in the tree
 tags-tree-hint = Searching a tag also finds the tags under it, and the top of the tree is the section a post's tags are grouped under.
 tags-tree-top = At the top: nothing above it.

@@ -246,6 +246,65 @@ pub fn headed(groups: &[(Group, Vec<PostTag>)]) -> bool {
     !matches!(groups, [(Group::Other, _)])
 }
 
+/// The tag editor's groups: the post's tags still `kept`, under the headings
+/// the card shows them under (`details`), and those it has no heading for
+/// with the other general tags.
+pub fn edit_groups(details: &[PostTag], kept: &[String]) -> Vec<(Group, Vec<String>)> {
+    let present: Vec<PostTag> = details
+        .iter()
+        .filter(|t| kept.contains(&t.name))
+        .cloned()
+        .collect();
+    let mut groups: Vec<(Group, Vec<String>)> = group_tags(&present)
+        .into_iter()
+        .map(|(g, tags)| (g, tags.into_iter().map(|t| t.name).collect()))
+        .collect();
+    let loose: Vec<String> = kept
+        .iter()
+        .filter(|k| !present.iter().any(|t| t.name == **k))
+        .cloned()
+        .collect();
+    if !loose.is_empty() {
+        match groups.iter_mut().find(|(g, _)| *g == Group::Other) {
+            Some((_, names)) => names.extend(loose),
+            None => {
+                let at = groups
+                    .iter()
+                    .position(|(g, _)| *g == Group::Category(TagCategory::Meta))
+                    .unwrap_or(groups.len());
+                groups.insert(at, (Group::Other, loose));
+            }
+        }
+    }
+    groups
+}
+
+/// The editor's `groups` with tags `added` (name and category) put in: a
+/// general one with the other general tags, any other under its category,
+/// in a group of its own in its place when the post has none yet.
+pub fn with_added(
+    mut groups: Vec<(Group, Vec<String>)>,
+    added: &[(String, TagCategory)],
+) -> Vec<(Group, Vec<String>)> {
+    for (name, category) in added {
+        let group = match category {
+            TagCategory::General => Group::Other,
+            other => Group::Category(*other),
+        };
+        match groups.iter_mut().find(|(g, _)| *g == group) {
+            Some((_, names)) => names.push(name.clone()),
+            None => {
+                let at = groups
+                    .iter()
+                    .position(|(g, _)| g.rank() > group.rank())
+                    .unwrap_or(groups.len());
+                groups.insert(at, (group, vec![name.clone()]));
+            }
+        }
+    }
+    groups
+}
+
 /// The chip class that colours a tag by its category.
 pub fn category_class(category: TagCategory) -> &'static str {
     match category {
@@ -647,6 +706,87 @@ mod tests {
         assert_eq!(other, ["blue_sky", "fractal", "mandelbrot"]);
         assert!(headed(&groups));
         assert!(group_tags(&[]).is_empty());
+    }
+
+    #[test]
+    fn the_editor_keeps_the_cards_headings_for_the_tags_left() {
+        let details = [
+            tag("lavfi", TagCategory::Artist, None),
+            tag("fractal", TagCategory::General, None),
+            tag("smile", TagCategory::General, Some("expression")),
+            tag("hd", TagCategory::Meta, None),
+        ];
+        let kept = |names: &[&str]| names.iter().map(|s| (*s).to_owned()).collect::<Vec<_>>();
+        let names = |groups: &[(Group, Vec<String>)]| {
+            groups
+                .iter()
+                .map(|(g, n)| (g.clone(), n.join(" ")))
+                .collect::<Vec<_>>()
+        };
+        assert_eq!(
+            names(&edit_groups(&details, &kept(&["fractal", "hd", "smile"]))),
+            [
+                (Group::Section("expression".into()), "smile".into()),
+                (Group::Other, "fractal".into()),
+                (Group::Category(TagCategory::Meta), "hd".into()),
+            ]
+        );
+        // Tags the card doesn't know yet, from saving the people meanwhile,
+        // go with the other general ones, before meta.
+        assert_eq!(
+            names(&edit_groups(&details, &kept(&["lavfi", "hd", "1girl"]))),
+            [
+                (Group::Category(TagCategory::Artist), "lavfi".into()),
+                (Group::Other, "1girl".into()),
+                (Group::Category(TagCategory::Meta), "hd".into()),
+            ]
+        );
+        assert_eq!(
+            names(&edit_groups(&[], &kept(&["b", "a"]))),
+            [(Group::Other, "b a".into())]
+        );
+        assert!(edit_groups(&details, &[]).is_empty());
+    }
+
+    #[test]
+    fn a_tag_added_lands_under_its_category() {
+        let groups = vec![
+            (
+                Group::Category(TagCategory::Artist),
+                vec!["lavfi".to_owned()],
+            ),
+            (
+                Group::Section("expression".into()),
+                vec!["smile".to_owned()],
+            ),
+            (Group::Category(TagCategory::Meta), vec!["hd".to_owned()]),
+        ];
+        let added = [
+            ("artist:bob".to_owned(), TagCategory::Artist),
+            ("touhou".to_owned(), TagCategory::Copyright),
+            ("sky".to_owned(), TagCategory::General),
+        ];
+        let got: Vec<(Group, String)> = with_added(groups, &added)
+            .into_iter()
+            .map(|(g, n)| (g, n.join(" ")))
+            .collect();
+        assert_eq!(
+            got,
+            [
+                (
+                    Group::Category(TagCategory::Artist),
+                    "lavfi artist:bob".into()
+                ),
+                (Group::Category(TagCategory::Copyright), "touhou".into()),
+                (Group::Section("expression".into()), "smile".into()),
+                (Group::Other, "sky".into()),
+                (Group::Category(TagCategory::Meta), "hd".into()),
+            ]
+        );
+        assert_eq!(
+            with_added(Vec::new(), &[("x".to_owned(), TagCategory::Meta)]),
+            [(Group::Category(TagCategory::Meta), vec!["x".to_owned()])]
+        );
     }
 
     #[test]

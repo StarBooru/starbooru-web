@@ -109,6 +109,88 @@ pub fn tags_changed(text: &str, saved: &[String]) -> bool {
     }
 }
 
+/// The tag editor's text as its chips show it.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct Edit {
+    /// The post's tags still in the text, in the post's order.
+    pub kept: Vec<String>,
+    /// Tags new to the post, in the order typed.
+    pub added: Vec<String>,
+    /// The post's tags no longer in the text.
+    pub removed: Vec<String>,
+    /// Words that can't be tags, as typed.
+    pub bad: Vec<String>,
+}
+
+/// What the editor's `text` does to the post's `saved` tags.
+pub fn edit_of(text: &str, saved: &[String]) -> Edit {
+    let mut typed: Vec<String> = Vec::new();
+    let mut bad: Vec<String> = Vec::new();
+    for word in text.split_whitespace() {
+        match normalize_tag(word) {
+            Ok(tag) if !typed.contains(&tag) => typed.push(tag),
+            Ok(_) | Err(TagError::Empty) => {}
+            Err(_) if !bad.iter().any(|b| b == word) => bad.push(word.to_owned()),
+            Err(_) => {}
+        }
+    }
+    let (kept, removed) = saved.iter().cloned().partition(|t| typed.contains(t));
+    let added = typed.into_iter().filter(|t| !saved.contains(t)).collect();
+    Edit {
+        kept,
+        added,
+        removed,
+        bad,
+    }
+}
+
+/// `text` without the tag `name`, or without the word `name` where it can't
+/// be a tag.
+pub fn without_tag(text: &str, name: &str) -> String {
+    text.split_whitespace()
+        .filter(|w| *w != name && !is_tag(w, name))
+        .collect::<Vec<_>>()
+        .join(" ")
+}
+
+/// The tag `word` names, without a category prefix: `artist:foo` is `foo`.
+pub fn base_of(word: &str) -> String {
+    let tag = normalize_tag(word).unwrap_or_else(|_| word.to_owned());
+    split_category(&tag).1.to_owned()
+}
+
+/// Whether `text` has the tag `name`, with or without a category prefix.
+pub fn has_base(text: &str, name: &str) -> bool {
+    let name = base_of(name);
+    text.split_whitespace().any(|w| base_of(w) == name)
+}
+
+/// The category the last word of `typed` names with a prefix, if it has one.
+pub fn typed_category(typed: &str) -> Option<TagCategory> {
+    let last = typed.split_whitespace().last()?;
+    let tag = normalize_tag(last).ok()?;
+    split_category(&tag).0
+}
+
+/// How tag `tag` goes in the text when it's added with category `picked`
+/// chosen: as typed when it has a prefix of its own, when `picked` is
+/// general, or when it's a tag the collection has (`known`), which keeps
+/// its own category; else with `picked`'s prefix, which the server gives a
+/// new tag.
+pub fn with_category(tag: &str, picked: TagCategory, known: bool) -> String {
+    let prefix = match picked {
+        TagCategory::General => None,
+        TagCategory::Artist => Some("artist"),
+        TagCategory::Character => Some("character"),
+        TagCategory::Copyright => Some("copyright"),
+        TagCategory::Meta => Some("meta"),
+    };
+    match prefix {
+        Some(prefix) if !known && split_category(tag).0.is_none() => format!("{prefix}:{tag}"),
+        _ => tag.to_owned(),
+    }
+}
+
 /// The words of `text` that aren't among the post's `saved` tags: the ones
 /// worth a "did you mean".
 pub fn new_words(text: &str, saved: &[String]) -> String {
@@ -403,6 +485,53 @@ mod tests {
         assert!(tags_changed("cat sky", &saved));
         assert!(tags_changed("cat blue_sky -dog", &saved));
         assert!(tags_changed("dog", &[]));
+    }
+
+    #[test]
+    fn the_picked_category_goes_to_new_tags_only() {
+        let artist = TagCategory::Artist;
+        assert_eq!(with_category("lavfi", artist, false), "artist:lavfi");
+        assert_eq!(
+            with_category("lavfi", TagCategory::Meta, false),
+            "meta:lavfi"
+        );
+        assert_eq!(with_category("lavfi", TagCategory::General, false), "lavfi");
+        // A tag the collection has keeps its own category.
+        assert_eq!(with_category("fractal", artist, true), "fractal");
+        // A prefix typed wins.
+        assert_eq!(with_category("copy:touhou", artist, false), "copy:touhou");
+        assert_eq!(base_of("Artist:Lavfi"), "lavfi");
+        assert_eq!(base_of("lavfi"), "lavfi");
+        assert!(has_base("cat artist:lavfi", "lavfi"));
+        assert!(has_base("cat lavfi", "artist:lavfi"));
+        assert!(!has_base("cat", "dog"));
+        assert_eq!(typed_category("cat artist:la"), Some(artist));
+        assert_eq!(typed_category("artist:la cat"), None);
+        assert_eq!(typed_category("gen:x"), Some(TagCategory::General));
+        assert_eq!(typed_category("  "), None);
+    }
+
+    #[test]
+    fn the_chips_show_what_the_text_does_to_the_post() {
+        let saved = ["cat".to_owned(), "blue_sky".to_owned(), "dog".to_owned()];
+        let edit = edit_of(" Blue_Sky  hat cat -bad hat new_one -bad", &saved);
+        assert_eq!(edit.kept, ["cat", "blue_sky"]);
+        assert_eq!(edit.added, ["hat", "new_one"]);
+        assert_eq!(edit.removed, ["dog"]);
+        assert_eq!(edit.bad, ["-bad"]);
+        let same = edit_of("dog cat blue_sky _", &saved);
+        assert!(same.added.is_empty() && same.removed.is_empty() && same.bad.is_empty());
+        assert_eq!(same.kept, ["cat", "blue_sky", "dog"]);
+        assert_eq!(edit_of("", &[]), Edit::default());
+    }
+
+    #[test]
+    fn a_chip_takes_its_tag_out_of_the_text() {
+        assert_eq!(without_tag("cat Blue_Sky  dog", "blue_sky"), "cat dog");
+        assert_eq!(without_tag("cat dog", "hat"), "cat dog");
+        // A word that can't be a tag goes as it was typed.
+        assert_eq!(without_tag("cat -bad dog", "-bad"), "cat dog");
+        assert_eq!(without_tag("cat", "cat"), "");
     }
 
     #[test]

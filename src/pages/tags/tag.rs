@@ -1,355 +1,31 @@
-//! The Tags page at `/tags`, every tag in use with its category and how many
-//! posts have it, and each tag's own page at `/tag?name=…`: its category,
-//! its place in the tree, its aliases and what it implies.
+//! A tag's own page at `/tag?name=…`: a few of its posts, its category, its
+//! place in the tree, its aliases and what it implies, with the ways to
+//! change each for those who may.
 
-use std::cell::RefCell;
-use std::collections::HashSet;
+use std::sync::Arc;
 
 use leptos::ev::SubmitEvent;
-use leptos::html;
 use leptos::prelude::*;
 use leptos::task::spawn_local;
 use leptos_router::NavigateOptions;
 use leptos_router::hooks::{use_navigate, use_query_map};
 use send_wrapper::SendWrapper;
-use starbooru_core::{Tag, TagCategory, TagDetail, TagOrder, TagUpdate};
+use starbooru_core::{Post, Tag, TagCategory, TagDetail, TagUpdate};
 
-use super::{CATEGORIES, category_label, gallery};
+use super::tint_class;
 use crate::api::{self, Failure};
 use crate::components::back::BackButton;
 use crate::components::banner::{ErrorBanner, Spinner};
 use crate::components::icons::{Ico, Icon};
-use crate::components::tag_menu::TagPress;
-use crate::dom;
-use crate::logic::search::{Latest, TYPING_PAUSE_MS, category_class, short_count};
-use crate::logic::tags::{
-    TAG_PAGE, by_alias, go_on, may_edit_tag, may_relate_tags, merges, shows, tag_list_request,
-};
+use crate::logic::gallery::tint;
+use crate::logic::tags::{by_alias, may_edit_tag, may_relate_tags, merges};
 use crate::logic::viewer::category_class as chip_class;
+use crate::pages::{CATEGORIES, category_label, gallery};
 use crate::route;
 use crate::store;
 
-// ---------- the Tags page ----------
-
-/// What the Tags page showed, so coming back to it shows the same.
-#[derive(Clone, Default)]
-struct Shown {
-    filter: String,
-    order: TagOrder,
-    category: Option<TagCategory>,
-}
-
-thread_local! {
-    static SHOWN: RefCell<Shown> = RefCell::new(Shown::default());
-}
-
-fn sort_label(order: TagOrder) -> String {
-    match order {
-        TagOrder::Count => t!("tags-most-used"),
-        TagOrder::Name => t!("tags-a-z"),
-    }
-}
-
-/// One tag of the list, leading to its page.
-fn row(tag: Tag) -> impl IntoView {
-    let Tag {
-        name,
-        category,
-        post_count,
-        ..
-    } = tag;
-    let count = u64::try_from(post_count).unwrap_or(0);
-    let label = t!("search-hint", tag = name.clone(), count = count);
-    let href = route::tag(&name);
-    let key = name.clone();
-    view! {
-        <li>
-            <a class="tag-row" href=href data-tag=key aria-label=label>
-                <span class=format!("tag-name {}", category_class(category))>{name}</span>
-                <span class="pill">{move || category_label(category)}</span>
-                <span class="count" title=count.to_string()>
-                    {short_count(count)}
-                </span>
-            </a>
-        </li>
-    }
-}
-
-#[component]
-pub fn Tags() -> impl IntoView {
-    let was = SHOWN.with_borrow(Clone::clone);
-    // What's in the box, and what the list is for once the typing pauses.
-    let typed = RwSignal::new(was.filter.clone());
-    let filter = RwSignal::new(was.filter);
-    let order = RwSignal::new(was.order);
-    let category = RwSignal::new(was.category);
-    let tags = RwSignal::new(Vec::<Tag>::new());
-    let next_page = StoredValue::new(1_u32);
-    let has_more = RwSignal::new(true);
-    let loading = RwSignal::new(false);
-    let error = RwSignal::new(None::<String>);
-    let generation = StoredValue::new(0_u64);
-    // Pages in a row with nothing of the chosen category, and whether the
-    // list still goes on by itself while its end is in sight.
-    let quiet = StoredValue::new(0_u32);
-    let going = RwSignal::new(true);
-    let pause = StoredValue::new(Latest::default());
-    let sentinel: NodeRef<html::Div> = NodeRef::new();
-
-    Effect::new(move |_| {
-        let now = Shown {
-            filter: filter.get(),
-            order: order.get(),
-            category: category.get(),
-        };
-        SHOWN.with_borrow_mut(|s| *s = now);
-    });
-
-    let load_more = move || {
-        if loading.get_untracked()
-            || !has_more.get_untracked()
-            || error.with_untracked(Option::is_some)
-        {
-            return;
-        }
-        let at = generation.get_value();
-        let request = tag_list_request(
-            &filter.get_untracked(),
-            order.get_untracked(),
-            next_page.get_value(),
-        );
-        let page = request.page;
-        loading.set(true);
-        spawn_local(async move {
-            let result = api::call(move |c| async move {
-                c.tag_list(&request.prefix, request.order, request.page, request.limit)
-                    .await
-            })
-            .await;
-            if generation.try_get_value() != Some(at) {
-                return;
-            }
-            loading.set(false);
-            match result {
-                Ok(found) => {
-                    let wanted = category.get_untracked();
-                    let shown = found.iter().filter(|t| shows(t, wanted)).count();
-                    let (now, on) = go_on(quiet.get_value(), shown);
-                    quiet.set_value(now);
-                    going.set(on);
-                    has_more.set(u32::try_from(found.len()).unwrap_or(u32::MAX) >= TAG_PAGE);
-                    next_page.set_value(page.saturating_add(1));
-                    // A tag that moved up a page since is there once.
-                    tags.update(|list| {
-                        let seen: HashSet<i64> = list.iter().map(|t| t.id).collect();
-                        list.extend(found.into_iter().filter(|t| !seen.contains(&t.id)));
-                    });
-                }
-                Err(message) => error.set(Some(message)),
-            }
-        });
-    };
-    let restart = move || {
-        generation.update_value(|g| *g = g.wrapping_add(1));
-        tags.set(Vec::new());
-        next_page.set_value(1);
-        has_more.set(true);
-        loading.set(false);
-        error.set(None);
-        quiet.set_value(0);
-        going.set(true);
-        load_more();
-    };
-    Effect::watch(
-        move || (filter.get(), order.get()),
-        move |_, _, _| restart(),
-        true,
-    );
-
-    // The end of the list in sight, after a page that filled too little of
-    // the screen: the next one comes by itself.
-    let near_end = move || {
-        sentinel.get_untracked().is_some_and(|el| {
-            let (_, tall) = dom::scroll();
-            el.get_bounding_client_rect().top() < tall * 2.5
-        })
-    };
-    Effect::new(move |_| {
-        let ready = going.get() && has_more.get() && !loading.get() && error.with(Option::is_none);
-        tags.track();
-        category.track();
-        if ready && near_end() {
-            load_more();
-        }
-    });
-    let watch = StoredValue::new(None::<dom::Watch>);
-    sentinel.on_load(move |el| {
-        let w = dom::on_near(&el, "0px 0px 150% 0px", move || {
-            if going.try_get_untracked() == Some(true) {
-                load_more();
-            }
-        });
-        watch.set_value(Some(w));
-    });
-    on_cleanup(move || {
-        if let Some(w) = watch.try_update_value(Option::take).flatten() {
-            w.stop();
-        }
-    });
-
-    let on_input = move |e: leptos::ev::Event| {
-        let value = event_target_value(&e);
-        typed.set(value.clone());
-        let Some(n) = pause.try_update_value(Latest::next) else {
-            return;
-        };
-        spawn_local(async move {
-            dom::sleep(TYPING_PAUSE_MS).await;
-            let latest = pause.try_with_value(|p| p.is(n)) == Some(true);
-            if latest && filter.try_get_untracked().is_some_and(|f| f != value) {
-                filter.set(value);
-            }
-        });
-    };
-    let pick = move |wanted: Option<TagCategory>| {
-        if category.get_untracked() != wanted {
-            category.set(wanted);
-            quiet.set_value(0);
-            going.set(true);
-        }
-    };
-    let more = move || {
-        quiet.set_value(0);
-        going.set(true);
-        load_more();
-    };
-    let retry = Callback::new(move |()| {
-        error.set(None);
-        more();
-    });
-
-    let visible = move || {
-        let wanted = category.get();
-        tags.with(|list| {
-            list.iter()
-                .filter(|t| shows(t, wanted))
-                .cloned()
-                .collect::<Vec<_>>()
-        })
-    };
-    let none_shown = move || {
-        let wanted = category.get();
-        tags.with(|list| !list.iter().any(|t| shows(t, wanted)))
-    };
-    let empty =
-        move || !loading.get() && !has_more.get() && error.with(Option::is_none) && none_shown();
-    let sorts = [TagOrder::Count, TagOrder::Name].map(|o| {
-        let on = move || order.get() == o;
-        view! {
-            <button
-                type="button"
-                role="radio"
-                class="seg"
-                class:on=on
-                aria-checked=move || if on() { "true" } else { "false" }
-                on:click=move |_| order.set(o)
-            >
-                {move || sort_label(o)}
-            </button>
-        }
-    });
-    let kinds = CATEGORIES.map(|c| {
-        let on = move || category.get() == Some(c);
-        view! {
-            <button
-                type="button"
-                role="radio"
-                class=chip_class(c)
-                class:on=on
-                aria-checked=move || if on() { "true" } else { "false" }
-                on:click=move |_| pick(Some(c))
-            >
-                {move || category_label(c)}
-            </button>
-        }
-    });
-
-    view! {
-        <div class="page tags-page">
-            <div class="page-head">
-                <h1 class="page-title">{move || t!("nav-tags")}</h1>
-                <div class="segmented" role="radiogroup" aria-label=move || t!("tags-sort")>
-                    {sorts}
-                </div>
-            </div>
-            <label class="field tag-filter">
-                <span class="visually-hidden">{move || t!("tags-filter-label")}</span>
-                <input
-                    type="search"
-                    autocomplete="off"
-                    spellcheck="false"
-                    autocapitalize="none"
-                    placeholder=move || t!("tags-filter-placeholder")
-                    prop:value=move || typed.get()
-                    on:input=on_input
-                />
-            </label>
-            <div class="chips tag-kinds" role="radiogroup" aria-label=move || t!("tags-category")>
-                <button
-                    type="button"
-                    role="radio"
-                    class="chip"
-                    class:on=move || category.get().is_none()
-                    aria-checked=move || if category.get().is_none() { "true" } else { "false" }
-                    on:click=move |_| pick(None)
-                >
-                    {move || t!("tags-any-category")}
-                </button>
-                {kinds}
-            </div>
-            {move || error.get().map(|message| view! { <ErrorBanner message=message on_retry=retry /> })}
-            <Show when=empty>
-                <div class="card empty">
-                    <Ico icon=Icon::Label size=48 />
-                    <h2>
-                        {move || {
-                            let all = filter.with(|f| f.trim().is_empty()) && category.get().is_none();
-                            if all { t!("tags-none-yet") } else { t!("tags-none-match") }
-                        }}
-                    </h2>
-                    <p class="muted">{move || t!("tags-appear")}</p>
-                </div>
-            </Show>
-            <Show when=move || !none_shown()>
-                <ul class="tag-list card" data-press="tag">
-                    <For each=visible key=|t| t.id children=row />
-                </ul>
-            </Show>
-            <div
-                class="sentinel"
-                class:done=move || !has_more.get() || error.with(Option::is_some)
-                node_ref=sentinel
-            >
-                {move || {
-                    if loading.get() {
-                        view! { <Spinner /> }.into_any()
-                    } else {
-                        view! {
-                            <button type="button" class="btn tonal" on:click=move |_| more()>
-                                {move || t!("load-more")}
-                            </button>
-                        }
-                            .into_any()
-                    }
-                }}
-            </div>
-            <TagPress q="" />
-        </div>
-    }
-}
-
-// ---------- a tag's page ----------
-
+/// Posts the top of the page shows, from one search.
+const SHOTS: u32 = 4;
 /// Which of a tag's lists a change is to.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum Relation {
@@ -441,6 +117,9 @@ pub fn TagPage() -> impl IntoView {
     let user = Memo::new(|_| store::session().map(|s| s.user));
     let editable = Signal::derive(move || user.with(|u| may_edit_tag(u.as_ref())));
     let relatable = Signal::derive(move || user.with(|u| may_relate_tags(u.as_ref())));
+    // A few of its posts, to show what it is. Only a picture: a failed
+    // request leaves the page as it is.
+    let shots = RwSignal::new(None::<Vec<Arc<Post>>>);
 
     let load = move |wanted: String| {
         generation.update_value(|g| *g = g.wrapping_add(1));
@@ -451,6 +130,17 @@ pub fn TagPage() -> impl IntoView {
         merging.set(None);
         merge_done.set_value(None);
         busy.set(false);
+        shots.set(None);
+        let searched = wanted.clone();
+        spawn_local(async move {
+            let found =
+                api::call(move |c| async move { c.search_posts(&searched, None, 1, SHOTS).await })
+                    .await;
+            if generation.try_get_value() == Some(at) {
+                let posts = found.map(|p| p.posts).unwrap_or_default();
+                shots.set(Some(posts.into_iter().map(Arc::new).collect()));
+            }
+        });
         spawn_local(async move {
             let result = api::fetch(move |c| async move { c.tag(&wanted).await }).await;
             if generation.try_get_value() != Some(at) {
@@ -596,24 +286,6 @@ pub fn TagPage() -> impl IntoView {
         })
     });
     let page = move || {
-        let head = move || {
-            tag.get().map(|t| {
-                let browse = route::gallery(&t.name);
-                let count = t.post_count;
-                view! {
-                    <div class="page-head">
-                        <div class="titled">
-                            <BackButton up=route::TAGS />
-                            <h1 class="page-title break">{t.name.clone()}</h1>
-                        </div>
-                        <a class="btn tonal" href=browse>
-                            <Ico icon=Icon::Gallery />
-                            {move || t!("tags-browse", count = count)}
-                        </a>
-                    </div>
-                }
-            })
-        };
         let alias_note = move || {
             let shown = tag.with(|t| t.as_ref().map(|t| t.name.clone()))?;
             let asked = name.get();
@@ -625,7 +297,7 @@ pub fn TagPage() -> impl IntoView {
                 }
             })
         };
-        let category_chips = move || {
+        let category_tabs = move || {
             let now = tag.with(|t| t.as_ref().map(|t| t.category));
             CATEGORIES
                 .map(|c| {
@@ -634,7 +306,7 @@ pub fn TagPage() -> impl IntoView {
                         <button
                             type="button"
                             role="radio"
-                            class="chip"
+                            class=format!("cat-tab {}", tint_class(c))
                             class:on=on
                             aria-checked=if on { "true" } else { "false" }
                             disabled=move || busy.get() || !editable.get()
@@ -644,11 +316,39 @@ pub fn TagPage() -> impl IntoView {
                                 }
                             }
                         >
+                            <span class="cat-dot" aria-hidden="true"></span>
                             {move || category_label(c)}
                         </button>
                     }
                 })
                 .collect_view()
+        };
+        let hero = move || {
+            let t = tag.get()?;
+            let browse = route::gallery(&t.name);
+            let count = t.post_count;
+            Some(view! {
+                <header class=move || {
+                    let now = tag.with(|t| t.as_ref().map_or(TagCategory::General, |t| t.category));
+                    format!("tag-hero {}", tint_class(now))
+                }>
+                    <Shots name=t.name.clone() shots=shots />
+                    <div class="hero-text">
+                        <div class="titled">
+                            <BackButton up=route::TAGS />
+                            <h1 class="page-title tag-title break">{t.name.clone()}</h1>
+                        </div>
+                        {alias_note}
+                        <div class="cat-tabs" role="radiogroup" aria-label=move || t!("tags-category")>
+                            {category_tabs}
+                        </div>
+                        <a class="btn" href=browse>
+                            <Ico icon=Icon::Gallery />
+                            {move || t!("tags-browse", count = count)}
+                        </a>
+                    </div>
+                </header>
+            })
         };
         let confirm = move || {
             merging.get().map(|(alias, count)| {
@@ -699,16 +399,9 @@ pub fn TagPage() -> impl IntoView {
             view! { <div class="chips">{chips}</div> }.into_any()
         };
         view! {
-            {head}
-            {alias_note}
+            {hero}
             {move || error.get().map(|message| view! { <ErrorBanner message=message /> })}
             <div class="tag-cards">
-                <section class="card">
-                    <h2 class="card-title">{move || t!("tags-category")}</h2>
-                    <div class="chips" role="radiogroup" aria-label=move || t!("tags-category")>
-                        {category_chips}
-                    </div>
-                </section>
                 <TreeCard detail=detail busy=busy editable=editable on_parent=set_parent />
                 <RelationCard
                     relation=Relation::Alias
@@ -729,7 +422,10 @@ pub fn TagPage() -> impl IntoView {
                     on_remove=remove
                 />
                 <section class="card">
-                    <h2 class="card-title">{move || t!("tags-implied-by")}</h2>
+                    <h2 class="card-title with-icon">
+                        <Ico icon=Icon::ArrowUp size=20 />
+                        {move || t!("tags-implied-by")}
+                    </h2>
                     <p class="muted hint">{move || t!("tags-implied-by-hint")}</p>
                     {implied_by}
                 </section>
@@ -753,6 +449,59 @@ pub fn TagPage() -> impl IntoView {
                         .into_any()
                 }
             }}
+        </div>
+    }
+}
+
+/// A few of tag `name`'s posts, each leading to it in the tag's search, with
+/// room kept for them while they come. None leaves a plain tile.
+#[component]
+fn Shots(name: String, shots: RwSignal<Option<Vec<Arc<Post>>>>) -> impl IntoView {
+    let client = api::client();
+    let tiles = move || {
+        let posts = shots.get()?;
+        let tiles = posts
+            .into_iter()
+            .map(|p| {
+                let src = p
+                    .thumb_url
+                    .as_deref()
+                    .and_then(|u| client.as_ref().map(|c| c.absolute(u)));
+                let style = tint(&p.palette).map(|c| format!("--tint: {c}"));
+                let loaded = RwSignal::new(false);
+                view! {
+                    <a
+                        class="shot"
+                        class:loaded=move || loaded.get()
+                        href=route::post(p.id, &name, None)
+                        style=style
+                        tabindex="-1"
+                        aria-hidden="true"
+                    >
+                        {src
+                            .map(|src| {
+                                view! {
+                                    <img
+                                        src=src
+                                        alt=""
+                                        decoding="async"
+                                        on:load=move |_| loaded.set(true)
+                                    />
+                                }
+                            })}
+                    </a>
+                }
+            })
+            .collect_view();
+        Some(tiles)
+    };
+    view! {
+        <div
+            class="hero-shots"
+            class:empty=move || shots.with(|s| s.as_ref().is_some_and(Vec::is_empty))
+            data-count=move || shots.with(|s| s.as_ref().map_or(0, Vec::len))
+        >
+            {tiles}
         </div>
     }
 }
@@ -871,7 +620,10 @@ fn TreeCard(
     };
     view! {
         <section class="card">
-            <h2 class="card-title">{move || t!("tags-tree")}</h2>
+            <h2 class="card-title with-icon">
+                <Ico icon=Icon::Folder size=20 />
+                {move || t!("tags-tree")}
+            </h2>
             <p class="muted hint">{move || t!("tags-tree-hint")}</p>
             {trail}
             <Show when=move || editable.get()>
@@ -962,9 +714,16 @@ fn RelationCard(
         Relation::Alias => t!("tags-new-alias"),
         Relation::Implies => t!("tags-implied-tag"),
     });
+    let icon = match relation {
+        Relation::Alias => Icon::Link,
+        Relation::Implies => Icon::Redo,
+    };
     view! {
         <section class="card">
-            <h2 class="card-title">{title}</h2>
+            <h2 class="card-title with-icon">
+                <Ico icon=icon size=20 />
+                {title}
+            </h2>
             <p class="muted hint">{hint}</p>
             {chips}
             <Show

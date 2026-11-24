@@ -26,12 +26,13 @@ use super::bulk::BulkBar;
 use super::drag_select::DragSelect;
 use super::post_menu::PostPress;
 use super::query_error_text;
-use super::saved::{self, SaveToggle, SavedList};
+use super::saved::{self, SaveToggle, SavedRow};
 use super::upload::DropToUpload;
 use crate::api;
 use crate::components::banner::{CorrectionBanner, ErrorBanner, Spinner};
 use crate::components::color_picker::ColorPicker;
 use crate::components::icons::{Ico, Icon};
+use crate::components::preview::forget_previews;
 use crate::components::select::{Choice, Select};
 use crate::components::thumb::Thumb;
 use crate::dom;
@@ -42,6 +43,7 @@ use crate::logic::gallery::{
     single_tag, sorted, title, to_middle,
 };
 use crate::logic::layout::{self, Layout, TILE_GAP};
+use crate::logic::saved::Kind;
 use crate::store::{self, GalleryView, Spot, SwipeAction};
 use crate::{instance, route};
 
@@ -103,6 +105,13 @@ fn cached_list(q: &str) -> Option<List> {
     LISTS.with_borrow(|l| l.find(q, &owner, Utc::now()))
 }
 
+/// The first post of the results kept for search `q`, for its preview
+/// (`components/preview.rs`): `Some(None)` when it finds nothing.
+pub fn kept_first(q: &str) -> Option<Option<Arc<Post>>> {
+    let owner = store::owner();
+    LISTS.with_borrow(|l| l.first(q, &owner, Utc::now()))
+}
+
 fn keep_list(list: List) {
     LISTS.with_borrow_mut(|l| l.keep(list));
 }
@@ -117,6 +126,7 @@ thread_local! {
 /// any of them. A gallery on the page loads its results again.
 pub fn forget_lists() {
     LISTS.with_borrow_mut(Lists::clear);
+    forget_previews();
     CHANGED.with(|c| c.update(|n| *n = n.wrapping_add(1)));
 }
 
@@ -125,6 +135,7 @@ pub fn forget_lists() {
 /// without starting over.
 pub fn posts_arrived() {
     LISTS.with_borrow_mut(Lists::clear);
+    forget_previews();
     ARRIVED.with(|a| a.update(|n| *n = n.wrapping_add(1)));
 }
 
@@ -394,7 +405,7 @@ pub fn Gallery() -> impl IntoView {
     ));
     let masonry: NodeRef<html::Div> = NodeRef::new();
     let alive = Arc::new(AtomicBool::new(true));
-    saved::load();
+    saved::load(Kind::Gallery);
     // Bumped each time the spot has been put back.
     let landed = RwSignal::new(0_u32);
     let seek = StoredValue::new(None::<Seek>);
@@ -636,6 +647,7 @@ pub fn Gallery() -> impl IntoView {
         started.set(true);
         if parse_query(&q).is_ok() {
             store::visit_search(&q, saved::queries().as_deref());
+            saved::seen(Kind::Gallery, &q, &[]);
         }
         seek.set_value(take_viewed(&q).map(|id| Seek::Landing(id, SEEK_PAGES)));
         shown_q.set(q.clone());
@@ -995,7 +1007,7 @@ pub fn Gallery() -> impl IntoView {
                         })
                 }}
                 <Show when=move || !guest && q.with(|q| !q.trim().is_empty())>
-                    <SaveToggle q=q />
+                    <SaveToggle kind=Kind::Gallery q=q />
                 </Show>
                 <div class="page-tools">
                     <SortMenu q=q />
@@ -1035,7 +1047,7 @@ pub fn Gallery() -> impl IntoView {
                 />
             </Show>
             <Show when=move || !guest && q.with(|q| q.trim().is_empty())>
-                <SavedList />
+                <SavedRow kind=Kind::Gallery />
             </Show>
             {move || {
                 error
