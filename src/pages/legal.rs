@@ -50,9 +50,11 @@ const PRIVACY: Doc = Doc {
             heading: || t!("privacy-server"),
             body: &[Block::List(&[
                 || t!("privacy-server-account"),
+                || t!("privacy-server-profile"),
                 || t!("privacy-server-sessions"),
                 || t!("privacy-server-files"),
                 || t!("privacy-server-content"),
+                || t!("privacy-server-forum"),
                 || t!("privacy-server-shares"),
                 || t!("privacy-server-sites"),
                 || t!("privacy-server-limits"),
@@ -88,6 +90,7 @@ const PRIVACY: Doc = Doc {
             body: &[
                 Block::Text(|| t!("privacy-who-sees-body")),
                 Block::Text(|| t!("privacy-who-sees-public")),
+                Block::Text(|| t!("privacy-who-sees-profiles")),
             ],
         },
         Section {

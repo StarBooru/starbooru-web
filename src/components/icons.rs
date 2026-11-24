@@ -17,8 +17,12 @@ pub enum Icon {
     /// The posts added on this day.
     Calendar,
     Check,
+    /// A tag voted down.
+    ChevronDown,
     ChevronLeft,
     ChevronRight,
+    /// A tag voted up.
+    ChevronUp,
     Close,
     Copy,
     /// Editing a picture.
@@ -35,6 +39,8 @@ pub enum Icon {
     /// Mirroring a picture; turned a quarter, top to bottom.
     Flip,
     Folder,
+    /// The forum: a speech bubble.
+    Forum,
     Fullscreen,
     FullscreenExit,
     Gallery,
@@ -53,6 +59,8 @@ pub enum Icon {
     /// The gallery's layout.
     Layout,
     Link,
+    /// A locked thread.
+    Lock,
     /// Signing in: an arrow into a door.
     Login,
     Logout,
@@ -69,6 +77,8 @@ pub enum Icon {
     People,
     /// A video in a window of its own, over the others.
     PictureInPicture,
+    /// A thread pinned to the top of its category.
+    Pin,
     Play,
     /// A crop of any proportions, and of proportions typed in.
     RatioCustom,
@@ -84,6 +94,8 @@ pub enum Icon {
     RotateLeft,
     RotateRight,
     Search,
+    /// Sending a post.
+    Send,
     Share,
     /// Signing in through an identity provider.
     Shield,
@@ -154,6 +166,8 @@ impl Icon {
             ),
             Icon::ChevronLeft => Shape::Stroke("3", "M14.657 17.657L9 12l5.657-5.657"),
             Icon::ChevronRight => Shape::Stroke("3", "M9.343 6.343L15 12l-5.657 5.657"),
+            Icon::ChevronUp => Shape::Stroke("3", "M6.343 14.657L12 9l5.657 5.657"),
+            Icon::ChevronDown => Shape::Stroke("3", "M6.343 9.343L12 15l5.657-5.657"),
             Icon::Close => Shape::EvenOdd(
                 "M4.575 4.576a1.5 1.5 0 0 1 2.122 0L12 9.88l5.303-5.303a1.5 1.5 0 0 1 2.122 2.121l-5.304 5.304l5.304 5.303a1.5 1.5 0 1 1-2.122 2.121L12 14.122l-5.303 5.303a1.5 1.5 0 1 1-2.122-2.12L9.88 12L4.575 6.697a1.5 1.5 0 0 1 0-2.12",
             ),
@@ -188,6 +202,10 @@ impl Icon {
             ),
             Icon::Flip => Shape::Fill(
                 "M12 2a1 1 0 0 1 1 1v18a1 1 0 1 1-2 0v-1H5a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h6V3a1 1 0 0 1 1-1m4 16a1 1 0 1 1 0 2h-1a1 1 0 1 1 0-2zm4-1a1 1 0 0 1 1 1a2 2 0 0 1-2 2a1 1 0 1 1 0-2a1 1 0 0 1 1-1m0-4a1 1 0 0 1 1 1v1a1 1 0 1 1-2 0v-1a1 1 0 0 1 1-1m0-5a1 1 0 0 1 1 1v1a1 1 0 1 1-2 0V9a1 1 0 0 1 1-1m-1-4a2 2 0 0 1 2 2a1 1 0 1 1-2 0a1 1 0 1 1 0-2m-3 0a1 1 0 1 1 0 2h-1a1 1 0 1 1 0-2z",
+            ),
+            // A bubble with three dots, drawn for StarBooru.
+            Icon::Forum => Shape::EvenOdd(
+                "M5 3h14a3 3 0 0 1 3 3v9a3 3 0 0 1-3 3h-7.2l-4.6 3.45A1 1 0 0 1 5.6 20.65V18H5a3 3 0 0 1-3-3V6a3 3 0 0 1 3-3m3 7a1.5 1.5 0 1 0 0 3a1.5 1.5 0 0 0 0-3m4 0a1.5 1.5 0 1 0 0 3a1.5 1.5 0 0 0 0-3m4 0a1.5 1.5 0 1 0 0 3a1.5 1.5 0 0 0 0-3",
             ),
             Icon::Folder => Shape::Fill(
                 "M2 5a2 2 0 0 1 2-2h5.52a2 2 0 0 1 1.561.75l1.4 1.75H20a2 2 0 0 1 2 2V19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2z",
@@ -234,6 +252,10 @@ impl Icon {
                 "M9.879 11.291c-.872-.872-.646-1.677.417-2.41a5.5 5.5 0 0 1 7.007.643l3.182 3.182a5.5 5.5 0 0 1-7.778 7.778l-1.06-1.06a1.5 1.5 0 0 1 2.12-2.122l1.061 1.06a2.5 2.5 0 0 0 3.536-3.535l-3.182-3.182a2.5 2.5 0 0 0-2.681-.56c-1.145.448-1.75 1.079-2.622.206M3.515 3.513a5.5 5.5 0 0 1 7.778 0l1.06 1.06a1.5 1.5 0 1 1-2.12 2.122l-1.061-1.06A2.5 2.5 0 1 0 5.636 9.17l3.182 3.182a2.5 2.5 0 0 0 2.681.56c1.145-.448 1.75-1.078 2.622-.206s.646 1.677-.418 2.41a5.5 5.5 0 0 1-7.006-.643l-3.182-3.182a5.5 5.5 0 0 1 0-7.778",
             ),
             // Drawn for StarBooru in the same strokes: an arrow into a door.
+            // A padlock, drawn for StarBooru.
+            Icon::Lock => Shape::EvenOdd(
+                "M7 10V8a5 5 0 0 1 10 0v2h.5a2.5 2.5 0 0 1 2.5 2.5v7a2.5 2.5 0 0 1-2.5 2.5h-11A2.5 2.5 0 0 1 4 19.5v-7A2.5 2.5 0 0 1 6.5 10zm3 0h4V8a2 2 0 0 0-4 0z",
+            ),
             Icon::Login => Shape::Stroke(
                 "2.5",
                 "M14 3.75h3.5a2.75 2.75 0 0 1 2.75 2.75v11a2.75 2.75 0 0 1-2.75 2.75H14M3.75 12h10.5m-3.75-4l4 4l-4 4",
@@ -263,6 +285,10 @@ impl Icon {
             // MingCute miniplayer_fill.
             Icon::PictureInPicture => Shape::Fill(
                 "M20.324 12.026c.984.16 1.637 1.005 1.676 1.974v4c-.022.535-.202 1.03-.586 1.414s-.879.564-1.414.586h-5c-.535-.022-1.03-.202-1.414-.586S13.022 18.535 13 18v-4c.046-1.146.854-1.954 2-2h5ZM15 14v4h5v-4Zm6-4h-7c-1.708.057-2.943 1.292-3 3v6H4a2 2 0 0 1-.632-.102C2.535 18.622 2.034 17.856 2 17V6c.022-.535.202-1.03.586-1.414S3.465 4.022 4 4h15c1.146.046 1.954.854 2 2ZM6.088 9.502c-.329 0-.714-.051-1.026.102-.732.358-.732 1.438 0 1.796a1 1 0 0 0 .44.102h3a1.04 1.04 0 0 0 .625-.22c.246-.197.357-.473.375-.78v-3a1 1 0 0 0-.102-.44c-.358-.732-1.438-.732-1.796 0-.153.312-.102.697-.102 1.026L5.587 6.173c-.152-.133-.256-.209-.453-.26a1.01 1.01 0 0 0-1.254.967c0 .278.114.502.293.707Z",
+            ),
+            // A pushpin, drawn for StarBooru.
+            Icon::Pin => Shape::Fill(
+                "M8 3h8a1 1 0 0 1 0 2h-1v4.6l2.8 3.73A1 1 0 0 1 17 15h-4v5.5a1 1 0 0 1-2 0V15H7a1 1 0 0 1-.8-1.67L9 9.6V5H8a1 1 0 0 1 0-2",
             ),
             // MingCute group_2_fill.
             Icon::People => Shape::Fill(
@@ -306,6 +332,10 @@ impl Icon {
             ),
             Icon::Search => Shape::Fill(
                 "M10.5 2a8.5 8.5 0 0 1 8.5 8.5a8.46 8.46 0 0 1-1.826 5.26l3.654 3.654a1.001 1.001 0 0 1-1.414 1.415l-3.654-3.655A8.46 8.46 0 0 1 10.5 19a8.5 8.5 0 0 1 0-17m0 2a6.5 6.5 0 1 0 0 13a6.5 6.5 0 0 0 0-13zM5.75 10.5A4.75 4.75 0 0 1 10.5 5.75a.75.75 0 0 1 0 1.5A3.25 3.25 0 0 0 7.25 10.5a.75.75 0 0 1-1.5 0z",
+            ),
+            // A paper plane, drawn for StarBooru.
+            Icon::Send => Shape::Fill(
+                "M3.4 3.1a1 1 0 0 1 1.05-.13l16.5 8.13a1 1 0 0 1 0 1.8L4.45 21.03A1 1 0 0 1 3.06 19.8L5.5 13H12a1 1 0 0 0 0-2H5.5L3.06 4.2a1 1 0 0 1 .34-1.1",
             ),
             Icon::Share => Shape::Fill(
                 "M5.74 11.28L16.24 5.78L17.26 7.72L6.76 13.22zM6.87 11.34L14.99 16.84L13.76 18.66L5.63 13.16zM12 6.75a4.75 4.75 0 1 1 9.5 0a4.75 4.75 0 1 1 -9.5 0zM2.5 12.25a3.75 3.75 0 1 1 7.5 0a3.75 3.75 0 1 1 -7.5 0zM11.125 17.75a3.25 3.25 0 1 1 6.5 0a3.25 3.25 0 1 1 -6.5 0z",
@@ -403,7 +433,7 @@ pub fn Ico(icon: Icon, #[prop(default = 24)] size: u32) -> impl IntoView {
 mod tests {
     use super::*;
 
-    const ALL: [Icon; 74] = [
+    const ALL: [Icon; 80] = [
         Icon::Add,
         Icon::ArrowBack,
         Icon::Article,
@@ -414,8 +444,10 @@ mod tests {
         Icon::Battery,
         Icon::Calendar,
         Icon::Check,
+        Icon::ChevronDown,
         Icon::ChevronLeft,
         Icon::ChevronRight,
+        Icon::ChevronUp,
         Icon::Close,
         Icon::Copy,
         Icon::Crop,
@@ -428,6 +460,7 @@ mod tests {
         Icon::Eye,
         Icon::Flip,
         Icon::Folder,
+        Icon::Forum,
         Icon::Fullscreen,
         Icon::FullscreenExit,
         Icon::Gallery,
@@ -440,6 +473,7 @@ mod tests {
         Icon::Label,
         Icon::Layout,
         Icon::Link,
+        Icon::Lock,
         Icon::Login,
         Icon::Logout,
         Icon::More,
@@ -449,6 +483,7 @@ mod tests {
         Icon::Pause,
         Icon::People,
         Icon::PictureInPicture,
+        Icon::Pin,
         Icon::Play,
         Icon::RatioCustom,
         Icon::RatioFree,
@@ -460,6 +495,7 @@ mod tests {
         Icon::RotateLeft,
         Icon::RotateRight,
         Icon::Search,
+        Icon::Send,
         Icon::Share,
         Icon::Shield,
         Icon::Shuffle,

@@ -20,6 +20,12 @@ nav-tags = Tag
 nav-upload = Carica
 nav-settings = Impostazioni
 nav-settings-tab = Opzioni
+nav-forum = Forum
+account-button = Il tuo account, { $name }
+account-title = Il tuo account
+account-guest-title = Senza un account
+account-guest-hint = Vota, carica, scrivi nel forum
+account-see-profile = Vedi il tuo profilo
 search-placeholder = Cerca tag, ad es. cat rating:safe
 search-label = Cerca tag
 search-clear = Cancella la ricerca
@@ -30,6 +36,174 @@ search-hint = { $tag }, { $count ->
 }
 search-corrected = Ortografia corretta: { $tags }
 search-exact = Cerca esattamente come scritto
+
+## Profili
+
+profile-title = Profilo
+profile-edit = Modifica profilo
+profile-done = Fatto
+profile-stat-posts = Post
+profile-stat-forum = Messaggi nel forum
+profile-stat-joined = Iscritto il
+profile-missing = Nessuno si chiama { $name } qui
+profile-missing-body = Controlla il nome, o forse l'account è stato eliminato.
+profile-off = Nessun profilo su questo server
+profile-off-body = Questo server è privato: non mostra il profilo di nessuno.
+profile-display-name = Nome visualizzato
+profile-display-name-hint = Quello che gli altri vedono al posto del tuo nome utente, che resta il tuo identificativo. Lascialo vuoto per mostrare il nome utente.
+profile-about = Su di te
+profile-chars-left =
+    { $count ->
+        [one] Resta 1 carattere
+       *[other] Restano { $count } caratteri
+    }
+profile-chars-over =
+    { $count ->
+        [one] 1 carattere di troppo
+       *[other] { $count } caratteri di troppo
+    }
+profile-save = Salva profilo
+profile-name-long = Un nome visualizzato ha al massimo { $max } caratteri.
+profile-about-long = Questo testo ha al massimo { $max } caratteri.
+profile-bad-character = Togli i caratteri invisibili o di controllo.
+profile-picture-add = Aggiungi un'immagine
+profile-picture-change = Cambia immagine
+profile-picture-remove = Togli immagine
+profile-picture-removed = Immagine tolta.
+profile-picture-saved = Immagine salvata.
+profile-picture-hint = JPEG, PNG, WebP o GIF, fino a 5 MB. Poi scegli il cerchio.
+profile-picture-use = Usa questa immagine
+profile-picture-sending = Salvataggio…
+profile-picture-big = L'immagine supera { $max }. Scegline una più piccola.
+profile-picture-kind = Non è un'immagine JPEG, PNG, WebP o GIF.
+profile-picture-small = L'immagine ha un lato più corto di { $min } pixel.
+profile-picture-outside = Quel quadrato non sta dentro l'immagine.
+profile-crop-label = Trascina l'immagine per sistemarla nel cerchio, anche con le frecce. La rotellina, due dita o + e − ingrandiscono.
+profile-crop-zoom = Zoom
+profile-crop-in = Ingrandisci
+profile-crop-out = Rimpicciolisci
+
+## Il forum
+
+forum-off = Nessun forum su questo server
+forum-off-body = Questo server è privato, e solo uno pubblico ha un forum.
+forum-search = Cerca nel forum
+forum-search-category = Cerca in questa categoria
+forum-found = Discussioni con “{ $q }”
+forum-found-clear = Mostra tutte
+forum-found-none = Nessuna discussione contiene tutte queste parole.
+forum-no-categories = Ancora nessuna categoria.
+forum-threads =
+    { $count ->
+        [one] 1 discussione
+       *[other] { $count } discussioni
+    }
+forum-replies =
+    { $count ->
+        [0] Nessuna risposta
+        [one] 1 risposta
+       *[other] { $count } risposte
+    }
+forum-no-activity = Ancora niente
+forum-threads-none = Ancora nessuna discussione qui. Inizia la prima.
+forum-more = Mostra altre
+forum-more-posts = Mostra altri messaggi
+forum-back = Torna al forum
+forum-category-missing = Questa categoria non esiste
+forum-thread-missing = Questa discussione non esiste
+forum-pinned = In evidenza
+forum-locked = Chiusa
+forum-author-gone = Account eliminato
+forum-thread-new = Nuova discussione
+forum-thread-title = Titolo
+forum-thread-body = Primo messaggio
+forum-thread-post = Pubblica discussione
+forum-guest-why = Accedi per scrivere nel forum. Tornerai qui.
+forum-guest-reply = Accedi per rispondere in questa discussione.
+forum-write = Scrivi
+forum-preview = Anteprima
+forum-preview-empty = Ancora niente da mostrare.
+forum-placeholder = Testo semplice, con Markdown: **grassetto**, *corsivo*, elenchi, > citazioni. >>123 rimanda al post 123.
+forum-sending = Pubblicazione…
+forum-reply = Rispondi
+forum-reply-send = Pubblica risposta
+forum-wait =
+    { $seconds ->
+        [one] Pubblico tra 1 secondo…
+       *[other] Pubblico tra { $seconds } secondi…
+    }
+forum-wait-cancel = Non pubblicare
+forum-slow-down = Stai scrivendo troppo in fretta. Riprova tra un attimo.
+forum-slow-down-seconds =
+    { $seconds ->
+        [one] Potrai scrivere di nuovo tra 1 secondo.
+       *[other] Potrai scrivere di nuovo tra { $seconds } secondi.
+    }
+forum-slow-down-minutes =
+    { $minutes ->
+        [one] Oggi hai scritto { $posts } messaggi. Potrai scrivere di nuovo tra 1 minuto.
+       *[other] Oggi hai scritto { $posts } messaggi. Potrai scrivere di nuovo tra { $minutes } minuti.
+    }
+forum-slow-down-hours =
+    { $hours ->
+        [one] Oggi hai scritto { $posts } messaggi. Potrai scrivere di nuovo tra 1 ora.
+       *[other] Oggi hai scritto { $posts } messaggi. Potrai scrivere di nuovo tra { $hours } ore.
+    }
+forum-locked-note = Questa discussione è chiusa. Nessuno può rispondere.
+forum-edited = modificato
+forum-edited-at = Modificato { $when }
+forum-edit = Modifica
+forum-delete = Elimina messaggio
+forum-edited-done = Messaggio modificato.
+forum-post-deleted = Messaggio eliminato.
+forum-post-gone = Questo messaggio è stato eliminato.
+forum-undone = Annullato.
+forum-thread-manage = Gestisci discussione
+forum-pin = Metti in evidenza
+forum-pin-hint = Prima nella sua categoria
+forum-unpin = Togli dall'evidenza
+forum-unpin-hint = Di nuovo tra le altre
+forum-lock = Chiudi
+forum-lock-hint = Rispondono solo gli admin
+forum-unlock = Riapri
+forum-unlock-hint = Tutti possono rispondere
+forum-pinned-done = Discussione messa in evidenza.
+forum-unpinned-done = Discussione tolta dall'evidenza.
+forum-locked-done = Discussione chiusa.
+forum-unlocked-done = Discussione riaperta.
+forum-rename = Rinomina
+forum-renamed-done = Discussione rinominata.
+forum-move-to = Sposta in { $name }
+forum-moved-done = Spostata in { $name }.
+forum-thread-delete = Elimina discussione
+forum-thread-delete-sure =
+    { $count ->
+        [one] Eliminare definitivamente questa discussione e il suo messaggio?
+       *[other] Eliminare definitivamente questa discussione e i suoi { $count } messaggi?
+    }
+forum-thread-deleted = Discussione eliminata.
+forum-title-empty = Dai un titolo alla discussione.
+forum-title-long = Un titolo ha al massimo { $max } caratteri.
+forum-body-empty = Prima scrivi qualcosa.
+forum-body-long = Un messaggio ha al massimo { $max } caratteri.
+forum-category-new = Nuova categoria
+forum-category-name = Nome
+forum-category-description = A cosa serve
+forum-category-add = Aggiungi categoria
+forum-category-edit = Modifica categoria
+forum-category-edit-named = Modifica { $name }
+forum-category-place = Posizione nell'elenco
+forum-category-up = Sposta su
+forum-category-down = Sposta giù
+forum-category-delete = Elimina categoria
+forum-category-deleted = Categoria eliminata.
+forum-category-not-empty = Sposta o elimina le sue discussioni per eliminarla.
+forum-category-name-empty = Dai un nome alla categoria.
+forum-category-name-long = Un nome ha al massimo { $max } caratteri.
+forum-category-description-long = Una descrizione ha al massimo { $max } caratteri.
+mention-post = Post n. { $id }
+mention-missing = Questo post non c'è
+mention-no-picture = Nessuna immagine
 
 ## La demo della casella di ricerca vuota
 
@@ -100,6 +274,7 @@ guest-page-needs-account = Questa pagina è per chi ha un account su questo serv
 guest-account-note = Vota, carica e salva le ricerche
 guest-account-why = Con un account puoi votare, caricare, salvare le ricerche e ritrovare i post che hai aperto.
 guest-vote-why = Accedi per votare. Tornerai su questo post.
+guest-tag-vote-why = Accedi per votare i tag. Tornerai su questo post.
 guest-needs-account = Accedi per vederlo. Questo server lo mostra solo a chi ha un account.
 guest-gallery-empty = Qui non è ancora stato pubblicato nulla.
 guest-server-closed = Ora questo server è aperto solo a chi ha un account. Accedi per continuare.
@@ -143,6 +318,7 @@ settings-group-about = Aiuto e informazioni
 settings-group-about-note = Guida, privacy, riconoscimenti e versione
 settings-account = Account
 settings-signed-in-as = Accesso come
+settings-profile = Profilo
 settings-server-version = Versione del server
 settings-sign-out = Esci
 settings-library = Raccolta
@@ -629,6 +805,13 @@ stars-votes =
     }
 stars-no-votes = Ancora nessun voto
 vote-failed = Impossibile salvare il voto: { $reason }
+tag-vote-up = { $tag } è giusto qui
+tag-vote-down = { $tag } non c'entra
+tag-vote-up-undo = Togli il tuo voto a favore di { $tag }
+tag-vote-down-undo = Togli il tuo voto contro { $tag }
+tag-vote-score = Punteggio { $score }
+tag-vote-failed = Impossibile salvare il voto sul tag: { $reason }
+tag-voted-off = I voti hanno tolto { $tag } da questo post.
 post-download = Scarica
 download-failed = Il download non è finito. Controlla la connessione e riprova.
 share-button = Condividi
@@ -820,6 +1003,7 @@ post-colors = Colori
 post-color-search = Cerca { $color }
 post-added = Aggiunto
 post-source = Fonte
+post-uploader = Caricato da
 post-sample-note = Stai vedendo una copia più leggera. Ingrandendo si carica l’originale.
 post-show-original = Mostra originale
 post-related = Simili
@@ -1049,6 +1233,9 @@ help-server-private = È privato: solo chi ha un account vede i suoi post. Un li
 help-server-public = È pubblico: chiunque può sfogliare post, tag ed Esplora senza un account. Un post si condivide con il suo indirizzo.
 help-votes-likes = Un voto è un Mi piace o un Non mi piace. Premilo di nuovo per toglierlo. order:score mette prima i più apprezzati.
 help-votes-stars = Un voto va da 1 a 5 stelle. Premi di nuovo la tua stella per toglierlo. order:score mette prima i più votati, e un post ha bisogno di qualche voto per salire.
+help-forum = Il forum è nella barra di navigazione, al posto di Carica. Chiunque può leggerlo; per scrivere serve un account, al massimo una volta ogni 15 secondi. >>123 o post #123 in un messaggio rimandano a quel post.
+help-tag-votes = Ogni tag di un post si può votare: le frecce accanto dicono se è giusto lì. Un tag votato abbastanza in basso viene tolto dal post, e solo un amministratore può rimetterlo.
+help-profiles = Ognuno ha un profilo con un'immagine, un nome e due parole, che chiunque può vedere. Carica, Opzioni e il tuo profilo sono sotto la tua immagine, accanto alla navigazione.
 help-shortcuts = Scorciatoie da tastiera e gesti
 key-prev-next = post precedente o successivo
 key-edit = modifica tag e classificazione
@@ -1130,9 +1317,11 @@ privacy-responsible = Chi è responsabile
 privacy-responsible-body = La persona o l'organizzazione che gestisce questo server (il gestore) decide chi può registrarsi ed è responsabile dei dati che contiene. Le domande sui tuoi dati vanno rivolte a lei.
 privacy-server = Cosa salva il server
 privacy-server-account = Il tuo account: nome utente, ruolo e un hash Argon2id con sale della tua password. La password in sé non viene mai salvata. Se accedi tramite il provider di identità del gestore, il server conserva l'identificativo che quel provider ti assegna e il nome utente o l'email che riporta, per riconoscerti la volta successiva.
+privacy-server-profile = Su un server pubblico, ciò che metti nel tuo profilo: un nome visualizzato, qualche parola su di te e un'immagine, conservata in due piccole copie ritagliate sul quadrato che hai scelto. L'immagine che hai caricato non viene conservata.
 privacy-server-sessions = Le tue sessioni: un hash di ogni token di accesso, il tipo di dispositivo da cui proviene (ad esempio “Firefox on Linux” o “StarBooru app on Android”), quando è stata creata e usata l'ultima volta, e quando scade. Le chiavi API che crei sono conservate allo stesso modo: un hash della chiave, i primi caratteri per distinguerla, il suo nome e quando è stata usata l'ultima volta.
 privacy-server-files = I tuoi caricamenti: ogni file con dimensione, risoluzione, checksum e un'impronta visiva per la ricerca dei duplicati, e ciò che il server ne ricava: la data contenuta nel file, i colori principali e l'eventuale testo in un'immagine statica. Il server registra chi ha caricato ogni post.
 privacy-server-content = Ciò che aggiungi: tag, le persone segnate in un post, classificazioni, fonti, traduzioni delle pagine di fumetti, voti con il momento in cui li hai dati, e ricerche salvate.
+privacy-server-forum = Su un server pubblico, ciò che scrivi nel forum, con quando l'hai scritto e modificato l'ultima volta, e i tuoi voti sui tag. Un messaggio che elimini resta al suo posto, vuoto.
 privacy-server-shares = Per ogni link di condivisione che crei: i post che contiene, il titolo, la scadenza, e quante volte e quando è stato aperto l'ultima volta (non da chi).
 privacy-server-sites = Per gli altri siti: le ricerche che salvi su altri booru, gli account che salvi per loro (il nome utente come l'hai scritto, la chiave cifrata con il segreto del server), gli indirizzi che importi, tenuti 7 giorni dopo la fine, e ogni importazione di raccolte con i suoi conteggi finché non la rimuovi.
 privacy-server-limits = Per rallentare i tentativi di indovinare le password, il server conta gli accessi falliti per account e per indirizzo di rete, e le registrazioni per indirizzo. Questi conteggi restano in memoria al massimo un'ora e non vengono mai scritti su disco.
@@ -1153,6 +1342,7 @@ privacy-not-done-logs = Il contenuto dei file, il testo letto nelle immagini, le
 privacy-who-sees = Chi può vedere i tuoi post
 privacy-who-sees-body = Chiunque abbia un account su questo server può vedere i post che contiene, e scaricarne i file originali con tutto ciò che contengono, come il luogo in cui è stata scattata una foto. Un post mostra il suo punteggio, non chi l'ha votato. I link ai file forniti all'app sono firmati e scadono, quindi un link copiato smette di funzionare entro 12 ore. Se crei un link di condivisione, chiunque lo abbia può vedere i post che contiene, senza i loro tag, finché non scade o non lo rimuovi.
 privacy-who-sees-public = Su un server pubblico, anche chi non ha un account può vedere post, tag ed Esplora e scaricare i file, ma non il cestino né chi ha votato. Non può votare, caricare né salvare nulla. Lì un post si condivide con il suo indirizzo, che chiunque può aprire.
+privacy-who-sees-profiles = Un server pubblico mostra a tutti, anche a chi non ha un account, il profilo di ogni account (immagine, nome visualizzato, presentazione, data di iscrizione e quanto ha pubblicato), chi ha caricato ogni post, e il forum con chi ha scritto cosa. I voti sui tag si vedono solo come punteggi. Rendere privato il server elimina le immagini, le presentazioni, il forum e i voti sui tag.
 privacy-keeping = Conservazione ed eliminazione
 privacy-keeping-bin = I post eliminati finiscono nel cestino. Da lì un amministratore, o chi li ha caricati, può cancellarli insieme ai file, e il gestore può far svuotare il cestino da solo dopo un certo numero di giorni.
 privacy-keeping-sessions = Le sessioni terminano quando esci, dopo 90 giorni, o quando disconnetti gli altri dispositivi dalle Impostazioni. Cambiare la password disconnette tutti gli altri dispositivi; le chiavi API continuano a funzionare finché non le rimuovi o scadono.
@@ -1392,6 +1582,7 @@ admin-tab-backups = Backup
 admin-tab-server = Server
 # Un trattino morbido: sul telefono la parola può andare a capo tra le schede.
 admin-tab-updates = Aggiorna{"\u00AD"}menti
+admin-tab-moderation = Modera{"\u00AD"}zione
 admin-on = Attivo
 admin-off = Disattivato
 admin-posts = Post
@@ -1441,13 +1632,28 @@ admin-enabled-done = Account riattivato.
 admin-delete = Elimina account
 admin-delete-confirm = Eliminare { $name } definitivamente?
 admin-delete-note = L'eliminazione rimuove l'account, i suoi voti, le ricerche salvate e le chiavi. I suoi post restano.
+admin-profile = Profilo
+admin-profile-named = Profilo di { $name }
+admin-profile-lead = Ciò che questo account mostra a tutti. Ogni voce sparisce subito.
+admin-clear-picture = Togli immagine
+admin-clear-name = Cancella nome visualizzato
+admin-clear-about = Cancella la presentazione
+admin-cleared-picture = Immagine tolta.
+admin-cleared-name = Nome visualizzato cancellato.
+admin-cleared-about = Presentazione cancellata.
+admin-moderation-private = Su un server privato non c'è nulla da moderare.
+admin-voted-off = Tag tolti dai voti
+admin-voted-off-lead = I tag che le persone hanno tolto dai post con i voti, dai più recenti. Rimetterne uno azzera i suoi voti, e nient'altro può farlo.
+admin-voted-off-none = Nessun tag è stato tolto dai voti.
+admin-voted-off-restore = Rimetti
+admin-voted-off-back = { $tag } è di nuovo sul post n. { $id }.
 admin-deleted = Account { $name } eliminato.
 admin-server-lead = Si applicano subito e hanno la precedenza sulle variabili d'ambiente del server.
 mode-title = Chi può vedere questo server
 mode-private = Privato
 mode-public = Pubblico
-mode-private-means = Solo chi ha un account può vedere i post. I link di condivisione tornano a funzionare e si possono configurare altri booru.
-mode-public-means = Chiunque può sfogliare post, tag ed Esplora senza un account. I voti diventano Mi piace e un post si condivide con il suo indirizzo.
+mode-private-means = Solo chi ha un account può vedere i post. I link di condivisione tornano a funzionare e si possono configurare altri booru. Il forum, le immagini del profilo e i voti sui tag spariscono.
+mode-public-means = Chiunque può sfogliare post, tag, Esplora e il forum senza un account. I voti diventano Mi piace, un post si condivide con il suo indirizzo e ognuno ha un profilo.
 mode-switch-to = Passa a { $mode }
 mode-delete-and-switch = Elimina e cambia
 mode-switch-without-backup = Cambia senza backup
@@ -1505,6 +1711,36 @@ change-like-votes =
         [one] 1 Mi piace o Non mi piace
        *[other] { $count } Mi piace e Non mi piace
     }
+change-profile-pictures =
+    { $count ->
+        [one] 1 immagine del profilo
+       *[other] { $count } immagini del profilo
+    }
+change-profile-texts =
+    { $count ->
+        [one] 1 presentazione del profilo
+       *[other] { $count } presentazioni del profilo
+    }
+change-forum-threads =
+    { $count ->
+        [one] 1 discussione del forum
+       *[other] { $count } discussioni del forum
+    }
+change-forum-posts =
+    { $count ->
+        [one] 1 messaggio del forum
+       *[other] { $count } messaggi del forum
+    }
+change-tag-votes =
+    { $count ->
+        [one] 1 voto su un tag
+       *[other] { $count } voti sui tag
+    }
+change-tag-removals =
+    { $count ->
+        [one] 1 registro di un tag tolto dai voti
+       *[other] { $count } registri di tag tolti dai voti
+    }
 change-fate-deleted = verranno eliminati
 change-done-deleted = eliminati
 change-fate-likes = diventeranno Mi piace e Non mi piace: 4 o 5 stelle un Mi piace, 1 o 2 un Non mi piace
@@ -1513,6 +1749,12 @@ change-fate-neither = verranno eliminati, perché 3 stelle non è né un Mi piac
 change-done-neither = eliminati, perché 3 stelle non è né un Mi piace né un Non mi piace
 change-fate-stars = diventeranno stelle: un Mi piace 5, un Non mi piace 1
 change-done-stars = diventati stelle
+change-fate-texts = verranno eliminate; i nomi visualizzati restano
+change-done-texts = eliminate; i nomi visualizzati restano
+change-fate-threads = verranno eliminate; le categorie restano
+change-done-threads = eliminate; le categorie restano
+change-fate-removals = verranno eliminati; i tag restano tolti, e le modifiche possono rimetterli
+change-done-removals = eliminati; i tag restano tolti, e le modifiche possono rimetterli
 admin-name = Nome del server
 admin-name-hint = Mostrato nella pagina di accesso.
 admin-name-error = Dai al server un nome da 1 a { $max } caratteri.
@@ -1523,6 +1765,11 @@ admin-trash-days-hint = I post nel cestino più vecchi di così vengono eliminat
 admin-trash-days-error = Scrivi un numero di giorni da 0 a { $max }.
 admin-auto-tags = Aggiungi ai nuovi post i tag di ciò che mostra il file
 admin-auto-tags-hint = Tag meta come highres, lowres, wide_image, video, sound e long_video. Ogni post viene taggato una volta sola, quindi un tag che togli resta tolto. Attivandolo vengono taggati anche i post più vecchi al prossimo avvio del server.
+admin-tag-votes = I voti tolgono un tag a
+admin-tag-votes-hint = Il punteggio a cui un tag viene tolto da un post. Con 0 non ne viene mai tolto nessuno.
+admin-tag-votes-at = Un tag viene tolto da un post quando il suo punteggio arriva a { $score }.
+admin-tag-votes-off = I voti non tolgono mai un tag.
+admin-tag-votes-error = Inserisci un numero da 0 a { $max }.
 admin-save = Salva
 admin-saved = Salvato
 admin-bin-open = Apri il cestino

@@ -1,14 +1,16 @@
 //! Administration › Server: the mode and the score kind (`modes.rs`), the
 //! settings that override the server's environment (its name, sign-ups, how
-//! long the recycle bin keeps posts, automatic meta tags), emptying the bin
+//! long the recycle bin keeps posts, automatic meta tags, and on a public
+//! server the score at which votes take a tag off), emptying the bin
 //! at once, and the AI tools (`ai.rs`). The settings are read once for the
 //! cards that show them.
 
 use leptos::ev::SubmitEvent;
 use leptos::prelude::*;
 use leptos::task::spawn_local;
-use starbooru_core::ServerSettings;
 use starbooru_core::admin::{MAX_INSTANCE_NAME_CHARS, MAX_TRASH_DAYS};
+use starbooru_core::tag_vote::{DEFAULT_TAG_VOTE_THRESHOLD, MAX_TAG_VOTE_THRESHOLD};
+use starbooru_core::{Mode, ServerSettings};
 
 use super::Waiting;
 use super::ai::AiCard;
@@ -60,6 +62,9 @@ fn ServerCard(settings: RwSignal<Option<ServerSettings>>) -> impl IntoView {
     let open = RwSignal::new(false);
     let days = RwSignal::new(String::new());
     let meta_tags = RwSignal::new(true);
+    // How low a tag's score goes before it comes off, typed without its
+    // minus; a public server's alone.
+    let threshold = RwSignal::new(String::new());
     let loaded = RwSignal::new(false);
     let busy = RwSignal::new(false);
     let error = RwSignal::new(None::<String>);
@@ -69,6 +74,11 @@ fn ServerCard(settings: RwSignal<Option<ServerSettings>>) -> impl IntoView {
         open.try_set(s.allow_registration);
         days.try_set(s.trash_days.to_string());
         meta_tags.try_set(s.auto_meta_tags);
+        threshold.try_set(
+            s.tag_vote_threshold
+                .unwrap_or(DEFAULT_TAG_VOTE_THRESHOLD)
+                .to_string(),
+        );
         loaded.try_set(true);
     };
     // The form takes the settings as they first come; a switch of mode or
@@ -88,15 +98,27 @@ fn ServerCard(settings: RwSignal<Option<ServerSettings>>) -> impl IntoView {
                 .unwrap_or_default()
         })
     });
+    let public = Memo::new(move |_| kept.get().0 == Mode::Public);
     let check = Memo::new(move |_| {
+        let typed = threshold.read();
         check_settings(
             &name.read(),
             open.get(),
             &days.read(),
             meta_tags.get(),
+            public.get().then_some(typed.as_str()),
             kept.get(),
         )
     });
+    // What the number does, as a sentence under it.
+    let threshold_note = move || {
+        let typed = threshold.read();
+        match typed.trim().trim_start_matches('-').parse::<u32>() {
+            Ok(0) => t!("admin-tag-votes-off"),
+            Ok(n) => t!("admin-tag-votes-at", score = format!("\u{2212}{n}")),
+            Err(_) => t!("admin-tag-votes-hint"),
+        }
+    };
     let save = move |e: SubmitEvent| {
         e.prevent_default();
         if busy.get_untracked() {
@@ -177,6 +199,29 @@ fn ServerCard(settings: RwSignal<Option<ServerSettings>>) -> impl IntoView {
                         </label>
                         <small class="muted field-hint">{move || t!("admin-auto-tags-hint")}</small>
                     </div>
+                    <Show when=move || public.get()>
+                        <label class="field tag-votes-field">
+                            <span>{move || t!("admin-tag-votes")}</span>
+                            <span class="minus-input">
+                                <span class="minus" aria-hidden="true">"\u{2212}"</span>
+                                <input
+                                    type="number"
+                                    inputmode="numeric"
+                                    min="0"
+                                    max=MAX_TAG_VOTE_THRESHOLD
+                                    aria-invalid=move || invalid(!check.get().threshold_ok)
+                                    aria-describedby="tag-votes-note"
+                                    bind:value=threshold
+                                />
+                            </span>
+                            <Show when=move || !check.get().threshold_ok>
+                                <small class="field-error">
+                                    {move || t!("admin-tag-votes-error", max = MAX_TAG_VOTE_THRESHOLD)}
+                                </small>
+                            </Show>
+                            <small class="muted field-hint" id="tag-votes-note">{threshold_note}</small>
+                        </label>
+                    </Show>
                     {move || error.get().map(|message| view! { <ErrorBanner message=message /> })}
                     <div class="row-end">
                         <Show when=move || saved.get()>

@@ -50,7 +50,7 @@ pub fn follow() {
 
 /// An arrow before the page's title. `up` is the page above this one.
 #[component]
-pub fn BackButton(up: &'static str) -> impl IntoView {
+pub fn BackButton(#[prop(into)] up: String) -> impl IntoView {
     let back = move |e: MouseEvent| {
         let modifier = e.ctrl_key() || e.meta_key() || e.shift_key() || e.alt_key();
         if !plain_click(e.button(), modifier) {

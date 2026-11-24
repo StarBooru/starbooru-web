@@ -29,10 +29,12 @@ starbooru-client = { git = "https://github.com/StarBooru/starbooru-server", tag 
 src/
   main.rs       loads the store, picks the language, mounts the app
   app.rs        theme, OLED, accent and language on the root, and the routes
-  route.rs      the navigation's tabs, which tab a path is under, search addresses
+  route.rs      the navigation's tabs per mode, which tab or the account button a path is under, search,
+                  forum and profile addresses
   api.rs        the shared Client, a session's or a guest's without a token, api::call (a 401 signs out),
                   errors in words
   instance.rs   what the server is (private or public, likes or stars) from /info, and whether it takes guests
+  me.rs         the signed-in account's own profile on a public server, for the account button
   oidc.rs       sign-in through the identity provider, and linking it to the account, away and back to /oidc
   store.rs      session, preferences, the gallery's place in each search and the posts opened, in localStorage
   theme.rs      the accent as hue, chroma and lightness (--seed-*), the browser's bar colour (theme-color)
@@ -44,12 +46,15 @@ src/
   pages/        one module per page; shell.rs is the frame, post/ the viewer and its media editor, share/
                   the share sheet, the list of links and the public /s/ page, tags/ the Tags page and a tag's
                   own page, saved/ the saved searches of the gallery and the boorus, settings/ the Settings groups,
-                  admin/ the administration's tabs, legal.rs the privacy policy and the terms
+                  admin/ the administration's tabs, legal.rs the privacy policy and the terms, account.rs a
+                  public server's account button, profile/ a profile and the form and crop picker that edit
+                  your own, forum/ the forum's categories, threads and posts and the box to write in
   components/   icons, brand, snackbar, tiles and their swipes, downloads, the tag box and its grip, a tag's menu,
                   the picture of what a search finds,
                   the button that asks "Sure?", the links to the legal pages, the menu that looks a picture up on
                   other sites, the video player, the Back button of the pages under a tab, Markdown as elements,
-                  the five stars of a vote, and what stands in for a page a guest or a public server can't use
+                  the five stars of a vote, what stands in for a page a guest or a public server can't use,
+                  an account's picture on a disc, and a post named in a forum post with its preview
   logic/        pure Rust with unit tests: server addresses, the gallery's lists and layout, zoom, the viewer's
                   tags, people, details and file names, the video player's clock, seek bar, keys and resting
                   controls, the word at the caret, the tag editor's text and chips, the category a new tag gets and
@@ -63,14 +68,17 @@ src/
                   a small Markdown reader, updates: the notice's rule, an update's steps, the reasons a
                   server can't update itself and the hour of automatic updates, stars: a press, the keys, the
                   average and the tallies shown before the server answers, and modes: what a switch lists, why it
-                  was refused, which screen someone without a session gets and where a sign-in comes back to
+                  was refused, which screen someone without a session gets and where a sign-in comes back to,
+                  profiles: names, what an edit sends, a picture's checks and the crop picker's square, the
+                  forum: a post cut where it names posts, pages joined, the wait between posts and who may do
+                  what, and tag votes: a press, the score shown and the tags an answer took off
 locales/        en.ftl, it.ftl
 style/          tokens.css, base.css, shell.css, player.css, pages/<page>.css
 assets/         the icons, the web app manifest and the service worker (sw.js), copied to the root as they are
 index.html      Trunk's entry, with the loading screen
 ```
 
-Routes keep the first StarBooru app's paths, so links people saved still open: `/`, `/explore`, `/post/:id`, `/tags`, `/tag`, `/upload`, `/boorus`, `/boorus/post`, `/settings` and `/settings/<group>`, `/trash`, `/duplicates`, `/help`, `/admin`, `/oidc`, `/s/:token`, `/privacy`, `/terms`. The first thirteen show inside the shell; the rest open without signing in. A guest on a public server gets the shell too.
+Routes keep the first StarBooru app's paths, so links people saved still open: `/`, `/explore`, `/post/:id`, `/tags`, `/tag`, `/upload`, `/boorus`, `/boorus/post`, `/settings` and `/settings/<group>`, `/trash`, `/duplicates`, `/help`, `/admin`, `/oidc`, `/s/:token`, `/privacy`, `/terms`. The first thirteen show inside the shell; the rest open without signing in. A guest on a public server gets the shell too. A public server adds `/forum`, `/forum/c/:id`, `/forum/t/:id` (a post's anchor is `#p<id>`) and `/u/:name`, in the shell; on a private one they say there is no forum or no profiles.
 
 Settings is a list of groups (`logic::settings::Group`): Account and security, Appearance, Viewing and gestures, Battery and effects, Library, Sharing and API keys, Help and about, with the administration at the foot for administrators. From 1000 px the list stays beside the open group, and `/settings` shows Appearance; narrower, `/settings` is the list and each group is a page with a Back. An address from before the groups, `/settings#keys` or `/settings/keys`, is replaced by the group's with the card's anchor (`/settings/sharing#keys`). Choices that change looks are drawn as small pictures in the app's own roles: `tokens.css` gives `.scheme-light` and `.scheme-dark` the two themes' roles, so the theme pictures show the other theme too.
 
@@ -82,7 +90,7 @@ Plain CSS, split by role. `index.html` links each file with `<link data-trunk re
 |---|---|
 | `style/tokens.css` | Colour roles for light, dark and the system's dark, all in OKLCH from the accent's hue (`--seed-hue`) and, for a picked colour, its chroma and lightness (`--seed-chroma`, `--seed-lightness`): a grey makes a palette without a tint. `[data-oled]` blacks out the dark roles. Radii, easing, durations, shadows; `.glass` |
 | `style/base.css` | Base elements and the shared components: buttons, switches, fields and the tag box, segmented choices, chips, cards, banners, spinners, Markdown, the snackbar, the tag menu, keyframes and the reduced-motion fallback |
-| `style/shell.css` | The top bar, the brand and search capsules, the navigation slider in its three places, the content area and the update notice |
+| `style/shell.css` | The top bar, the brand and search capsules, the navigation slider in its three places, a public server's account button beside it, the content area and the update notice |
 | `style/player.css` | The video player, shared by the viewer and the share page; its narrow layouts are container queries on the player's own width |
 | `style/pages/<page>.css` | One per page, linked after the four above when the page lands |
 
@@ -96,7 +104,11 @@ Component CSS uses only the role variables, never a literal colour. The navigati
 - **Motion.** CSS transitions and the Web Animations API. View Transitions where the browser has them, with a plain fallback. Everything heavy goes quiet under `prefers-reduced-motion` and the battery saver.
 - **Uploads.** `Client::upload_file` sends files in chunks and resends a failed one. The queue lives in a signal at the root, so it keeps going while the user moves between pages.
 - **Private and public.** `instance.rs` keeps what `/info` said last: the mode, the score kind and whether guests may browse. Until it answers, a server counts as private with likes. The shell asks when it starts, `api::server_info` again every two minutes, and a switch in Administration › Server puts the new mode in at once and asks again, so every view that reads it follows. A public server counts likes whatever is stored, as the server does.
-- **Guests.** Without a session, the shell asks the server the sign-in screen would start with whether it takes guests. If it does, the pages open without signing in, and requests go out with a client that has no token; nothing is kept per account (no history, no saved searches, no uploads). The navigation has Gallery, Explore, Tags and Settings (Appearance and Help only), then Sign in. Upload, the recycle bin, the duplicates and the administration show a card that leads to sign-in instead. A vote, from the viewer or a tile's menu, asks to sign in. The sign-in screen then opens over the page with a way back, and signing in, with a password or through the identity provider (which keeps the page in its handle), stays on that page. A guest's 401 asks the server again whether it still takes guests; a 429 the client doesn't wait out says to slow down and when to try again. On a private server nothing changes: the sign-in screen comes first.
+- **A public server's frame.** The navigation has Gallery, Explore, Tags and Forum, the forum in Upload's place, and a round account button beside it (after the slider at the top right, at the foot of the rail, beside the bar at the bottom of a phone) with the account's picture or initial. Its menu holds the profile, Upload, Settings, the administration and Sign out; a guest's says Sign in and holds the ways to an account and Settings. Upload, Settings and your own profile light the button's ring as an item lights for its pages. The uploads under way show as a badge on it. The profile shown there comes from `GET /auth/profile` once a session (`me.rs`), and an edit puts the answer in at once. A private server's navigation is as before.
+- **Profiles.** `/u/:name` shows the picture, display name, handle, the administrator badge, what the account wrote about itself and its counts. Your own has Edit, which turns the card into the form (also in Settings › Account): the picture is checked for kind and size, then cut in the crop picker, dragged with a pointer or two fingers, zoomed with the slider, the wheel or a pinch, moved with the arrows; `logic::profile::Crop` turns that into the square in the picture's own pixels for `PUT /auth/avatar`. The search syntax has no uploader term, so a profile lists no uploads. Posts say who uploaded them in the viewer's details.
+- **The forum.** Categories, a category's threads (pinned first, 30 a page as the list nears its end) and a thread (50 posts a page, Show more). The top bar's search finds threads while the forum is open, in the whole forum or the category. Posts are drawn with `components/markdown.rs`, which turns `>>123` and `post #123` (found by `starbooru_core::post_mentions`) into links with the post's thumbnail on hover or focus. The box to write in has Write and Preview. The app counts the 15 seconds after the account's last post it knows of: a post sent sooner waits them out on the button, with Don't post. The client waits out a shorter `429` itself; a longer one (the day's 100 posts) is said in words with the time left. Authors edit (with Undo) and delete (after Sure?) their posts; administrators pin, lock, move, rename and delete a thread from its menu, with Undo where the API takes the change back, and edit, reorder, add and delete categories on `/forum`.
+- **Tag votes.** In the viewer's Tags card on a public server (`pages/post/tag_votes.rs`, apart from the tag editor), each tag has up and down arrows on hover or focus, always on a touch screen, and its score once it has votes. Your vote is lit, and pressing it again takes it back. The score moves at once and goes back if the server turns the vote down. A tag the votes take off folds away and a notice says so. Administration › Moderation lists the tags voted off with Put back; Server has the score at which a tag comes off.
+- **Guests.** Without a session, the shell asks the server the sign-in screen would start with whether it takes guests. If it does, the pages open without signing in, and requests go out with a client that has no token; nothing is kept per account (no history, no saved searches, no uploads). The navigation has Gallery, Explore, Tags and Forum, and the account button says Sign in, with Settings (Appearance and Help only) in its menu. Upload, the recycle bin, the duplicates and the administration show a card that leads to sign-in instead. A vote, from the viewer or a tile's menu, asks to sign in. The sign-in screen then opens over the page with a way back, and signing in, with a password or through the identity provider (which keeps the page in its handle), stays on that page. A guest's 401 asks the server again whether it still takes guests; a 429 the client doesn't wait out says to slow down and when to try again. On a private server nothing changes: the sign-in screen comes first.
 - **Stars.** On a private server set to stars, the viewer's vote is five stars (`components/stars.rs`) with the post's average and count; the menu's like gives five, and a sort by score reads as by rating. The tallies change at once and go back if the server turns the vote down, as likes do.
 - **Sharing on a public server.** The share sheet gives the post's own address (`/post/{id}`), or several, one a line, to copy or hand to the browser's share sheet. Settings › Sharing has no list of links there.
 - **Explore.** A private server has no Trending or Popular tags, so Explore shows the posts added on this day in earlier years and random picks, and asks for a one-day window, as only the two missing sections read it. A public one leads with Trending, over the window in `?days=` (today, a week, a month or a year, a week by default), and Popular tags, and has no boorus side: the `/boorus` pages say so. While it's open, the top bar's search box narrows it (`?q=`) instead of searching the gallery.

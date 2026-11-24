@@ -16,16 +16,28 @@ pub enum Kind {
     StarVotesConverted,
     StarVotesDropped,
     LikeVotesConverted,
+    ProfilePictures,
+    ProfileTexts,
+    ForumThreads,
+    ForumPosts,
+    TagVotes,
+    TagRemovals,
 }
 
 impl Kind {
-    pub const ALL: [Kind; 6] = [
+    pub const ALL: [Kind; 12] = [
         Kind::ShareLinks,
         Kind::BooruAccounts,
         Kind::RemoteSearches,
         Kind::StarVotesConverted,
         Kind::StarVotesDropped,
         Kind::LikeVotesConverted,
+        Kind::ProfilePictures,
+        Kind::ProfileTexts,
+        Kind::ForumThreads,
+        Kind::ForumPosts,
+        Kind::TagVotes,
+        Kind::TagRemovals,
     ];
 
     pub fn as_str(self) -> &'static str {
@@ -36,6 +48,12 @@ impl Kind {
             Kind::StarVotesConverted => changes::STAR_VOTES_CONVERTED,
             Kind::StarVotesDropped => changes::STAR_VOTES_DROPPED,
             Kind::LikeVotesConverted => changes::LIKE_VOTES_CONVERTED,
+            Kind::ProfilePictures => changes::PROFILE_PICTURES,
+            Kind::ProfileTexts => changes::PROFILE_TEXTS,
+            Kind::ForumThreads => changes::FORUM_THREADS,
+            Kind::ForumPosts => changes::FORUM_POSTS,
+            Kind::TagVotes => changes::TAG_VOTES,
+            Kind::TagRemovals => changes::TAG_REMOVALS,
         }
     }
 
@@ -57,6 +75,12 @@ impl Kind {
             Kind::StarVotesConverted => t!("change-star-votes", count = count),
             Kind::StarVotesDropped => t!("change-three-stars", count = count),
             Kind::LikeVotesConverted => t!("change-like-votes", count = count),
+            Kind::ProfilePictures => t!("change-profile-pictures", count = count),
+            Kind::ProfileTexts => t!("change-profile-texts", count = count),
+            Kind::ForumThreads => t!("change-forum-threads", count = count),
+            Kind::ForumPosts => t!("change-forum-posts", count = count),
+            Kind::TagVotes => t!("change-tag-votes", count = count),
+            Kind::TagRemovals => t!("change-tag-removals", count = count),
         }
     }
 
@@ -64,18 +88,22 @@ impl Kind {
     /// "deleted".
     pub fn fate(self, done: bool) -> String {
         match (self, done) {
-            (Kind::ShareLinks | Kind::BooruAccounts | Kind::RemoteSearches, false) => {
-                t!("change-fate-deleted")
-            }
-            (Kind::ShareLinks | Kind::BooruAccounts | Kind::RemoteSearches, true) => {
-                t!("change-done-deleted")
-            }
+            // Display names and the forum's categories stay, for a server
+            // that goes public again.
+            (Kind::ProfileTexts, false) => t!("change-fate-texts"),
+            (Kind::ProfileTexts, true) => t!("change-done-texts"),
+            (Kind::ForumThreads, false) => t!("change-fate-threads"),
+            (Kind::ForumThreads, true) => t!("change-done-threads"),
+            (Kind::TagRemovals, false) => t!("change-fate-removals"),
+            (Kind::TagRemovals, true) => t!("change-done-removals"),
             (Kind::StarVotesConverted, false) => t!("change-fate-likes"),
             (Kind::StarVotesConverted, true) => t!("change-done-likes"),
             (Kind::StarVotesDropped, false) => t!("change-fate-neither"),
             (Kind::StarVotesDropped, true) => t!("change-done-neither"),
             (Kind::LikeVotesConverted, false) => t!("change-fate-stars"),
             (Kind::LikeVotesConverted, true) => t!("change-done-stars"),
+            (_, false) => t!("change-fate-deleted"),
+            (_, true) => t!("change-done-deleted"),
         }
     }
 }
@@ -266,8 +294,22 @@ mod tests {
                 Kind::ShareLinks,
                 Kind::BooruAccounts,
                 Kind::RemoteSearches,
-                Kind::StarVotesDropped
+                Kind::StarVotesDropped,
+                Kind::ProfilePictures,
+                Kind::ProfileTexts,
+                Kind::ForumThreads,
+                Kind::ForumPosts,
+                Kind::TagVotes,
+                Kind::TagRemovals,
             ]
+        );
+        // Going private says what stays.
+        assert_eq!(Kind::ForumThreads.noun(3), "3 forum threads");
+        assert!(Kind::ForumThreads.fate(false).contains("categories stay"));
+        assert!(
+            Kind::ProfileTexts
+                .fate(false)
+                .contains("display names stay")
         );
     }
 

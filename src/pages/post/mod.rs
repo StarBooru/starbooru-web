@@ -13,6 +13,7 @@ mod people;
 mod related;
 mod side;
 pub(crate) mod stage;
+mod tag_votes;
 
 use std::cell::RefCell;
 use std::collections::VecDeque;
@@ -694,6 +695,17 @@ pub fn PostView() -> impl IntoView {
             people_editing.set(false);
         }
     });
+    // A vote on one of its tags: the lists show the post's tags too.
+    let tag_voted = Callback::new(move |p: Post| {
+        let p = Arc::new(p);
+        keep(Arc::clone(&p));
+        gallery::update_post(Arc::clone(&p));
+        post.try_update(|shown| {
+            if let Some(shown) = shown.as_mut().filter(|s| s.id == p.id) {
+                *shown = p;
+            }
+        });
+    });
 
     // Not while the page still shows the post before, nor one in the bin.
     let share = Callback::new(move |()| {
@@ -884,7 +896,14 @@ pub fn PostView() -> impl IntoView {
                                 })
                         } else {
                             Some(
-                                view! { <TagsCard post=post editable=editable on_edit=start_edit /> }
+                                view! {
+                                    <TagsCard
+                                        post=post
+                                        editable=editable
+                                        on_edit=start_edit
+                                        on_voted=tag_voted
+                                    />
+                                }
                                     .into_any(),
                             )
                         }

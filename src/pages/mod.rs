@@ -1,11 +1,13 @@
 //! The app's pages. `app.rs` says which address shows which.
 
+pub mod account;
 pub mod admin;
 pub mod boorus;
 mod bulk;
 mod drag_select;
 pub mod duplicates;
 pub mod explore;
+pub mod forum;
 pub mod gallery;
 pub mod help;
 pub mod legal;
@@ -13,6 +15,7 @@ mod library;
 pub mod login;
 pub mod post;
 mod post_menu;
+pub mod profile;
 mod saved;
 mod search_demo;
 pub mod settings;

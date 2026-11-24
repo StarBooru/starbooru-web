@@ -13,11 +13,13 @@ use crate::pages::admin::Admin;
 use crate::pages::boorus::{BooruPost, Boorus};
 use crate::pages::duplicates::Duplicates;
 use crate::pages::explore::Explore;
+use crate::pages::forum::{Forum, ForumCategoryPage, ForumThreadPage};
 use crate::pages::gallery::Gallery;
 use crate::pages::help::Help;
 use crate::pages::legal::{Privacy, Terms};
 use crate::pages::login::OidcReturn;
 use crate::pages::post::PostView;
+use crate::pages::profile::ProfilePage;
 use crate::pages::settings::Settings;
 use crate::pages::share::SharedPage;
 use crate::pages::shell::Shell;
@@ -109,6 +111,10 @@ fn AppRoutes() -> impl IntoView {
                 />
                 <Route path=path!("/help") view=Help />
                 <Route path=path!("/admin") view=|| view! { <MembersOnly><Admin /></MembersOnly> } />
+                <Route path=path!("/forum") view=Forum />
+                <Route path=path!("/forum/c/:id") view=ForumCategoryPage />
+                <Route path=path!("/forum/t/:id") view=ForumThreadPage />
+                <Route path=path!("/u/:name") view=ProfilePage />
             </ParentRoute>
         </Routes>
     }

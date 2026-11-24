@@ -20,6 +20,12 @@ nav-tags = Tags
 nav-upload = Upload
 nav-settings = Settings
 nav-settings-tab = Settings
+nav-forum = Forum
+account-button = Your account, { $name }
+account-title = Your account
+account-guest-title = Without an account
+account-guest-hint = Vote, upload, write in the forum
+account-see-profile = See your profile
 search-placeholder = Search tags, e.g. cat rating:safe
 search-label = Search tags
 search-clear = Clear the search
@@ -30,6 +36,174 @@ search-hint = { $tag }, { $count ->
 }
 search-corrected = Spelling corrected: { $tags }
 search-exact = Search exactly as typed
+
+## Profiles
+
+profile-title = Profile
+profile-edit = Edit profile
+profile-done = Done
+profile-stat-posts = Posts
+profile-stat-forum = Forum posts
+profile-stat-joined = Joined
+profile-missing = No one called { $name } here
+profile-missing-body = Check the name, or the account may have been deleted.
+profile-off = No profiles on this server
+profile-off-body = This server is private: it shows nobody's profile.
+profile-display-name = Display name
+profile-display-name-hint = What others see in place of your username, which stays your handle. Leave it empty to show your username.
+profile-about = About you
+profile-chars-left =
+    { $count ->
+        [one] 1 character left
+       *[other] { $count } characters left
+    }
+profile-chars-over =
+    { $count ->
+        [one] 1 character too many
+       *[other] { $count } characters too many
+    }
+profile-save = Save profile
+profile-name-long = A display name has at most { $max } characters.
+profile-about-long = This text has at most { $max } characters.
+profile-bad-character = Remove the invisible or control characters.
+profile-picture-add = Add a picture
+profile-picture-change = Change picture
+profile-picture-remove = Remove picture
+profile-picture-removed = Picture removed.
+profile-picture-saved = Picture saved.
+profile-picture-hint = JPEG, PNG, WebP or GIF, up to 5 MB. You pick the circle next.
+profile-picture-use = Use this picture
+profile-picture-sending = Saving…
+profile-picture-big = The picture is over { $max }. Pick a smaller one.
+profile-picture-kind = That isn't a JPEG, PNG, WebP or GIF picture.
+profile-picture-small = The picture is smaller than { $min } pixels on a side.
+profile-picture-outside = That square isn't inside the picture.
+profile-crop-label = Drag the picture to place it in the circle, with the arrow keys too. The wheel, two fingers or + and − zoom.
+profile-crop-zoom = Zoom
+profile-crop-in = Zoom in
+profile-crop-out = Zoom out
+
+## The forum
+
+forum-off = No forum on this server
+forum-off-body = This server is private, and only a public one has a forum.
+forum-search = Search the forum
+forum-search-category = Search this category
+forum-found = Threads with “{ $q }”
+forum-found-clear = Show all
+forum-found-none = No thread has all these words.
+forum-no-categories = No categories yet.
+forum-threads =
+    { $count ->
+        [one] 1 thread
+       *[other] { $count } threads
+    }
+forum-replies =
+    { $count ->
+        [0] No replies
+        [one] 1 reply
+       *[other] { $count } replies
+    }
+forum-no-activity = Nothing yet
+forum-threads-none = No threads here yet. Start the first one.
+forum-more = Show more
+forum-more-posts = Show more posts
+forum-back = Back to the forum
+forum-category-missing = This category doesn't exist
+forum-thread-missing = This thread doesn't exist
+forum-pinned = Pinned
+forum-locked = Locked
+forum-author-gone = Deleted account
+forum-thread-new = New thread
+forum-thread-title = Title
+forum-thread-body = First post
+forum-thread-post = Post thread
+forum-guest-why = Sign in to write in the forum. You'll be back here.
+forum-guest-reply = Sign in to reply in this thread.
+forum-write = Write
+forum-preview = Preview
+forum-preview-empty = Nothing to preview yet.
+forum-placeholder = Plain text, with Markdown: **bold**, *italic*, lists, > quotes. >>123 links to post 123.
+forum-sending = Posting…
+forum-reply = Reply
+forum-reply-send = Post reply
+forum-wait =
+    { $seconds ->
+        [one] Posting in 1 second…
+       *[other] Posting in { $seconds } seconds…
+    }
+forum-wait-cancel = Don't post
+forum-slow-down = You're posting too fast. Try again in a moment.
+forum-slow-down-seconds =
+    { $seconds ->
+        [one] You can post again in 1 second.
+       *[other] You can post again in { $seconds } seconds.
+    }
+forum-slow-down-minutes =
+    { $minutes ->
+        [one] That's { $posts } posts today. You can post again in 1 minute.
+       *[other] That's { $posts } posts today. You can post again in { $minutes } minutes.
+    }
+forum-slow-down-hours =
+    { $hours ->
+        [one] That's { $posts } posts today. You can post again in 1 hour.
+       *[other] That's { $posts } posts today. You can post again in { $hours } hours.
+    }
+forum-locked-note = This thread is locked. Nobody can reply.
+forum-edited = edited
+forum-edited-at = Edited { $when }
+forum-edit = Edit
+forum-delete = Delete post
+forum-edited-done = Post edited.
+forum-post-deleted = Post deleted.
+forum-post-gone = This post was deleted.
+forum-undone = Undone.
+forum-thread-manage = Manage thread
+forum-pin = Pin
+forum-pin-hint = First in its category
+forum-unpin = Unpin
+forum-unpin-hint = Back among the others
+forum-lock = Lock
+forum-lock-hint = Only administrators reply
+forum-unlock = Unlock
+forum-unlock-hint = Everyone can reply again
+forum-pinned-done = Thread pinned.
+forum-unpinned-done = Thread unpinned.
+forum-locked-done = Thread locked.
+forum-unlocked-done = Thread unlocked.
+forum-rename = Rename
+forum-renamed-done = Thread renamed.
+forum-move-to = Move to { $name }
+forum-moved-done = Moved to { $name }.
+forum-thread-delete = Delete thread
+forum-thread-delete-sure =
+    { $count ->
+        [one] Delete this thread and its post for good?
+       *[other] Delete this thread and its { $count } posts for good?
+    }
+forum-thread-deleted = Thread deleted.
+forum-title-empty = Give the thread a title.
+forum-title-long = A title has at most { $max } characters.
+forum-body-empty = Write something first.
+forum-body-long = A post has at most { $max } characters.
+forum-category-new = New category
+forum-category-name = Name
+forum-category-description = What it's for
+forum-category-add = Add category
+forum-category-edit = Edit category
+forum-category-edit-named = Edit { $name }
+forum-category-place = Place in the list
+forum-category-up = Move up
+forum-category-down = Move down
+forum-category-delete = Delete category
+forum-category-deleted = Category deleted.
+forum-category-not-empty = Move or delete its threads to delete it.
+forum-category-name-empty = Give the category a name.
+forum-category-name-long = A name has at most { $max } characters.
+forum-category-description-long = A description has at most { $max } characters.
+mention-post = Post #{ $id }
+mention-missing = This post isn't here
+mention-no-picture = No picture
 
 ## The empty search box's demo
 
@@ -100,6 +274,7 @@ guest-page-needs-account = This page is for people with an account on this serve
 guest-account-note = Vote, upload and save searches
 guest-account-why = With an account you can vote, upload, save searches and keep the posts you opened.
 guest-vote-why = Sign in to vote. You'll be back on this post.
+guest-tag-vote-why = Sign in to vote on tags. You'll be back on this post.
 guest-needs-account = Sign in to see this. This server shows it only to people with an account.
 guest-gallery-empty = Nothing has been posted here yet.
 guest-server-closed = This server is now open only to people with an account. Sign in to go on.
@@ -143,6 +318,7 @@ settings-group-about = Help and about
 settings-group-about-note = Cheat sheet, privacy, credits and version
 settings-account = Account
 settings-signed-in-as = Signed in as
+settings-profile = Profile
 settings-server-version = Server version
 settings-sign-out = Sign out
 settings-library = Library
@@ -632,6 +808,13 @@ stars-votes =
     }
 stars-no-votes = No votes yet
 vote-failed = Couldn't save your vote: { $reason }
+tag-vote-up = { $tag } belongs here
+tag-vote-down = { $tag } doesn't belong here
+tag-vote-up-undo = Take back your vote for { $tag }
+tag-vote-down-undo = Take back your vote against { $tag }
+tag-vote-score = Score { $score }
+tag-vote-failed = Couldn't save your vote on the tag: { $reason }
+tag-voted-off = The votes took { $tag } off this post.
 post-download = Download
 download-failed = The download didn't finish. Check your connection and try again.
 share-button = Share
@@ -823,6 +1006,7 @@ post-colors = Colours
 post-color-search = Search for { $color }
 post-added = Added
 post-source = Source
+post-uploader = Uploaded by
 post-sample-note = Showing a smaller copy. Zooming in loads the original.
 post-show-original = Show original
 post-related = Related
@@ -1040,6 +1224,9 @@ help-server-private = It's private: only people with an account see its posts. A
 help-server-public = It's public: anyone can browse its posts, tags and Explore without an account. A post is shared by its own address.
 help-votes-likes = A vote is a like or a dislike. Press it again to take it back. order:score puts the most liked first.
 help-votes-stars = A vote is 1 to 5 stars. Press your star again to take it back. order:score puts the best rated first, and a post needs a few votes to climb.
+help-forum = The forum is in the navigation, in Upload's place. Anyone can read it; writing needs an account, once every 15 seconds at most. >>123 or post #123 in a post links to that post.
+help-tag-votes = Each tag of a post takes votes: the arrows beside it say whether it belongs there. A tag voted far enough down comes off the post, and only an administrator can put it back.
+help-profiles = Everyone has a profile with a picture, a name and a few words, which anyone can see. Upload, Settings and yours are under your picture, beside the navigation.
 help-shortcuts = Keyboard shortcuts and gestures
 key-prev-next = previous or next post
 key-edit = edit tags and rating
@@ -1121,9 +1308,11 @@ privacy-responsible = Who is responsible
 privacy-responsible-body = The person or organisation that runs this server (the operator) decides who may sign up and is responsible for the data on it. Questions about your data go to them.
 privacy-server = What the server stores
 privacy-server-account = Your account: username, role and a salted Argon2id hash of your password. The password itself is never stored. If you sign in through the operator’s identity provider, the server keeps that provider’s id for you and the username or email it reports, to recognise you next time.
+privacy-server-profile = On a public server, what you put on your profile: a display name, a few words about you and a picture, kept as two small copies cut to the square you picked. The picture you uploaded isn't kept.
 privacy-server-sessions = Your sessions: a hash of each sign-in token, the kind of device it came from (for example “Firefox on Linux” or “StarBooru app on Android”), when it was created and last used, and when it expires. API keys you create are kept the same way: a hash of the key, its first characters to tell it apart, its name, and when it was last used.
 privacy-server-files = Your uploads: each file with its size, dimensions, checksum and a visual fingerprint for the duplicate finder, and what the server reads from it: the date in the file, its main colours and any text in a still image. The server notes who uploaded each post.
 privacy-server-content = What you add: tags, the people marked in a post, ratings, sources, translations of comic pages, votes with when you cast them, and saved searches.
+privacy-server-forum = On a public server, what you write in its forum, with when you wrote and last edited it, and your votes on tags. A post you delete keeps its place, empty.
 privacy-server-shares = For each share link you make: the posts in it, its title, when it expires, and how many times and when it was last opened (not by whom).
 privacy-server-sites = For other sites: the searches you save on other boorus, the accounts you save for them (the login as you typed it, the key encrypted with the server’s secret), the addresses you import, kept for 7 days after they finish, and each library import with its counts until you remove it.
 privacy-server-limits = To slow down password guessing, the server counts failed sign-ins per account and per network address, and sign-ups per address. These counts are kept in memory for at most an hour and never written to disk.
@@ -1144,6 +1333,7 @@ privacy-not-done-logs = File contents, the text read in images, passwords and to
 privacy-who-sees = Who can see your posts
 privacy-who-sees-body = Everyone with an account on this server can see the posts on it, and download the original files with anything they hold, such as where a photo was taken. A post shows its score, not who voted. Media links handed to the app are signed and expire, so a copied link stops working within 12 hours. If you make a share link, anyone who has it can see the posts in it, without their tags, until it expires or you remove it.
 privacy-who-sees-public = On a public server, people without an account can see its posts, tags and Explore too, and download the files, but not the recycle bin, and not who voted. They can't vote, upload or save anything. A post is shared there by its own address, which anyone can open.
+privacy-who-sees-profiles = A public server also shows everyone, guests included, each account's profile (its picture, display name, words about itself, when it joined and how much it posted), who uploaded each post, and its forum with who wrote what. Votes on tags show only as scores. Switching the server to private deletes the pictures, the profile texts, the forum and the votes on tags.
 privacy-keeping = Keeping and deleting
 privacy-keeping-bin = Deleted posts go to the recycle bin. From there an administrator, or whoever uploaded them, can erase them with their files, and the operator can have the bin emptied by itself after a set number of days.
 privacy-keeping-sessions = Sessions end when you sign out, after 90 days, or when you sign out other devices in Settings. Changing your password signs out every other device; API keys keep working until you remove them or they expire.
@@ -1370,6 +1560,7 @@ admin-tab-accounts = Accounts
 admin-tab-backups = Backups
 admin-tab-server = Server
 admin-tab-updates = Updates
+admin-tab-moderation = Moderation
 admin-on = On
 admin-off = Off
 admin-posts = Posts
@@ -1419,13 +1610,28 @@ admin-enabled-done = Account enabled.
 admin-delete = Delete account
 admin-delete-confirm = Delete { $name } for good?
 admin-delete-note = Deleting removes the account, its votes, saved searches and keys. Its posts stay.
+admin-profile = Profile
+admin-profile-named = Profile of { $name }
+admin-profile-lead = What this account shows to everyone. Each goes at once.
+admin-clear-picture = Remove picture
+admin-clear-name = Clear display name
+admin-clear-about = Clear about
+admin-cleared-picture = Picture removed.
+admin-cleared-name = Display name cleared.
+admin-cleared-about = About text cleared.
+admin-moderation-private = There's nothing to moderate on a private server.
+admin-voted-off = Tags voted off
+admin-voted-off-lead = Tags people voted off posts, newest first. Putting one back clears its votes, and nothing else can.
+admin-voted-off-none = No tag has been voted off.
+admin-voted-off-restore = Put back
+admin-voted-off-back = { $tag } is back on post #{ $id }.
 admin-deleted = Account { $name } deleted.
 admin-server-lead = These apply at once and override the server's environment variables.
 mode-title = Who can see this server
 mode-private = Private
 mode-public = Public
-mode-private-means = Only people with an account can see posts. Share links work again, and other boorus can be set up.
-mode-public-means = Anyone can browse posts, tags and Explore without an account. Votes become likes, and a post is shared by its own address.
+mode-private-means = Only people with an account can see posts. Share links work again, and other boorus can be set up. The forum, profile pictures and votes on tags go.
+mode-public-means = Anyone can browse posts, tags, Explore and the forum without an account. Votes become likes, a post is shared by its own address, and everyone has a profile.
 mode-switch-to = Switch to { $mode }
 mode-delete-and-switch = Delete and switch
 mode-switch-without-backup = Switch without a backup
@@ -1483,6 +1689,36 @@ change-like-votes =
         [one] 1 like or dislike
        *[other] { $count } likes and dislikes
     }
+change-profile-pictures =
+    { $count ->
+        [one] 1 profile picture
+       *[other] { $count } profile pictures
+    }
+change-profile-texts =
+    { $count ->
+        [one] 1 profile text
+       *[other] { $count } profile texts
+    }
+change-forum-threads =
+    { $count ->
+        [one] 1 forum thread
+       *[other] { $count } forum threads
+    }
+change-forum-posts =
+    { $count ->
+        [one] 1 forum post
+       *[other] { $count } forum posts
+    }
+change-tag-votes =
+    { $count ->
+        [one] 1 vote on a tag
+       *[other] { $count } votes on tags
+    }
+change-tag-removals =
+    { $count ->
+        [one] 1 record of a tag voted off
+       *[other] { $count } records of tags voted off
+    }
 change-fate-deleted = will be deleted
 change-done-deleted = deleted
 change-fate-likes = will become likes and dislikes: 4 or 5 stars a like, 1 or 2 a dislike
@@ -1491,6 +1727,12 @@ change-fate-neither = will be deleted, as 3 stars is neither a like nor a dislik
 change-done-neither = deleted, as 3 stars is neither a like nor a dislike
 change-fate-stars = will become stars: a like 5, a dislike 1
 change-done-stars = became stars
+change-fate-texts = will be deleted; display names stay
+change-done-texts = deleted; display names stay
+change-fate-threads = will be deleted; the categories stay
+change-done-threads = deleted; the categories stay
+change-fate-removals = will be deleted; the tags stay off, and edits may add them again
+change-done-removals = deleted; the tags stay off, and edits may add them again
 admin-name = Server name
 admin-name-hint = Shown on the sign-in page.
 admin-name-error = Give the server a name of 1 to { $max } characters.
@@ -1501,6 +1743,11 @@ admin-trash-days-hint = Posts older than this in the bin are deleted for good, h
 admin-trash-days-error = Type a number of days from 0 to { $max }.
 admin-auto-tags = Tag new posts with what the file shows
 admin-auto-tags-hint = Meta tags like highres, lowres, wide_image, video, sound and long_video. Each post is tagged once, so a tag you remove stays removed. Turning this on also tags older posts at the next server start.
+admin-tag-votes = Votes take a tag off at
+admin-tag-votes-hint = The score at which a tag comes off a post. 0 never takes one off.
+admin-tag-votes-at = A tag comes off a post once its score reaches { $score }.
+admin-tag-votes-off = Votes never take a tag off.
+admin-tag-votes-error = Enter a number from 0 to { $max }.
 admin-save = Save
 admin-saved = Saved
 admin-bin-open = Open the recycle bin

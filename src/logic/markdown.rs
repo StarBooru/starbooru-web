@@ -86,6 +86,16 @@ fn heading(line: &str) -> Option<(u8, &str)> {
     Some((u8::try_from(level).unwrap_or(6), body))
 }
 
+/// A line of a quote: `>` first, unless it names a post as `>>123`, the
+/// way a forum post points at one.
+fn quote(line: &str) -> bool {
+    let t = line.trim_start();
+    let mention = t
+        .strip_prefix(">>")
+        .is_some_and(|rest| rest.starts_with(|c: char| c.is_ascii_digit()));
+    t.starts_with('>') && !mention
+}
+
 fn rule(line: &str) -> bool {
     if indent(line) > 3 {
         return false;
@@ -235,12 +245,12 @@ fn blocks(lines: &[&str]) -> Vec<Block> {
             i += 1;
             continue;
         }
-        if indent(line) <= 3 && line.trim_start().starts_with('>') {
+        if indent(line) <= 3 && quote(line) {
             flush(&mut para, &mut out);
             let mut inner = Vec::new();
             while let Some(&l) = lines.get(i) {
                 let t = l.trim_start();
-                if indent(l) > 3 || !t.starts_with('>') {
+                if indent(l) > 3 || !quote(l) {
                     break;
                 }
                 let t = t.get(1..).unwrap_or_default();
@@ -309,7 +319,7 @@ fn list(lines: &[&str], at: usize, first: Bullet) -> (Block, usize) {
                 && heading(l).is_none()
                 && fence(l).is_none()
                 && !rule(l)
-                && !l.trim_start().starts_with('>')
+                && !quote(l)
                 && body.last().is_some_and(|b| !blank(b))
             {
                 body.push(l.trim_start());
@@ -843,6 +853,23 @@ mod tests {
             ]
         );
         assert_eq!(inline("a ` b"), vec![text("a ` b")]);
+    }
+
+    #[test]
+    fn a_line_naming_a_post_is_no_quote() {
+        // `>>12` at the start of a line points at post 12, as in a forum.
+        assert_eq!(
+            parse(">>12 is the one.\n>> quoted twice"),
+            vec![
+                para(vec![text(">>12 is the one.")]),
+                Block::Quote(vec![Block::Quote(vec![para(vec![text("quoted twice")])])]),
+            ]
+        );
+        // Inside a quote, too.
+        assert_eq!(
+            parse("> >>7 said so"),
+            vec![Block::Quote(vec![para(vec![text(">>7 said so")])])]
+        );
     }
 
     #[test]

@@ -11,6 +11,7 @@ mod files;
 mod install;
 mod instance;
 mod logic;
+mod me;
 mod oidc;
 mod pace;
 mod pages;

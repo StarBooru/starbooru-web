@@ -249,6 +249,40 @@ a.brand:hover .mark-star, a.search-home:hover .mark-star { transform: rotate(90d
 .solo-page { display: grid; place-items: center; min-height: 100vh; min-height: 100dvh; padding: 16px; }
 .solo-page > .card { width: min(480px, 100%); }
 
+/* ---------- the account button (pages/account.rs) ---------- */
+
+/* A public server's: the account's picture on a round capsule beside the
+   navigation, which holds Upload, Settings and the profile. A ring lights
+   it while one of those is open, as the slider's thumb lights an item. */
+.top-end, .dock, .account-btn { display: none; }
+.account-btn {
+  position: relative; flex: none; place-items: center; width: var(--bar-h); height: var(--bar-h); padding: 0;
+  border: 0; border-radius: 999px; color: var(--on-surface); font: inherit; font-weight: 600; font-size: 14px; cursor: pointer;
+  transition: transform var(--med) var(--ease-spring), box-shadow var(--med) var(--ease);
+}
+.account-btn:active { transform: scale(0.94); }
+.account-btn:focus-visible { outline-offset: 2px; }
+.account-face { display: grid; place-items: center; transition: transform var(--med) var(--ease-spring); }
+.account-btn .avatar { width: 40px; height: 40px; }
+.account-btn.here { box-shadow: inset 0 1px 0 var(--glass-edge), 0 0 0 3px var(--primary), var(--shadow-2); }
+.account-btn.here .account-face { animation: pop var(--slow) var(--ease-spring); }
+@media (hover: hover) {
+  .account-btn:hover .account-face { transform: scale(1.06); }
+}
+/* A guest's says what it does: a door and Sign in; down the rail and in the
+   bar at the bottom, stacked like the items beside it. */
+.account-btn.guest { width: auto; grid-auto-flow: column; gap: 6px; padding: 0 18px 0 14px; color: var(--primary); }
+.account-btn.guest .icon { width: 20px; height: 20px; }
+.account-bottom.guest { grid-auto-flow: row; gap: 1px; padding: 0 6px; font-size: 12px; }
+.account-bottom.guest .icon { width: 22px; height: 22px; }
+.account-btn .nav-badge { top: 0; right: 0; }
+/* The menu: who you are at its head, leading to the profile. */
+.menu-item.account-head { display: flex; align-items: center; gap: 12px; padding: 10px 12px; margin-bottom: 4px; border-bottom: 1px solid var(--outline); border-radius: var(--radius-m) var(--radius-m) 0 0; }
+.account-names { display: grid; min-width: 0; text-align: left; line-height: 1.3; }
+.account-names strong { overflow-wrap: anywhere; }
+.account-names small { color: var(--on-surface-2); font-size: 13px; overflow-wrap: anywhere; }
+.account-names .account-see { color: var(--primary); font-weight: 600; }
+
 /* ---------- breakpoints ---------- */
 
 /* Wide windows: the labelled slider fits beside the search. */
@@ -259,6 +293,10 @@ a.brand:hover .mark-star, a.search-home:hover .mark-star { transform: rotate(90d
     height: var(--bar-h);
   }
   .nav-top .nav-item { padding: 0 10px; }
+  /* A public server's account button comes after it. */
+  .top-end { grid-column: 3; justify-self: end; display: flex; align-items: center; gap: 8px; pointer-events: none; }
+  .top-end > * { pointer-events: auto; }
+  .account-top { display: grid; }
 }
 
 /* Phones: the search takes the whole row, with the crown inside it, and the
@@ -280,6 +318,17 @@ a.brand:hover .mark-star, a.search-home:hover .mark-star { transform: rotate(90d
   .nav-bottom .nav-item .icon { width: 22px; height: 22px; }
   .content { --pad-x: 8px; padding-top: calc(var(--bar-end) + 12px); padding-bottom: calc(96px + env(safe-area-inset-bottom)); }
   .snackbar-slot { bottom: calc(96px + env(safe-area-inset-bottom)); }
+  /* A public server's bar: four items, and the account beside them, as tall
+     as the bar, so a thumb finds it at the same height. */
+  .dock {
+    position: fixed; left: max(12px, env(safe-area-inset-left)); right: max(12px, env(safe-area-inset-right));
+    bottom: max(12px, env(safe-area-inset-bottom)); z-index: 10;
+    margin-inline: auto; max-width: 480px; display: flex; align-items: stretch; gap: 8px; pointer-events: none;
+  }
+  .dock > * { pointer-events: auto; }
+  .dock .nav-bottom { position: static; flex: 1; min-width: 0; margin: 0; max-width: none; }
+  .account-bottom { display: grid; width: 60px; height: auto; }
+  .account-bottom .avatar { width: 44px; height: 44px; }
 }
 
 /* In between: tablets and laptops have the height to spare less than the width,
@@ -319,6 +368,17 @@ a.brand:hover .mark-star, a.search-home:hover .mark-star { transform: rotate(90d
     padding-right: max(calc(8px + var(--rail-r)), env(safe-area-inset-right));
   }
   .bulk-bar, .snackbar-slot { left: var(--rail-l); right: var(--rail-r); }
+  /* A public server's rail, with the account at its foot. */
+  .dock {
+    position: fixed; z-index: 9; left: var(--inset-l); width: var(--rail-w);
+    top: calc(var(--bar-end) + var(--bar-gap)); bottom: var(--bar-gap);
+    display: flex; flex-direction: column; justify-content: center; align-items: center; gap: 10px; pointer-events: none;
+  }
+  .app[data-hand="right"] .dock { left: auto; right: var(--inset-r); }
+  .dock > * { pointer-events: auto; }
+  .dock .nav-bottom { position: relative; inset: auto; width: 100%; height: auto; margin: 0; }
+  .account-bottom, .account-bottom.guest { display: grid; width: var(--rail-w); height: var(--rail-w); }
+  .account-bottom .avatar { width: 48px; height: 48px; }
 }
 @media (min-width: 761px) and (max-width: 1100px) {
   .app { --side: var(--bar-h); }
@@ -328,6 +388,7 @@ a.brand:hover .mark-star, a.search-home:hover .mark-star { transform: rotate(90d
 /* A phone on its side: icons alone fit the height, and still say what they are. */
 @media (min-width: 761px) and (max-width: 1529px) and (max-height: 500px) {
   .app { --rail-w: 52px; }
+  .account-bottom .avatar { width: 40px; height: 40px; }
   .nav-bottom .nav-item { min-height: calc(var(--rail-w) - 2 * var(--pad)); }
   .nav-bottom .nav-label { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
 }

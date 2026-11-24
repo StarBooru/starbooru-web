@@ -1,6 +1,8 @@
-//! Administration › Accounts: everyone on the server with what they use, and
-//! for each account but your own its role, storage limit, a new password,
-//! and a way to disable or delete it.
+//! Administration › Accounts: everyone on the server with their picture,
+//! display name and what they use, and for each account but your own its
+//! role, storage limit, a new password, and a way to disable or delete it.
+//! What an account shows of itself (picture, display name, about) can be
+//! cleared for any account, your own too.
 
 use chrono::{Local, Utc};
 use leptos::ev::SubmitEvent;
@@ -10,12 +12,14 @@ use starbooru_core::{AdminUser, Role, UserUpdate};
 
 use super::Waiting;
 use crate::api;
+use crate::components::avatar::{Avatar, Size};
 use crate::components::banner::ErrorBanner;
 use crate::components::confirm::ConfirmButton;
 use crate::components::icons::{Ico, Icon};
 use crate::components::snackbar::notify;
 use crate::components::strength::StrengthField;
 use crate::logic::admin::{account_parts, quota_change, quota_text};
+use crate::logic::profile::shown_name;
 use crate::logic::settings::{MIN_PASSWORD_CHARS, role_label};
 use crate::store;
 
@@ -76,6 +80,23 @@ fn AccountRow(id: i64, list: List, open: RwSignal<Option<i64>>, mine: bool) -> i
         user.with(|u| u.as_ref().map(|u| u.username.clone()))
             .unwrap_or_default()
     });
+    let display =
+        Signal::derive(move || user.with(|u| u.as_ref().and_then(|u| u.display_name.clone())));
+    let picture =
+        Signal::derive(move || user.with(|u| u.as_ref().and_then(|u| u.avatar_url.clone())));
+    // The display name first, the username after it when they differ.
+    let handle = move || {
+        let shown = name.with(|n| display.with(|d| shown_name(n, d.as_deref())));
+        name.with(|n| (shown != *n).then(|| format!("@{n}")))
+    };
+    let profile_set = Memo::new(move |_| {
+        user.with(|u| {
+            u.as_ref().is_some_and(|u| {
+                u.display_name.is_some() || u.about.is_some() || u.avatar_url.is_some()
+            })
+        })
+    });
+    let tidy = RwSignal::new(false);
     let expanded = move || open.get() == Some(id);
     let line = move || {
         let parts = user.with(|u| u.as_ref().map(|u| account_parts(u, Utc::now(), &Local)))?;
@@ -110,10 +131,30 @@ fn AccountRow(id: i64, list: List, open: RwSignal<Option<i64>>, mine: bool) -> i
             </Show>
         }
     });
+    // Your own account's profile is cleared here too.
+    let profile_button = move || {
+        view! {
+            <Show when=move || profile_set.get()>
+                <button
+                    type="button"
+                    class="icon-btn"
+                    class:on=move || tidy.get()
+                    title=move || t!("admin-profile")
+                    aria-label=move || t!("admin-profile-named", name = name.get())
+                    aria-expanded=move || if tidy.get() { "true" } else { "false" }
+                    on:click=move |_| tidy.update(|t| *t = !*t)
+                >
+                    <Ico icon=Icon::User />
+                </button>
+            </Show>
+        }
+    };
     view! {
         <li class="session account">
+            <Avatar name=name display=display url=picture size=Size::Normal />
             <div class="session-main">
-                <strong class="break">{name}</strong>
+                <strong class="break">{move || name.with(|n| display.with(|d| shown_name(n, d.as_deref())))}</strong>
+                {move || handle().map(|h| view! { <span class="muted break">{h}</span> })}
                 <Show when=move || has(|u| u.role == Role::Admin)>
                     <span class="pill">{move || role_label(Role::Admin)}</span>
                 </Show>
@@ -123,8 +164,96 @@ fn AccountRow(id: i64, list: List, open: RwSignal<Option<i64>>, mine: bool) -> i
                 {mine.then(|| view! { <span class="pill">{move || t!("admin-you")}</span> })}
                 <span class="muted account-line">{line}</span>
             </div>
+            {profile_button}
             {manage}
+            <Show when=move || tidy.get() && profile_set.get()>
+                <ProfileTools id=id user=user list=list />
+            </Show>
         </li>
+    }
+}
+
+/// Clearing what an account shows of itself: its picture, its text about
+/// itself, its display name. Each goes at once, with a word of what went.
+#[component]
+fn ProfileTools(id: i64, user: Memo<Option<AdminUser>>, list: List) -> impl IntoView {
+    let busy = RwSignal::new(false);
+    let error = RwSignal::new(None::<String>);
+    let clear = move |change: UserUpdate, said: fn() -> String| {
+        if busy.get_untracked() {
+            return;
+        }
+        busy.set(true);
+        error.set(None);
+        spawn_local(async move {
+            match api::call(move |c| async move { c.update_user(id, &change).await }).await {
+                Ok(changed) => {
+                    list.try_update(|l| {
+                        if let Some(slot) = l.iter_mut().flatten().find(|u| u.id == changed.id) {
+                            *slot = changed;
+                        }
+                    });
+                    notify(untrack(said));
+                }
+                Err(message) => {
+                    error.try_set(Some(message));
+                }
+            }
+            busy.try_set(false);
+        });
+    };
+    let has = move |test: fn(&AdminUser) -> bool| user.with(|u| u.as_ref().is_some_and(test));
+    let about = move || user.with(|u| u.as_ref().and_then(|u| u.about.clone()));
+    view! {
+        <div class="account-tools profile-tools">
+            {move || error.get().map(|message| view! { <ErrorBanner message=message /> })}
+            <p class="muted field-hint">{move || t!("admin-profile-lead")}</p>
+            {move || about().map(|text| view! { <blockquote class="profile-quote">{text}</blockquote> })}
+            <div class="profile-clears">
+                <Show when=move || has(|u| u.avatar_url.is_some())>
+                    <button
+                        type="button"
+                        class="btn tonal small"
+                        disabled=move || busy.get()
+                        on:click=move |_| {
+                            let change = UserUpdate { clear_avatar: true, ..UserUpdate::default() };
+                            clear(change, || t!("admin-cleared-picture"));
+                        }
+                    >
+                        <Ico icon=Icon::Delete size=18 />
+                        {move || t!("admin-clear-picture")}
+                    </button>
+                </Show>
+                <Show when=move || has(|u| u.display_name.is_some())>
+                    <button
+                        type="button"
+                        class="btn tonal small"
+                        disabled=move || busy.get()
+                        on:click=move |_| {
+                            let change = UserUpdate { clear_display_name: true, ..UserUpdate::default() };
+                            clear(change, || t!("admin-cleared-name"));
+                        }
+                    >
+                        <Ico icon=Icon::Delete size=18 />
+                        {move || t!("admin-clear-name")}
+                    </button>
+                </Show>
+                <Show when=move || has(|u| u.about.is_some())>
+                    <button
+                        type="button"
+                        class="btn tonal small"
+                        disabled=move || busy.get()
+                        on:click=move |_| {
+                            let change = UserUpdate { clear_about: true, ..UserUpdate::default() };
+                            clear(change, || t!("admin-cleared-about"));
+                        }
+                    >
+                        <Ico icon=Icon::Delete size=18 />
+                        {move || t!("admin-clear-about")}
+                    </button>
+                </Show>
+            </div>
+        </div>
     }
 }
 

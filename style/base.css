@@ -396,6 +396,24 @@ button.chip:disabled:hover { background: var(--surface-2); color: var(--on-surfa
 }
 .spinner.small { width: 20px; height: 20px; border-width: 3px; }
 
+/* ---------- accounts (components/avatar.rs) ---------- */
+
+/* An account's picture on a disc, or its initial on the accent. */
+.avatar {
+  flex: none; display: grid; place-items: center; width: 40px; height: 40px; border-radius: 50%; overflow: hidden;
+  background: var(--primary); color: var(--on-primary); font-size: 18px; font-weight: 700; line-height: 1;
+}
+.avatar.pictured { background: var(--surface-3); }
+.avatar img { width: 100%; height: 100%; object-fit: cover; animation: fade-in var(--med) var(--ease); }
+.avatar.small { width: 28px; height: 28px; font-size: 13px; }
+.avatar.big { width: 56px; height: 56px; font-size: 24px; }
+.avatar.huge { width: 112px; height: 112px; font-size: 48px; }
+/* Who did something: a picture and a name, leading to the profile. */
+.author { display: inline-flex; align-items: center; gap: 8px; min-width: 0; color: var(--on-surface); text-decoration: none; font-weight: 600; }
+a.author:hover .author-name { text-decoration: underline; }
+.author.gone { color: var(--on-surface-2); font-weight: 500; }
+.author.gone .avatar { background: var(--surface-3); color: var(--on-surface-2); }
+
 /* ---------- Markdown (components/markdown.rs) ---------- */
 
 .markdown { font-size: 14px; line-height: 1.55; overflow-wrap: anywhere; }
@@ -415,6 +433,17 @@ button.chip:disabled:hover { background: var(--surface-2); color: var(--on-surfa
 .markdown pre code { padding: 0; background: none; }
 .markdown blockquote { padding: 2px 0 2px 14px; border-left: 3px solid var(--primary-container); color: var(--on-surface-2); }
 .markdown hr { margin: 16px 0; border: 0; border-top: 1px solid var(--outline); }
+/* A post of the booru named in a forum post (components/mention.rs). */
+.mention { font-weight: 600; color: var(--primary); text-decoration: none; border-bottom: 1px dashed currentColor; }
+.mention:hover { border-bottom-style: solid; }
+.mention-card {
+  position: fixed; z-index: 62; width: 176px; display: grid; gap: 6px; padding: 6px; pointer-events: none;
+  border-radius: var(--radius-m); background: var(--surface); box-shadow: var(--shadow-2);
+  animation: drop-in var(--fast) var(--ease);
+}
+.mention-card img { display: block; width: 100%; max-height: 200px; object-fit: contain; border-radius: var(--radius-s); background: var(--surface-2); }
+.mention-wait, .mention-missing { display: grid; place-items: center; min-height: 96px; border-radius: var(--radius-s); background: var(--surface-2); font-size: 13px; color: var(--on-surface-2); }
+.mention-id { padding: 0 4px 2px; font-size: 12px; font-weight: 600; color: var(--on-surface-2); }
 
 /* ---------- snackbar (components/snackbar.rs) ---------- */
 

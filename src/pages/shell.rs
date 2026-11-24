@@ -33,7 +33,8 @@ use crate::logic::search::{
     Hint, Latest, ListKey, REMOTE_PAUSE_MS, TYPING_PAUSE_MS, complete, list_key, short_count,
     still_fitting, utf16_index, word_at,
 };
-use crate::route::{self, Tab};
+use crate::pages::account::AccountButton;
+use crate::route::{self, ForumPage, Place, Tab};
 use crate::updates::UpdateNotice;
 use crate::{api, instance, store};
 
@@ -96,7 +97,6 @@ fn Frame(guest: bool) -> impl IntoView {
     instance::refresh();
     let location = use_location();
     let path = location.pathname;
-    let here = Memo::new(move |_| path.with(|p| route::tab_of(p)));
     // Opening the app carries on from the last search.
     let navigate = use_navigate();
     let query = use_query_map();
@@ -111,6 +111,18 @@ fn Frame(guest: bool) -> impl IntoView {
             navigate(&route::gallery(&last), options);
         }
     });
+    // A public server has the forum in Upload's place and the account
+    // button beside the navigation; a private one stays as it was.
+    let public = Memo::new(|_| instance::public());
+    let me = Memo::new(|_| store::session().map(|s| s.user.username));
+    let place = Memo::new(move |_| {
+        path.with(|p| me.with(|me| route::place_of(p, public.get(), me.as_deref())))
+    });
+    let here = Memo::new(move |_| match place.get() {
+        Some(Place::Tab(tab)) => Some(tab),
+        _ => None,
+    });
+    let mine = Signal::derive(move || place.get() == Some(Place::Account));
     view! {
         <header class="topbar">
             <a class="brand glass float" href="/" aria-label=move || t!("app-name")>
@@ -118,13 +130,39 @@ fn Frame(guest: bool) -> impl IntoView {
                 <Wordmark height=19 />
             </a>
             <SearchBox />
-            <NavSlider place="nav-top" here=here guest=guest />
+            {move || {
+                if public.get() {
+                    view! {
+                        <div class="top-end">
+                            <NavSlider place="nav-top" here=here guest=guest public=true />
+                            <AccountButton place="account-top" here=mine guest=guest />
+                        </div>
+                    }
+                        .into_any()
+                } else {
+                    view! { <NavSlider place="nav-top" here=here guest=guest public=false /> }
+                        .into_any()
+                }
+            }}
         </header>
         <main class="content">
             <UpdateNotice />
             <Outlet />
         </main>
-        <NavSlider place="nav-bottom" here=here guest=guest />
+        {move || {
+            if public.get() {
+                view! {
+                    <div class="dock">
+                        <NavSlider place="nav-bottom" here=here guest=guest public=true />
+                        <AccountButton place="account-bottom" here=mine guest=guest />
+                    </div>
+                }
+                    .into_any()
+            } else {
+                view! { <NavSlider place="nav-bottom" here=here guest=guest public=false /> }
+                    .into_any()
+            }
+        }}
         {(!guest).then(|| view! { <Activity /> })}
         {(!guest).then(|| view! { <SavedSheet /> })}
     }
@@ -141,6 +179,8 @@ enum Scope {
     Boorus(String),
     /// The Tags page, which the box filters as it's typed in.
     Tags,
+    /// The forum's threads, in one category or in all of them.
+    Forum(Option<i64>),
 }
 
 impl Scope {
@@ -149,7 +189,7 @@ impl Scope {
         match self {
             Scope::Collection | Scope::Explore(_) => Some(Kind::Gallery),
             Scope::Boorus(_) => Some(Kind::Boorus),
-            Scope::Tags => None,
+            Scope::Tags | Scope::Forum(_) => None,
         }
     }
 }
@@ -159,6 +199,11 @@ impl Scope {
 fn scope_of(path: &str, s: Option<String>, days: Option<String>) -> Scope {
     if path == route::BOORUS || path.starts_with("/boorus/") {
         Scope::Boorus(s.unwrap_or_default())
+    } else if let Some(page) = route::forum_page(path) {
+        Scope::Forum(match page {
+            ForumPage::Category(id) => Some(id),
+            ForumPage::Index | ForumPage::Thread(_) => None,
+        })
     } else if route::is_explore(path) {
         Scope::Explore(days.map(|d| window(Some(&d))))
     } else if route::is_tags(path) {
@@ -181,6 +226,8 @@ fn search_href(scope: &Scope, q: &str, last_sites: &[String]) -> String {
             let sites = boorus::sites_param(&boorus::chosen_sites(s, last_sites));
             route::boorus(&boorus::tidy_query(q), &sites)
         }
+        Scope::Forum(None) => route::forum(q),
+        Scope::Forum(Some(id)) => route::forum_category(*id, q),
     }
 }
 
@@ -190,7 +237,7 @@ fn search_href(scope: &Scope, q: &str, last_sites: &[String]) -> String {
 fn shown_search(path: &str, q: Option<String>, last: &str) -> String {
     match scope_of(path, None, None) {
         Scope::Boorus(_) => boorus::from_address(&q.unwrap_or_default()),
-        Scope::Explore(_) | Scope::Tags => q.unwrap_or_default(),
+        Scope::Explore(_) | Scope::Tags | Scope::Forum(_) => q.unwrap_or_default(),
         Scope::Collection if route::has_search(path) => q.unwrap_or_default(),
         Scope::Collection => last.to_owned(),
     }
@@ -203,6 +250,8 @@ fn placeholder(scope: &Scope) -> String {
         Scope::Explore(_) => t!("explore-search"),
         Scope::Boorus(_) => t!("boorus-search"),
         Scope::Tags => t!("tags-filter-placeholder"),
+        Scope::Forum(None) => t!("forum-search"),
+        Scope::Forum(Some(_)) => t!("forum-search-category"),
     }
 }
 
@@ -213,6 +262,8 @@ fn label(scope: &Scope) -> String {
         Scope::Explore(_) => t!("explore-search"),
         Scope::Boorus(_) => t!("boorus-search"),
         Scope::Tags => t!("tags-filter-label"),
+        Scope::Forum(None) => t!("forum-search"),
+        Scope::Forum(Some(_)) => t!("forum-search-category"),
     }
 }
 
@@ -226,13 +277,15 @@ fn kept(scope: &Scope, typed: &str) -> Option<Vec<Hint>> {
             let site = boorus::completing_site(s, &store::prefs_untracked().booru_sites)?;
             api::kept_remote_tags(&site, typed)
         }
+        // Words, not tags.
+        Scope::Forum(_) => Some(Vec::new()),
     }
 }
 
 /// How long the typing pauses before `scope` is asked.
 fn pause(scope: &Scope) -> i32 {
     match scope {
-        Scope::Collection | Scope::Explore(_) | Scope::Tags => TYPING_PAUSE_MS,
+        Scope::Collection | Scope::Explore(_) | Scope::Tags | Scope::Forum(_) => TYPING_PAUSE_MS,
         Scope::Boorus(_) => REMOTE_PAUSE_MS,
     }
 }
@@ -249,6 +302,7 @@ async fn suggest(scope: Scope, typed: String) -> Vec<Hint> {
                 None => Vec::new(),
             }
         }
+        Scope::Forum(_) => Vec::new(),
     }
 }
 
@@ -291,8 +345,10 @@ fn SearchBox() -> impl IntoView {
     let scope = Memo::new(move |_| {
         let (s, days) = query.with(|q| (q.get("s"), q.get("days")));
         match path.with(|p| scope_of(p, s, days)) {
-            // A public server has no boorus: the box searches the collection.
+            // A public server has no boorus, and a private one no forum:
+            // the box searches the collection.
             Scope::Boorus(_) if instance::public() => Scope::Collection,
+            Scope::Forum(_) if !instance::public() => Scope::Collection,
             scope => scope,
         }
     });
@@ -762,15 +818,16 @@ fn item(tab: Tab) -> (Icon, String) {
         Tab::Gallery => (Icon::Gallery, t!("nav-gallery")),
         Tab::Explore => (Icon::Explore, t!("nav-explore")),
         Tab::Tags => (Icon::Label, t!("nav-tags")),
+        Tab::Forum => (Icon::Forum, t!("nav-forum")),
         Tab::Upload => (Icon::Upload, t!("nav-upload")),
         Tab::Settings => (Icon::Tune, t!("nav-settings-tab")),
     }
 }
 
-/// The navigation's items in order, with their icons and names: a guest's,
-/// or an account's.
-fn items(guest: bool) -> Vec<(Tab, Icon, String)> {
-    Tab::shown(guest)
+/// The navigation's items in order, with their icons and names: a public
+/// server's or a private one's, a guest's or an account's.
+fn items(public: bool, guest: bool) -> Vec<(Tab, Icon, String)> {
+    Tab::shown(public, guest)
         .iter()
         .map(|&tab| {
             let (icon, label) = item(tab);
@@ -791,11 +848,18 @@ fn way(was: usize, at: usize, last: &'static str) -> &'static str {
 }
 
 /// `place` is the class that says where this copy of the navigation shows:
-/// `nav-top` or `nav-bottom`, which also makes the rail. A guest's ends with
-/// Sign in, where an account's Settings holds the account.
+/// `nav-top` or `nav-bottom`, which also makes the rail. On a private server
+/// a guest's ends with Sign in, where an account's Settings holds the
+/// account; a public server has the account button beside it instead.
 #[component]
-fn NavSlider(place: &'static str, here: Memo<Option<Tab>>, guest: bool) -> impl IntoView {
-    let tabs = Tab::shown(guest);
+fn NavSlider(
+    place: &'static str,
+    here: Memo<Option<Tab>>,
+    guest: bool,
+    public: bool,
+) -> impl IntoView {
+    let tabs = Tab::shown(public, guest);
+    let sign_in = guest && !public;
     let index = move || {
         here.get()
             .and_then(|tab| tabs.iter().position(|t| *t == tab))
@@ -807,7 +871,7 @@ fn NavSlider(place: &'static str, here: Memo<Option<Tab>>, guest: bool) -> impl 
         let at = index().unwrap_or(was);
         (at, way(was, at, last_way))
     });
-    let cells = tabs.len() + usize::from(guest);
+    let cells = tabs.len() + usize::from(sign_in);
     // The gallery goes back to the search it showed last, and Explore to
     // where it was left.
     let last = Memo::new(|_| store::last_search());
@@ -821,7 +885,8 @@ fn NavSlider(place: &'static str, here: Memo<Option<Tab>>, guest: bool) -> impl 
             style=move || format!("--n: {cells}; --i: {}", thumb.get().0)
             data-dir=move || thumb.get().1
         >
-            <span class="slider-thumb" class:off=move || here.get().is_none()>
+            // Off too for a page whose item this navigation hasn't.
+            <span class="slider-thumb" class:off=move || index().is_none()>
                 <span class="slider-clip">
                     <span class="slider-unclip">
                         <span class="slider-fill"></span>
@@ -829,7 +894,7 @@ fn NavSlider(place: &'static str, here: Memo<Option<Tab>>, guest: bool) -> impl 
                 </span>
             </span>
             {move || {
-                items(guest)
+                items(public, guest)
                     .into_iter()
                     .map(|(tab, icon, label)| {
                         let active = move || here.get() == Some(tab);
@@ -873,7 +938,7 @@ fn NavSlider(place: &'static str, here: Memo<Option<Tab>>, guest: bool) -> impl 
                     })
                     .collect_view()
             }}
-            {guest.then(|| view! { <SignInItem /> })}
+            {sign_in.then(|| view! { <SignInItem /> })}
         </nav>
     }
 }
@@ -995,6 +1060,8 @@ mod tests {
             Scope::Explore(None),
             Scope::Boorus(String::new()),
             Scope::Tags,
+            Scope::Forum(None),
+            Scope::Forum(Some(1)),
         ];
         for (i, a) in scopes.iter().enumerate() {
             assert!(!placeholder(a).is_empty());
@@ -1060,13 +1127,44 @@ mod tests {
 
     #[test]
     fn the_items_are_the_tabs_in_order() {
-        let tabs: Vec<Tab> = items(false).into_iter().map(|(tab, ..)| tab).collect();
-        assert_eq!(tabs, Tab::ALL);
-        let guest: Vec<Tab> = items(true).into_iter().map(|(tab, ..)| tab).collect();
-        assert_eq!(guest, Tab::GUEST);
-        // A guest's ends with the way to sign in, and has no uploads to show.
+        let tabs = |public, guest| -> Vec<Tab> {
+            items(public, guest)
+                .into_iter()
+                .map(|(tab, ..)| tab)
+                .collect()
+        };
+        assert_eq!(tabs(false, false), Tab::ALL);
+        assert_eq!(tabs(false, true), Tab::GUEST);
+        assert_eq!(tabs(true, false), Tab::PUBLIC);
+        assert_eq!(tabs(true, true), Tab::PUBLIC);
+        // A private server's guest ends with the way to sign in; a public
+        // server's has the account button for it. Nobody's uploads to show.
         let source = include_str!("shell.rs");
-        assert!(source.contains("{guest.then(|| view! { <SignInItem /> })}"));
+        assert!(source.contains("let sign_in = guest && !public;"));
+        assert!(source.contains("{sign_in.then(|| view! { <SignInItem /> })}"));
         assert!(source.contains("{(!guest).then(|| view! { <Activity /> })}"));
+        assert!(
+            source.contains(r#"<AccountButton place="account-bottom" here=mine guest=guest />"#)
+        );
+    }
+
+    #[test]
+    fn on_the_forum_the_box_searches_its_threads() {
+        assert_eq!(scope_of("/forum", None, None), Scope::Forum(None));
+        assert_eq!(scope_of("/forum/t/4", None, None), Scope::Forum(None));
+        assert_eq!(scope_of("/forum/c/2", None, None), Scope::Forum(Some(2)));
+        assert_eq!(
+            search_href(&Scope::Forum(None), " best sky ", &[]),
+            "/forum?q=best+sky"
+        );
+        assert_eq!(
+            search_href(&Scope::Forum(Some(2)), "sky", &[]),
+            "/forum/c/2?q=sky"
+        );
+        assert_eq!(search_href(&Scope::Forum(Some(2)), " ", &[]), "/forum/c/2");
+        assert_eq!(shown_search("/forum", Some("sky".into()), "sea"), "sky");
+        assert_eq!(shown_search("/forum/t/4", None, "sea"), "");
+        // Words, not tags: nothing to complete.
+        assert_eq!(kept(&Scope::Forum(None), "sk"), Some(Vec::new()));
     }
 }

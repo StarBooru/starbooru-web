@@ -30,16 +30,18 @@ use self::keys::ApiKeysCard;
 use self::sessions::SessionsCard;
 use self::viewing::ViewingGroup;
 use super::library::LibraryImportCard;
+use super::profile::edit::ProfileSettings;
 use super::share::SharesCard;
+use crate::components::avatar::Avatar;
 use crate::components::back::BackButton;
 use crate::components::icons::{Ico, Icon};
 use crate::components::invite::SignInCard as SignInInvite;
 use crate::components::legal::note_opener;
+use crate::logic::profile::shown_name;
 use crate::logic::settings::{
-    FIRST, FocusTo, Group, Sections, anchored, focus_after, group_for_anchor, initial, sections,
-    version,
+    FIRST, FocusTo, Group, Sections, anchored, focus_after, group_for_anchor, sections, version,
 };
-use crate::{api, dom, install, instance, route, store};
+use crate::{api, dom, install, instance, me, route, store};
 
 /// Where this app's code lives, and the list of everyone whose work it uses.
 const REPOSITORY: &str = env!("CARGO_PKG_REPOSITORY");
@@ -270,9 +272,12 @@ pub fn Settings() -> impl IntoView {
 #[component]
 fn GroupLink(group: Group, current: Memo<Option<Group>>, open: Memo<Group>) -> impl IntoView {
     let account = move || store::session().map(|s| s.user.username);
+    // A public server's profile has a picture and a name to show.
+    let display = Signal::derive(|| me::profile().and_then(|p| p.display_name));
+    let picture = Signal::derive(|| me::profile().and_then(|p| p.avatar_small_url));
     let icon = move || match (group, account()) {
         (Group::Account, Some(name)) => {
-            view! { <span class="avatar">{initial(&name)}</span> }.into_any()
+            view! { <Avatar name=name display=display url=picture /> }.into_any()
         }
         _ => view! {
             <span class="group-icon">
@@ -282,7 +287,7 @@ fn GroupLink(group: Group, current: Memo<Option<Group>>, open: Memo<Group>) -> i
         .into_any(),
     };
     let name = move || match (group, account()) {
-        (Group::Account, Some(name)) => name,
+        (Group::Account, Some(name)) => shown_name(&name, display.get().as_deref()),
         (Group::Account, None) => t!("guest-sign-in"),
         _ => group_name(group),
     };
@@ -366,6 +371,8 @@ fn AccountGroup(ctx: Ctx) -> impl IntoView {
         ctx.shows(|s| s.sign_in)
             .then(|| view! { <SignInCard methods=ctx.methods provider=provider /> })
     };
+    // Profiles are a public server's.
+    let profile = move || instance::public().then(|| view! { <ProfileSettings /> });
     move || {
         if instance::guest() {
             return view! { <SignInInvite why=Signal::derive(|| t!("guest-account-why")) /> }
@@ -375,6 +382,7 @@ fn AccountGroup(ctx: Ctx) -> impl IntoView {
             .then(|| {
                 view! {
                     <AccountCard info=ctx.info />
+                    {profile}
                     {sign_in}
                     <PasswordCard
                         methods=ctx.methods
@@ -534,6 +542,7 @@ mod tests {
         let order = [
             "fn AccountGroup",
             "<AccountCard info=ctx.info />",
+            "{profile}",
             "{sign_in}",
             "<PasswordCard",
             "<SessionsCard",

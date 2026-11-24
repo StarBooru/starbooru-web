@@ -45,10 +45,10 @@ Private mode:
 
 Public mode:
 
-- [ ] Accounts with a profile and a profile picture (server)
-- [ ] An account button with the profile picture beside the navigation; Upload and Settings move under it
-- [ ] A forum, in Upload's place in the navigation (server)
-- [ ] Votes on tags (server)
+- [x] Accounts with a profile and a profile picture (server)
+- [x] An account button with the profile picture beside the navigation; Upload and Settings move under it
+- [x] A forum, in Upload's place in the navigation (server)
+- [x] Votes on tags (server)
 - [x] No Boorus side in Explore, and no way to turn it on (server)
 - [x] Trending and Popular tags back in Explore (server)
 - [x] Browsing without an account, read-only (server)

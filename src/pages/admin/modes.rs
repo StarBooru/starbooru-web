@@ -27,6 +27,12 @@ fn kind_icon(kind: Option<Kind>) -> Icon {
         Some(Kind::StarVotesConverted) => Icon::ThumbUp,
         Some(Kind::StarVotesDropped) => Icon::StarOutline,
         Some(Kind::LikeVotesConverted) => Icon::Star,
+        Some(Kind::ProfilePictures) => Icon::Gallery,
+        Some(Kind::ProfileTexts) => Icon::Article,
+        Some(Kind::ForumThreads) => Icon::Forum,
+        Some(Kind::ForumPosts) => Icon::Send,
+        Some(Kind::TagVotes) => Icon::ChevronUp,
+        Some(Kind::TagRemovals) => Icon::Label,
         None => Icon::Info,
     }
 }

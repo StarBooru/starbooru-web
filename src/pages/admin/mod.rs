@@ -1,5 +1,6 @@
 //! Administration, for administrators only: the server's numbers
-//! (`overview.rs`), the accounts (`accounts.rs`), the database backups
+//! (`overview.rs`), the accounts (`accounts.rs`), on a public server the
+//! tags its people voted off (`moderation.rs`), the database backups
 //! (`backups.rs`), the server's mode and score kind (`modes.rs`) with its
 //! settings (`server.rs`) and AI tools (`ai.rs`), and new versions
 //! (`updates.rs`). The tab is in the address, so
@@ -9,6 +10,7 @@
 mod accounts;
 mod ai;
 mod backups;
+mod moderation;
 mod modes;
 mod overview;
 mod server;
@@ -20,18 +22,20 @@ use starbooru_core::Role;
 
 use self::accounts::Accounts;
 use self::backups::Backups;
+use self::moderation::Moderation;
 use self::overview::Overview;
 use self::server::ServerTab;
 use self::updates::Updates;
 use crate::components::back::BackButton;
 use crate::components::banner::Spinner;
 use crate::logic::admin::Tab;
-use crate::{route, store, updates as versions};
+use crate::{instance, route, store, updates as versions};
 
 fn tab_label(tab: Tab) -> String {
     match tab {
         Tab::Overview => t!("admin-tab-overview"),
         Tab::Accounts => t!("admin-tab-accounts"),
+        Tab::Moderation => t!("admin-tab-moderation"),
         Tab::Backups => t!("admin-tab-backups"),
         Tab::Server => t!("admin-tab-server"),
         Tab::Updates => t!("admin-tab-updates"),
@@ -67,12 +71,14 @@ pub fn Admin() -> impl IntoView {
 fn AdminTabs() -> impl IntoView {
     let query = use_query_map();
     let tab = Memo::new(move |_| query.with(|q| Tab::parse(q.get("tab").as_deref())));
-    // A server from before updates has none to show.
+    // A server from before updates has none to show; a private one has
+    // nothing to moderate.
     let links = move || {
-        let missing = versions::missing();
+        let updates = !versions::missing();
+        let public = instance::public();
         Tab::ALL
             .into_iter()
-            .filter(move |t| *t != Tab::Updates || !missing)
+            .filter(move |t| t.shown(public, updates))
             .map(|t| {
                 let on = move || tab.get() == t;
                 view! {
@@ -95,6 +101,7 @@ fn AdminTabs() -> impl IntoView {
         {move || match tab.get() {
             Tab::Overview => view! { <Overview /> }.into_any(),
             Tab::Accounts => view! { <Accounts /> }.into_any(),
+            Tab::Moderation => view! { <Moderation /> }.into_any(),
             Tab::Backups => view! { <Backups /> }.into_any(),
             Tab::Updates => view! { <Updates /> }.into_any(),
             Tab::Server => view! { <ServerTab /> }.into_any(),

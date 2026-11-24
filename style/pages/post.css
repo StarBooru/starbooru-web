@@ -440,3 +440,58 @@ html:has(.stage) { overscroll-behavior-x: none; }
   .star-summary .muted { display: none; }
 }
 .app[data-effects="lite"] .star.given .icon { animation: none; }
+
+/* ---------- tag votes (pages/post/tag_votes.rs) ---------- */
+
+/* A public server's tags take votes. The chip and its arrows are one
+   capsule: the score sits beside the name once there are votes, and the
+   arrows open out on hover or focus, or stay on a touch screen. Your own
+   vote stays lit. */
+.tag-vote {
+  display: inline-flex; align-items: stretch; min-width: 0; border-radius: 8px;
+  transition: opacity var(--med) var(--ease), transform var(--med) var(--ease);
+}
+.tag-vote > .chip { position: relative; z-index: 1; }
+.tag-vote:is(.counted, .voted, :hover, :focus-within) > .chip { border-top-right-radius: 0; border-bottom-right-radius: 0; }
+.tv-controls {
+  display: inline-flex; align-items: center; overflow: hidden; max-width: 0;
+  border: 1px solid var(--outline); border-left: 0; border-radius: 0 8px 8px 0; background: var(--surface);
+  opacity: 0; transition: max-width var(--med) var(--ease), opacity var(--fast) var(--ease);
+}
+.tag-vote:is(.counted, .voted, :hover, :focus-within) .tv-controls { max-width: 120px; opacity: 1; }
+.tv-score {
+  min-width: 26px; padding: 0 2px; text-align: center; font-size: 13px; font-weight: 700;
+  font-variant-numeric: tabular-nums; color: var(--on-surface-2);
+}
+.tv-score.high { color: var(--ok); }
+.tv-score.low { color: var(--danger); }
+.tv-btn {
+  display: grid; place-items: center; width: 0; height: 100%; min-height: 30px; padding: 0; border: 0;
+  background: none; color: var(--on-surface-2); cursor: pointer; opacity: 0;
+  transition: width var(--med) var(--ease), opacity var(--fast) var(--ease), background-color var(--fast) var(--ease), color var(--fast) var(--ease);
+}
+.tv-btn:focus-visible { outline: 2px solid var(--primary); outline-offset: -2px; }
+.tv-btn:disabled { cursor: default; }
+.tag-vote:is(:hover, :focus-within) .tv-btn, .tv-btn.on { width: 28px; opacity: 1; }
+.tv-btn:hover:not(:disabled) { background: var(--surface-3); color: var(--on-surface); }
+.tv-up.on { background: oklch(from var(--ok) l c h / 0.16); color: var(--ok); }
+.tv-down.on { background: var(--danger-container); color: var(--on-danger-container); }
+.tv-btn.on .icon { animation: pop var(--slow) var(--ease-spring); }
+/* Fingers have no hover: the arrows stay, narrower, and a score shows only
+   once there are votes. */
+@media (hover: none) {
+  .tag-vote > .chip { border-top-right-radius: 0; border-bottom-right-radius: 0; }
+  .tv-controls { max-width: 120px; opacity: 1; }
+  .tv-btn { width: 26px; opacity: 1; }
+  .tag-vote:not(.counted, .voted) .tv-score { min-width: 0; width: 0; padding: 0; overflow: hidden; }
+}
+/* Voted off: it folds away where it stood. */
+.tag-vote.leaving { pointer-events: none; animation: tag-leave 420ms var(--ease) forwards; }
+@keyframes tag-leave {
+  30% { transform: scale(1.04); }
+  to { opacity: 0; transform: scale(0.6) translateY(4px); }
+}
+.app[data-effects="lite"] .tv-btn.on .icon { animation: none; }
+
+/* Who uploaded the post, among its details. */
+.post-uploader .author { font-weight: 600; }

@@ -90,6 +90,12 @@ fn cached(server: &str, token: &str) -> Option<Client> {
     })
 }
 
+/// A server-relative address the API gave, such as a signed `/media` one,
+/// made absolute for the page to load.
+pub fn media(path: &str) -> String {
+    client().map_or_else(|| path.to_owned(), |c| c.absolute(path))
+}
+
 /// Drops the client and what it was told, at sign-out.
 pub fn forget() {
     CLIENT.with_borrow_mut(|cache| *cache = None);

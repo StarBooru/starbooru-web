@@ -5,13 +5,16 @@
 use percent_encoding::{AsciiSet, NON_ALPHANUMERIC, utf8_percent_encode};
 
 /// The navigation's items, five at most (the reference's design rules): a new
-/// page goes under one of these. A guest gets [`Tab::GUEST`], and a way to
-/// sign in after them.
+/// page goes under one of these. A private server has [`Tab::ALL`], or for
+/// a guest [`Tab::GUEST`] and a way to sign in after them. A public one has
+/// [`Tab::PUBLIC`], the forum in Upload's place, and the account button
+/// beside them, which holds Upload and Settings.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Tab {
     Gallery,
     Explore,
     Tags,
+    Forum,
     Upload,
     Settings,
 }
@@ -28,9 +31,17 @@ impl Tab {
     /// What a guest may use: Upload needs an account.
     pub const GUEST: [Tab; 4] = [Tab::Gallery, Tab::Explore, Tab::Tags, Tab::Settings];
 
-    /// The items of the navigation, a guest's or an account's.
-    pub fn shown(guest: bool) -> &'static [Tab] {
-        if guest { &Tab::GUEST } else { &Tab::ALL }
+    /// A public server's, for anyone: the account button comes after them.
+    pub const PUBLIC: [Tab; 4] = [Tab::Gallery, Tab::Explore, Tab::Tags, Tab::Forum];
+
+    /// The items of the navigation on a public or a private server, a
+    /// guest's or an account's.
+    pub fn shown(public: bool, guest: bool) -> &'static [Tab] {
+        match (public, guest) {
+            (true, _) => &Tab::PUBLIC,
+            (false, true) => &Tab::GUEST,
+            (false, false) => &Tab::ALL,
+        }
     }
 
     /// Where the item leads.
@@ -39,6 +50,7 @@ impl Tab {
             Tab::Gallery => "/",
             Tab::Explore => "/explore",
             Tab::Tags => "/tags",
+            Tab::Forum => FORUM,
             Tab::Upload => "/upload",
             Tab::Settings => "/settings",
         }
@@ -54,10 +66,110 @@ pub fn tab_of(path: &str) -> Option<Tab> {
         // The booru browser is the other side of Explore.
         ["explore"] | ["boorus"] | ["boorus", "post"] => Some(Tab::Explore),
         ["tags"] | ["tag"] => Some(Tab::Tags),
+        ["forum"] | ["forum", "c" | "t", _] => Some(Tab::Forum),
         ["upload"] => Some(Tab::Upload),
         ["settings"] | ["settings", _] | ["trash"] | ["duplicates"] | ["help"] | ["admin"] => {
             Some(Tab::Settings)
         }
+        _ => None,
+    }
+}
+
+/// Where in the frame a page belongs: under an item of the navigation, or
+/// on a public server under the account button, with Upload, Settings and
+/// the account's own profile.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Place {
+    Tab(Tab),
+    Account,
+}
+
+/// The place of `path`, on a public server or not, for the account named
+/// `me` when someone is signed in.
+pub fn place_of(path: &str, public: bool, me: Option<&str>) -> Option<Place> {
+    if let Some(name) = profile_name(path) {
+        let mine = me.is_some_and(|me| me.eq_ignore_ascii_case(&name));
+        return (public && mine).then_some(Place::Account);
+    }
+    match tab_of(path)? {
+        Tab::Upload | Tab::Settings if public => Some(Place::Account),
+        Tab::Forum if !public => None,
+        tab => Some(Place::Tab(tab)),
+    }
+}
+
+/// The username in a profile's address, `/u/{name}`.
+pub fn profile_name(path: &str) -> Option<String> {
+    let segments: Vec<&str> = path.split('/').filter(|s| !s.is_empty()).collect();
+    match segments.as_slice() {
+        ["u", name] => Some(
+            percent_encoding::percent_decode_str(name)
+                .decode_utf8_lossy()
+                .into_owned(),
+        ),
+        _ => None,
+    }
+}
+
+/// The profile of the account named `name`.
+pub fn profile(name: &str) -> String {
+    format!("/u/{}", utf8_percent_encode(name, PATH_SEGMENT))
+}
+
+/// What a path segment keeps as it is: a username's letters and signs.
+const PATH_SEGMENT: &AsciiSet = &NON_ALPHANUMERIC.remove(b'-').remove(b'_').remove(b'.');
+
+/// The forum's categories, or with `q` the threads found in all of them.
+pub fn forum(q: &str) -> String {
+    let q = q.trim();
+    if q.is_empty() {
+        FORUM.to_owned()
+    } else {
+        format!("{FORUM}?q={}", query_value(q))
+    }
+}
+
+/// The threads of category `id`, or with `q` those found in it.
+pub fn forum_category(id: i64, q: &str) -> String {
+    let q = q.trim();
+    if q.is_empty() {
+        format!("{FORUM}/c/{id}")
+    } else {
+        format!("{FORUM}/c/{id}?q={}", query_value(q))
+    }
+}
+
+/// Thread `id`.
+pub fn forum_thread(id: i64) -> String {
+    format!("{FORUM}/t/{id}")
+}
+
+/// Post `post` in thread `thread`, by its anchor.
+pub fn forum_post(thread: i64, post: i64) -> String {
+    format!("{FORUM}/t/{thread}#{}", forum_anchor(post))
+}
+
+/// The id of a forum post's element, for links to it.
+pub fn forum_anchor(post: i64) -> String {
+    format!("p{post}")
+}
+
+/// What the forum's pages are: its categories, one category, a thread.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ForumPage {
+    Index,
+    Category(i64),
+    Thread(i64),
+}
+
+/// The forum's page at `path`, where the search box searches the forum.
+pub fn forum_page(path: &str) -> Option<ForumPage> {
+    let segments: Vec<&str> = path.split('/').filter(|s| !s.is_empty()).collect();
+    let id = |s: &str| s.parse::<i64>().ok();
+    match segments.as_slice() {
+        ["forum"] => Some(ForumPage::Index),
+        ["forum", "c", c] => id(c).map(ForumPage::Category),
+        ["forum", "t", t] => id(t).map(ForumPage::Thread),
         _ => None,
     }
 }
@@ -244,6 +356,8 @@ pub fn is_settings(path: &str) -> bool {
 }
 /// The administration.
 pub const ADMIN: &str = "/admin";
+/// The forum of a public server.
+pub const FORUM: &str = "/forum";
 /// The privacy policy and the terms, outside the shell.
 pub const PRIVACY: &str = "/privacy";
 pub const TERMS: &str = "/terms";
@@ -357,19 +471,102 @@ mod tests {
 
     #[test]
     fn a_guest_has_no_upload_and_room_to_sign_in() {
-        assert_eq!(Tab::shown(false), Tab::ALL);
-        assert_eq!(Tab::shown(true), Tab::GUEST);
+        assert_eq!(Tab::shown(false, false), Tab::ALL);
+        assert_eq!(Tab::shown(false, true), Tab::GUEST);
         assert!(!Tab::GUEST.contains(&Tab::Upload));
         // The sign-in item comes after them, within the five.
         assert!(Tab::GUEST.len() < 5);
     }
 
     #[test]
+    fn a_public_server_has_the_forum_in_uploads_place() {
+        for guest in [false, true] {
+            let tabs = Tab::shown(true, guest);
+            assert_eq!(tabs, Tab::PUBLIC);
+            // Upload and Settings are under the account button after them.
+            assert!(!tabs.contains(&Tab::Upload) && !tabs.contains(&Tab::Settings));
+            assert!(tabs.len() < 5);
+        }
+        let private: Vec<_> = Tab::ALL
+            .iter()
+            .position(|t| *t == Tab::Upload)
+            .into_iter()
+            .collect();
+        let public: Vec<_> = Tab::PUBLIC
+            .iter()
+            .position(|t| *t == Tab::Forum)
+            .into_iter()
+            .collect();
+        assert_eq!(private, public);
+        // A private server's stays as it was.
+        assert!(!Tab::ALL.contains(&Tab::Forum) && !Tab::GUEST.contains(&Tab::Forum));
+    }
+
+    #[test]
+    fn upload_settings_and_your_profile_are_under_the_account_on_a_public_server() {
+        let me = Some("Ann");
+        for path in [
+            "/upload",
+            "/settings",
+            "/settings/account",
+            "/admin",
+            "/trash",
+            "/u/ann",
+        ] {
+            assert_eq!(place_of(path, true, me), Some(Place::Account), "{path}");
+        }
+        assert_eq!(place_of("/u/bob", true, me), None);
+        assert_eq!(place_of("/u/ann", true, None), None);
+        assert_eq!(
+            place_of("/forum/t/3", true, me),
+            Some(Place::Tab(Tab::Forum))
+        );
+        assert_eq!(place_of("/", true, me), Some(Place::Tab(Tab::Gallery)));
+        // A private server keeps them in the navigation.
+        assert_eq!(
+            place_of("/upload", false, me),
+            Some(Place::Tab(Tab::Upload))
+        );
+        assert_eq!(
+            place_of("/settings", false, me),
+            Some(Place::Tab(Tab::Settings))
+        );
+        assert_eq!(place_of("/u/ann", false, me), None);
+        assert_eq!(place_of("/forum", false, me), None);
+    }
+
+    #[test]
     fn every_tab_leads_to_a_page_under_it() {
         assert!(Tab::ALL.len() <= 5, "five items at most");
-        for tab in Tab::ALL {
+        for tab in Tab::ALL.into_iter().chain(Tab::PUBLIC) {
             assert_eq!(tab_of(tab.href()), Some(tab), "{tab:?}");
         }
+    }
+
+    #[test]
+    fn the_forum_and_profiles_have_addresses_of_their_own() {
+        assert_eq!(forum(""), "/forum");
+        assert_eq!(forum(" sky  tags "), "/forum?q=sky++tags");
+        assert_eq!(forum_category(2, ""), "/forum/c/2");
+        assert_eq!(forum_category(2, "a&b"), "/forum/c/2?q=a%26b");
+        assert_eq!(forum_thread(7), "/forum/t/7");
+        assert_eq!(forum_post(7, 12), "/forum/t/7#p12");
+        assert_eq!(forum_page("/forum"), Some(ForumPage::Index));
+        assert_eq!(forum_page("/forum/c/2"), Some(ForumPage::Category(2)));
+        assert_eq!(forum_page("/forum/t/7"), Some(ForumPage::Thread(7)));
+        for path in ["/forum/c/x", "/forum/t", "/forums", "/", "/forum/x/1"] {
+            assert_eq!(forum_page(path), None, "{path}");
+        }
+        for path in ["/forum", "/forum/c/2", "/forum/t/7"] {
+            assert_eq!(tab_of(path), Some(Tab::Forum), "{path}");
+        }
+        assert_eq!(profile("ann.b-c_d"), "/u/ann.b-c_d");
+        assert_eq!(profile("a b"), "/u/a%20b");
+        assert_eq!(profile_name(&profile("a b")).as_deref(), Some("a b"));
+        assert_eq!(profile_name("/u/ann"), Some("ann".into()));
+        assert_eq!(profile_name("/u"), None);
+        assert_eq!(profile_name("/u/a/b"), None);
+        assert_eq!(tab_of("/u/ann"), None);
     }
 
     #[test]

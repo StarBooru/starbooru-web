@@ -1,0 +1,63 @@
+/* Profiles (src/pages/profile/): a profile, the form that edits your own,
+   and the crop picker that cuts the picture to a circle. */
+
+.profile-card { display: grid; gap: 18px; }
+.profile-head { display: flex; align-items: center; flex-wrap: wrap; gap: 16px 20px; }
+.profile-head .avatar.huge { box-shadow: 0 0 0 4px var(--surface), 0 0 0 6px var(--primary-container); animation: pop-in var(--slow) var(--ease-spring); }
+.profile-names { display: grid; justify-items: start; gap: 2px; flex: 1 1 200px; min-width: 0; }
+.profile-shown { font-size: 24px; font-weight: 600; margin: 0; }
+.profile-names .role-pill { margin-top: 6px; max-width: none; background: var(--primary-container); color: var(--on-primary-container); }
+.profile-edit { flex: none; }
+/* What they wrote, its lines as they typed them. */
+.profile-about { margin: 0; white-space: pre-line; overflow-wrap: anywhere; line-height: 1.55; }
+.profile-stats { display: flex; flex-wrap: wrap; gap: 8px; margin: 0; }
+/* As wide as they need, or a row of their own: a date doesn't break. */
+.profile-stats > div { flex: 1 1 0; min-width: max-content; display: grid; gap: 2px; padding: 12px 14px; border-radius: var(--radius-m); background: var(--surface-2); }
+.profile-stats dt { font-size: 13px; color: var(--on-surface-2); }
+.profile-stats dd { margin: 0; font-size: 20px; font-weight: 600; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.profile-card.editing { animation: fade-up var(--med) var(--ease); }
+.profile-card .card-head .card-title { margin: 0; }
+
+/* ---------- the form ---------- */
+
+.profile-form { display: grid; gap: 16px; }
+.picture-row { display: flex; align-items: center; flex-wrap: wrap; gap: 16px 20px; }
+.picture-actions { display: flex; flex-direction: column; align-items: flex-start; gap: 8px; min-width: 0; flex: 1 1 200px; }
+.picture-actions small { font-size: 13px; }
+.profile-about-box { font-family: inherit !important; font-size: 15px !important; line-height: 1.5; resize: vertical; }
+.profile-form form .row-end { align-items: center; }
+
+/* ---------- the crop picker ---------- */
+
+/* The picture under a round window: what's outside the circle is dimmed, so
+   the eye sees what will show. */
+.picture-pick { display: grid; gap: 12px; padding: 16px; border-radius: var(--radius-l); background: var(--surface-2); animation: fade-up var(--med) var(--ease); }
+.crop { display: grid; justify-items: center; gap: 12px; }
+.crop-frame {
+  position: relative; width: min(280px, 100%); aspect-ratio: 1; overflow: hidden; border-radius: var(--radius-m);
+  background: var(--stage); touch-action: none; cursor: grab; user-select: none;
+}
+.crop-frame.dragging { cursor: grabbing; }
+.crop-frame:focus-visible { outline: 3px solid var(--primary); outline-offset: 3px; }
+.crop-picture { position: absolute; max-width: none; pointer-events: none; -webkit-user-drag: none; }
+.crop-window {
+  position: absolute; inset: 0; border-radius: 50%; pointer-events: none;
+  box-shadow: 0 0 0 999px var(--scrim), inset 0 0 0 2px var(--on-scrim);
+}
+.crop-frame:not(.dragging) .crop-picture { transition: left var(--fast) var(--ease), top var(--fast) var(--ease), width var(--fast) var(--ease), height var(--fast) var(--ease); }
+.crop-zoom { display: flex; align-items: center; gap: 4px; width: min(300px, 100%); }
+.crop-zoom input { flex: 1; min-width: 0; accent-color: var(--primary); }
+
+@media (max-width: 600px) {
+  .profile-stats dd { font-size: 17px; }
+  .profile-head { justify-content: center; text-align: center; }
+  .profile-names { justify-items: center; flex-basis: 100%; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .profile-head .avatar.huge, .picture-pick { animation: none; }
+  .crop-frame .crop-picture { transition: none; }
+}
+.app[data-effects="lite"] .profile-head .avatar.huge { animation: none; }
+
+/* Settings › Account: the profile's card. */
+#profile .card-head .card-title { margin: 0; }

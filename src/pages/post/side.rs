@@ -1,12 +1,15 @@
-//! The viewer's side column: the post's tags under their headings, and what
-//! the server knows of its file.
+//! The viewer's side column: the post's tags under their headings, with
+//! their votes on a public server (`tag_votes.rs`), and what the server
+//! knows of its file, and on a public server who uploaded it.
 
 use std::sync::Arc;
 
 use chrono::Local;
 use leptos::prelude::*;
-use starbooru_core::{MediaKind, Post};
+use starbooru_core::{MediaKind, Post, PostTag};
 
+use super::tag_votes::{TagVoteChip, Votes};
+use crate::components::avatar::{Size, UserLink};
 use crate::components::icons::{Ico, Icon};
 use crate::logic::gallery::tint;
 use crate::logic::viewer::{
@@ -61,28 +64,46 @@ pub(super) fn chip(name: String, class: &'static str) -> impl IntoView {
 }
 
 /// The tags, grouped when the server sent their categories, and the way to
-/// edit them for whoever `editable` says may.
+/// edit them for whoever `editable` says may. On a public server each tag
+/// takes votes, whose answers go to `on_voted`.
 #[component]
 pub fn TagsCard(
     #[prop(into)] post: Signal<Option<Arc<Post>>>,
     #[prop(into)] editable: Signal<bool>,
     on_edit: Callback<()>,
+    #[prop(optional)] on_voted: Option<Callback<Post>>,
 ) -> impl IntoView {
+    // The tags alone, so a vote redraws its own score and keeps the focus.
+    let shape = Memo::new(move |_| {
+        post.with(|p| {
+            p.as_ref()
+                .map(|p| (p.id, p.tags.clone(), p.tag_details.clone()))
+        })
+    });
+    let votes = on_voted.map(|on_voted| Votes {
+        post,
+        leaving: RwSignal::new(Vec::new()),
+        on_voted,
+    });
+    let public = Memo::new(|_| crate::instance::public());
+    let one = move |name: String, class: &'static str| match votes.filter(|_| public.get()) {
+        Some(votes) => {
+            let tag = name.clone();
+            view! { <TagVoteChip tag=tag votes=votes>{chip(name, class)}</TagVoteChip> }.into_any()
+        }
+        None => chip(name, class).into_any(),
+    };
     let tags = move || {
-        let p = post.get()?;
-        if p.tags.is_empty() {
+        let (_, names, details): (i64, Vec<String>, Vec<PostTag>) = shape.get()?;
+        if names.is_empty() {
             return Some(view! { <p class="muted">{move || t!("post-no-tags")}</p> }.into_any());
         }
         // A post from a list has its names only.
-        if p.tag_details.is_empty() {
-            let chips = p
-                .tags
-                .iter()
-                .map(|t| chip(t.clone(), "chip"))
-                .collect_view();
+        if details.is_empty() {
+            let chips = names.into_iter().map(|t| one(t, "chip")).collect_view();
             return Some(view! { <div class="chips" data-press="tag">{chips}</div> }.into_any());
         }
-        let groups = group_tags(&p.tag_details);
+        let groups = group_tags(&details);
         let headed = headed(&groups);
         let sections = groups
             .into_iter()
@@ -90,7 +111,7 @@ pub fn TagsCard(
                 let head = headed.then(|| view! { <h3>{group_label(&group)}</h3> });
                 let chips = tags
                     .into_iter()
-                    .map(|t| chip(t.name, category_class(t.category)))
+                    .map(|t| one(t.name, category_class(t.category)))
                     .collect_view();
                 view! {
                     <section class="tag-group">
@@ -196,7 +217,17 @@ pub fn DetailsCard(
             }
         });
         let rating = p.rating;
+        // On a public server, who put it here.
+        let uploader = p.uploader.clone().map(|card| {
+            view! {
+                <dt>{move || t!("post-uploader")}</dt>
+                <dd class="post-uploader">
+                    <UserLink card=Some(card) size=Size::Small />
+                </dd>
+            }
+        });
         Some(view! {
+            {uploader}
             <dt>{move || t!("rating")}</dt>
             <dd>{move || rating_label(rating)}</dd>
             <dt>{move || t!("post-size")}</dt>

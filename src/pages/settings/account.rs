@@ -8,15 +8,16 @@ use leptos::prelude::*;
 use leptos::task::spawn_local;
 use starbooru_core::{ServerInfo, SignInMethods};
 
+use crate::components::avatar::{Avatar, Size};
 use crate::components::banner::ErrorBanner;
 use crate::components::confirm::ConfirmButton;
 use crate::components::icons::{Ico, Icon};
 use crate::components::strength::StrengthField;
 use crate::logic::settings::{
-    MIN_PASSWORD_CHARS, check_password, identity_name, identity_times, initial, last_way_in,
-    role_label, usage_text, wrong_current,
+    MIN_PASSWORD_CHARS, check_password, identity_name, identity_times, last_way_in, role_label,
+    usage_text, wrong_current,
 };
-use crate::{api, oidc, store};
+use crate::{api, instance, me, oidc, store};
 
 #[component]
 pub(super) fn AccountCard(info: LocalResource<Option<ServerInfo>>) -> impl IntoView {
@@ -62,16 +63,21 @@ pub(super) fn AccountCard(info: LocalResource<Option<ServerInfo>>) -> impl IntoV
             }
         })
     };
+    if untrack(instance::public) {
+        me::ask();
+    }
+    let display = Signal::derive(|| me::profile().and_then(|p| p.display_name));
+    let picture = Signal::derive(|| me::profile().and_then(|p| p.avatar_url));
     move || {
         store::session().map(|s| {
             let role = s.user.role;
-            let badge = initial(&s.user.username);
+            let name = s.user.username.clone();
             view! {
                 <section class="card" id="account">
                     // The badge and the name say it.
                     <h3 class="visually-hidden">{move || t!("settings-account")}</h3>
                     <div class="profile">
-                        <span class="avatar big" aria-hidden="true">{badge}</span>
+                        <Avatar name=name display=display url=picture size=Size::Big />
                         <span class="profile-name">
                             <span class="visually-hidden">{move || t!("settings-signed-in-as")}</span>
                             <strong class="break">{s.user.username}</strong>

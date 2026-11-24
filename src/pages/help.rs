@@ -297,6 +297,12 @@ pub fn Help() -> impl IntoView {
                             if instance::stars() { t!("help-votes-stars") } else { t!("help-votes-likes") }
                         }}
                     </li>
+                    // What only a public server has.
+                    <Show when=instance::public>
+                        <li>{move || t!("help-forum")}</li>
+                        <li>{move || t!("help-tag-votes")}</li>
+                        <li>{move || t!("help-profiles")}</li>
+                    </Show>
                 </ul>
             </section>
             <section class="card">

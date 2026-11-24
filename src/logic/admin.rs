@@ -8,6 +8,7 @@ use std::fmt::Display;
 use chrono::{DateTime, TimeZone, Utc};
 use starbooru_core::admin::{MAX_BACKUP_DAYS, MAX_BACKUP_KEEP, MAX_TRASH_DAYS};
 use starbooru_core::ai::MAX_AI_FIELD_CHARS;
+use starbooru_core::tag_vote::MAX_TAG_VOTE_THRESHOLD;
 use starbooru_core::{
     AdminUser, AiAdminStatus, AiGeneralUpdate, AiMode, AiModelOption, AiPreset, AiTool,
     AiToolSettings, AiToolStatus, AiToolUpdate, Backup, BackupSchedule, DayCount, Hardware, Mode,
@@ -22,21 +23,24 @@ use crate::route;
 // ---------- tabs ----------
 
 /// The administration's tabs, as the reference had them, and Updates. The
-/// AI tools stand under Server.
+/// AI tools stand under Server. A public server adds Moderation, for what
+/// its people did together: the tags they voted off posts.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub enum Tab {
     #[default]
     Overview,
     Accounts,
+    Moderation,
     Backups,
     Server,
     Updates,
 }
 
 impl Tab {
-    pub const ALL: [Tab; 5] = [
+    pub const ALL: [Tab; 6] = [
         Tab::Overview,
         Tab::Accounts,
+        Tab::Moderation,
         Tab::Backups,
         Tab::Server,
         Tab::Updates,
@@ -46,9 +50,20 @@ impl Tab {
         match self {
             Tab::Overview => "overview",
             Tab::Accounts => "accounts",
+            Tab::Moderation => "moderation",
             Tab::Backups => "backups",
             Tab::Server => "server",
             Tab::Updates => "updates",
+        }
+    }
+
+    /// Whether the tab is there: Moderation on a public server, Updates on
+    /// a server that has them.
+    pub fn shown(self, public: bool, updates: bool) -> bool {
+        match self {
+            Tab::Moderation => public,
+            Tab::Updates => updates,
+            _ => true,
         }
     }
 
@@ -226,19 +241,24 @@ where
 pub struct SettingsCheck {
     pub name_ok: bool,
     pub days_ok: bool,
+    pub threshold_ok: bool,
     /// The settings to send, cleaned as the server cleans them, once every
     /// field is right.
     pub request: Option<ServerSettings>,
 }
 
 /// The name is 1–64 characters once its spaces are collapsed; the recycle
-/// bin keeps posts 0–3650 days. The mode and the score kind go back as they
-/// were read (`kept`): each has its own way to change.
+/// bin keeps posts 0–3650 days; on a public server a tag comes off at a
+/// score of 0 (never) to -100, typed as the number without its minus. The
+/// mode and the score kind go back as they were read (`kept`): each has its
+/// own way to change. `threshold` is `None` on a private server, which has
+/// none to send.
 pub fn check_settings(
     name: &str,
     allow_registration: bool,
     trash_days: &str,
     auto_meta_tags: bool,
+    threshold: Option<&str>,
     kept: (Mode, ScoreKind),
 ) -> SettingsCheck {
     let days = trash_days
@@ -246,22 +266,34 @@ pub fn check_settings(
         .parse::<u32>()
         .ok()
         .filter(|d| *d <= MAX_TRASH_DAYS);
+    let threshold = threshold.map(|t| {
+        t.trim()
+            .trim_start_matches('-')
+            .parse::<u32>()
+            .ok()
+            .filter(|t| *t <= MAX_TAG_VOTE_THRESHOLD)
+    });
     let (mode, score_kind) = kept;
-    let settings = |trash_days| ServerSettings {
+    let settings = |trash_days, tag_vote_threshold| ServerSettings {
         name: name.to_owned(),
         allow_registration,
         trash_days,
         auto_meta_tags,
         mode,
         score_kind,
+        tag_vote_threshold,
         changes: Vec::new(),
     };
     // The days don't matter to the name's check.
-    let name_ok = clean_settings(&settings(0)).is_ok();
+    let name_ok = clean_settings(&settings(0, None)).is_ok();
+    let threshold_ok = threshold.is_none_or(|t| t.is_some());
     SettingsCheck {
         name_ok,
         days_ok: days.is_some(),
-        request: days.and_then(|d| clean_settings(&settings(d)).ok()),
+        threshold_ok,
+        request: days
+            .filter(|_| threshold_ok)
+            .and_then(|d| clean_settings(&settings(d, threshold.flatten())).ok()),
     }
 }
 
@@ -581,6 +613,9 @@ mod tests {
             bytes: 1536,
             quota_bytes: None,
             last_active: None,
+            display_name: None,
+            about: None,
+            avatar_url: None,
         }
     }
 
@@ -596,6 +631,29 @@ mod tests {
         assert_eq!(Tab::Overview.href(), "/admin");
         assert_eq!(Tab::Server.href(), "/admin?tab=server");
         assert_eq!(Tab::Updates.href(), "/admin?tab=updates");
+        assert_eq!(Tab::Moderation.href(), "/admin?tab=moderation");
+    }
+
+    #[test]
+    fn moderation_is_a_public_servers_and_updates_a_newer_ones() {
+        let shown = |public, updates| {
+            Tab::ALL
+                .into_iter()
+                .filter(|t| t.shown(public, updates))
+                .collect::<Vec<_>>()
+        };
+        assert_eq!(
+            shown(false, true),
+            [
+                Tab::Overview,
+                Tab::Accounts,
+                Tab::Backups,
+                Tab::Server,
+                Tab::Updates
+            ]
+        );
+        assert!(shown(true, true).contains(&Tab::Moderation));
+        assert!(!shown(true, false).contains(&Tab::Updates));
     }
 
     #[test]
@@ -716,8 +774,8 @@ mod tests {
     #[test]
     fn the_settings_form_checks_what_the_server_checks() {
         let kept = (Mode::Private, ScoreKind::Stars);
-        let ok = check_settings("  My   booru ", true, " 30 ", false, kept);
-        assert!(ok.name_ok && ok.days_ok);
+        let ok = check_settings("  My   booru ", true, " 30 ", false, None, kept);
+        assert!(ok.name_ok && ok.days_ok && ok.threshold_ok);
         assert_eq!(
             ok.request,
             Some(ServerSettings {
@@ -727,34 +785,58 @@ mod tests {
                 auto_meta_tags: false,
                 mode: Mode::Private,
                 score_kind: ScoreKind::Stars,
+                tag_vote_threshold: None,
                 changes: Vec::new(),
             })
         );
         // A public server's mode goes back as it is, or the server refuses.
-        let public = check_settings("x", false, "0", true, (Mode::Public, ScoreKind::Likes));
-        assert_eq!(public.request.map(|r| r.mode), Some(Mode::Public));
+        let public = (Mode::Public, ScoreKind::Likes);
+        let check = check_settings("x", false, "0", true, Some("3"), public);
+        let request = check.request.unwrap();
+        assert_eq!(request.mode, Mode::Public);
+        assert_eq!(request.tag_vote_threshold, Some(3));
         assert!(
-            check_settings("x", false, "0", true, kept)
+            check_settings("x", false, "0", true, None, kept)
                 .request
                 .is_some()
         );
         assert!(
-            check_settings("x", false, "3650", true, kept)
+            check_settings("x", false, "3650", true, None, kept)
                 .request
                 .is_some()
         );
-        let long = check_settings(&"n".repeat(65), true, "0", true, kept);
+        let long = check_settings(&"n".repeat(65), true, "0", true, None, kept);
         assert!(!long.name_ok && long.days_ok && long.request.is_none());
-        assert!(check_settings(&"é".repeat(64), true, "0", true, kept).name_ok);
-        let empty = check_settings("   ", true, "1", true, kept);
+        assert!(check_settings(&"é".repeat(64), true, "0", true, None, kept).name_ok);
+        let empty = check_settings("   ", true, "1", true, None, kept);
         assert!(!empty.name_ok && empty.request.is_none());
-        assert!(!check_settings("a\u{7}b", true, "1", true, kept).name_ok);
+        assert!(!check_settings("a\u{7}b", true, "1", true, None, kept).name_ok);
         for days in ["3651", "-1", "", "ten", "1.5"] {
-            let check = check_settings("x", true, days, true, kept);
+            let check = check_settings("x", true, days, true, None, kept);
             assert!(
                 check.name_ok && !check.days_ok && check.request.is_none(),
                 "{days}"
             );
+        }
+    }
+
+    #[test]
+    fn a_tag_comes_off_at_a_score_typed_with_or_without_its_minus() {
+        let public = (Mode::Public, ScoreKind::Likes);
+        let threshold = |typed| {
+            check_settings("x", true, "0", true, Some(typed), public)
+                .request
+                .and_then(|r| r.tag_vote_threshold)
+        };
+        assert_eq!(threshold(" 5 "), Some(5));
+        assert_eq!(threshold("-5"), Some(5));
+        // 0 turns it off, and is still sent.
+        assert_eq!(threshold("0"), Some(0));
+        assert_eq!(threshold("100"), Some(100));
+        for bad in ["101", "", "x", "1.5", "--"] {
+            let check = check_settings("x", true, "0", true, Some(bad), public);
+            assert!(!check.threshold_ok && check.request.is_none(), "{bad}");
+            assert!(check.name_ok && check.days_ok);
         }
     }
 

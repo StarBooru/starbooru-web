@@ -1,5 +1,6 @@
 //! Pieces more than one page uses.
 
+pub mod avatar;
 pub mod back;
 pub mod banner;
 pub mod brand;
@@ -13,6 +14,7 @@ pub mod icons;
 pub mod invite;
 pub mod legal;
 pub mod markdown;
+pub mod mention;
 pub mod menu;
 pub mod player;
 pub mod preview;
