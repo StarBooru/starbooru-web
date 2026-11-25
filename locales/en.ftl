@@ -1047,6 +1047,22 @@ slot-pose = Pose
 slot-other = Other
 ai-suggest-people = Suggest people
 ai-no-people = The AI found no people.
+find-people = Find people
+find-people-looking = Looking for people…
+find-people-found =
+    { $count ->
+        [one] Found 1 person
+       *[other] Found { $count } people
+    }
+find-people-none-new = No one new found
+find-people-none = No one found
+find-people-starting = The People model is starting. Try again in a minute.
+find-people-no-memory = This server doesn't have enough memory to find people.
+find-people-off = Finding people is turned off on this server.
+find-people-no-picture = This post has no picture to find people in.
+find-people-failed = The AI didn't answer: { $reason }.
+people-found-badge = New
+people-looking = Looking for the people in the picture…
 post-details = Details
 rating = Rating
 rating-safe = safe
@@ -1844,8 +1860,13 @@ admin-ai-hw-threads =
     }
 admin-ai-hw-memory = { $total } RAM
 admin-ai-tagging = Tag suggestions
+admin-ai-tagging-about = Suggests tags and a rating for a post, and can tag new uploads.
+admin-ai-people = People
+admin-ai-people-about = Finds the faces in a picture and fills in who each person is, their clothes and looks. Runs on new uploads after tagging.
 admin-ai-translation = Translation
+admin-ai-translation-about = Translates the text read in a picture into the reader's language.
 admin-ai-comics = Comic translation
+admin-ai-comics-about = Finds the text in comic pages and puts it over the picture, translated.
 admin-ai-mode-off = Off
 admin-ai-mode-local = Local
 admin-ai-mode-api = API

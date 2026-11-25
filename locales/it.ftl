@@ -1044,6 +1044,22 @@ slot-pose = Posa
 slot-other = Altro
 ai-suggest-people = Suggerisci persone
 ai-no-people = L'IA non ha trovato persone.
+find-people = Trova persone
+find-people-looking = Cerco le persone…
+find-people-found =
+    { $count ->
+        [one] Trovata 1 persona
+       *[other] Trovate { $count } persone
+    }
+find-people-none-new = Nessuna persona nuova
+find-people-none = Nessuna persona trovata
+find-people-starting = Il modello delle persone si sta avviando. Riprova tra un minuto.
+find-people-no-memory = Questo server non ha abbastanza memoria per trovare le persone.
+find-people-off = La ricerca delle persone è spenta su questo server.
+find-people-no-picture = Questo post non ha un'immagine in cui cercare le persone.
+find-people-failed = L'IA non ha risposto: { $reason }.
+people-found-badge = Nuova
+people-looking = Cerco le persone nell'immagine…
 post-details = Dettagli
 rating = Classificazione
 rating-safe = sicuro
@@ -1862,8 +1878,13 @@ admin-ai-unavailable-api = Ogni strumento può comunque usare un'API.
 admin-ai-hw-threads = { $count } thread
 admin-ai-hw-memory = { $total } di RAM
 admin-ai-tagging = Suggerimento tag
+admin-ai-tagging-about = Suggerisce i tag e la classificazione di un post, e può taggare i nuovi caricamenti.
+admin-ai-people = Persone
+admin-ai-people-about = Trova i volti in un'immagine e indica chi è ogni persona, i suoi vestiti e il suo aspetto. Sui nuovi caricamenti parte dopo i tag.
 admin-ai-translation = Traduzione
+admin-ai-translation-about = Traduce il testo letto in un'immagine nella lingua di chi legge.
 admin-ai-comics = Traduzione fumetti
+admin-ai-comics-about = Trova il testo nelle pagine dei fumetti e lo mette sopra l'immagine, tradotto.
 admin-ai-mode-off = Spenta
 admin-ai-mode-local = Locale
 admin-ai-mode-api = API

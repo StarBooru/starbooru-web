@@ -3,12 +3,16 @@
 //! outlined, as the page scrolls up to it; while the editor is open every
 //! box shows, the one being edited with corners to resize it and the rest
 //! of it to move it, and "Mark the face" makes the next drag (or a tap) on
-//! the picture draw theirs. Escape lets go. The boxes sit in a layer the
+//! the picture draw theirs. Escape lets go. While the AI looks for people a
+//! light runs down the picture, and the boxes of those it found, or of
+//! those the server found after an upload, come in one after another. The
+//! boxes sit in a layer the
 //! size of the picture that zooms and pans with it (`logic::faces` does the
 //! sums). Still pictures only: an animation's or a video's crop comes from
 //! a frame the stage may not be showing.
 
 use std::sync::Arc;
+use std::time::Duration;
 
 use leptos::ev::PointerEvent;
 use leptos::html;
@@ -25,11 +29,13 @@ use crate::logic::faces::{
 use crate::logic::viewer::fit_style;
 use crate::logic::zoom::Zoom;
 
-/// One of the editor's people, with the box it holds for them.
+/// One of the editor's people, with the box it holds for them. `found`:
+/// the AI found them and they aren't saved yet.
 #[derive(Clone)]
 pub(super) struct Mark {
     pub key: u64,
     pub face: ArcRwSignal<Option<FaceBox>>,
+    pub found: bool,
 }
 
 /// What the People card, its editor and the stage share about the faces.
@@ -45,7 +51,17 @@ pub(super) struct Faces {
     pub marks: RwSignal<Vec<Mark>>,
     /// The person whose face the next drag on the picture marks.
     pub drawing: RwSignal<Option<u64>>,
+    /// The AI is looking for the people in the picture.
+    pub looking: RwSignal<bool>,
+    /// People who just came, in order: their boxes come in one after
+    /// another, and the card's people too.
+    pub arrived: RwSignal<Vec<u64>>,
 }
+
+/// How long the people who just came stay in `arrived`: long enough for
+/// the last of twenty to come in, and for the boxes shown outside the
+/// editor to go again.
+const ARRIVAL: Duration = Duration::from_millis(4_000);
 
 impl Faces {
     pub fn new() -> Self {
@@ -54,6 +70,8 @@ impl Faces {
             pinned: RwSignal::new(None),
             marks: RwSignal::new(Vec::new()),
             drawing: RwSignal::new(None),
+            looking: RwSignal::new(false),
+            arrived: RwSignal::new(Vec::new()),
         }
     }
 
@@ -62,6 +80,30 @@ impl Faces {
         self.lit.try_set(None);
         self.pinned.try_set(None);
         self.drawing.try_set(None);
+        self.looking.try_set(false);
+        self.arrived.try_set(Vec::new());
+    }
+
+    /// `keys` just came: they come in one after another, then settle.
+    pub fn arrive(self, keys: Vec<u64>) {
+        let shown = keys.clone();
+        self.arrived.try_set(keys);
+        set_timeout(
+            move || {
+                if self.arrived.try_with_untracked(|a| *a == shown) == Some(true) {
+                    self.arrived.try_set(Vec::new());
+                }
+            },
+            ARRIVAL,
+        );
+    }
+
+    /// Where `key` is among those who just came, for the delay of its
+    /// entrance.
+    pub fn arrival(self, key: u64) -> Option<usize> {
+        self.arrived
+            .try_with_untracked(|a| a.iter().position(|k| *k == key))
+            .flatten()
     }
 
     /// The box signal of the editor's person `key`.
@@ -350,18 +392,35 @@ pub(super) fn FaceLayer(
                 children=move |mark: Mark| {
                     let key = mark.key;
                     let face = mark.face.clone();
+                    let found = mark.found;
                     let number = move || {
                         faces.marks.with(|m| m.iter().position(|m| m.key == key).map_or(0, |i| i + 1))
                     };
                     let lit = move || faces.lit.get() == Some(key);
+                    // The box is made again as it moves: only the first one
+                    // comes in.
+                    let entered = StoredValue::new(false);
                     move || {
                         let shown = face.get()?;
+                        // Just found: in after the ones before it.
+                        let order = if entered.get_value() {
+                            None
+                        } else {
+                            entered.set_value(true);
+                            faces.arrival(key)
+                        };
+                        let style = match order {
+                            Some(i) => format!("{}; --i: {i}", place_style(shown)),
+                            None => place_style(shown),
+                        };
                         Some(view! {
                             <div
                                 class="face-box edit face-edit"
                                 class:lit=lit
+                                class:found=found
+                                class:arriving=order.is_some()
                                 data-key=key.to_string()
-                                style=place_style(shown)
+                                style=style
                             >
                                 <span class="face-number">{number}</span>
                                 <Show when=lit>
@@ -389,6 +448,30 @@ pub(super) fn FaceLayer(
             </div>
         })
     };
+    // People who came while the post was open: their boxes show one after
+    // another, then go, so it's clear who was found where.
+    let passing = move || {
+        let came: Vec<(usize, usize, FaceBox)> = faces.arrived.with(|keys| {
+            saved.with(|s| {
+                keys.iter()
+                    .enumerate()
+                    .filter_map(|(order, key)| {
+                        let at = usize::try_from(*key).ok()?;
+                        Some((order, at, s.get(at).copied().flatten()?))
+                    })
+                    .collect()
+            })
+        });
+        came.into_iter()
+            .map(|(order, at, face)| {
+                view! {
+                    <div class="face-box passing" style=format!("{}; --i: {order}", place_style(face))>
+                        <span class="face-number">{at + 1}</span>
+                    </div>
+                }
+            })
+            .collect_view()
+    };
 
     view! {
         <div
@@ -403,14 +486,31 @@ pub(super) fn FaceLayer(
             on:pointercancel=cancel
             on:lostpointercapture=cancel
         >
-            {move || if editing.get() { edited().into_any() } else { pointed().into_any() }}
+            {move || {
+                if editing.get() {
+                    edited().into_any()
+                } else {
+                    view! {
+                        {pointed}
+                        {passing}
+                    }
+                        .into_any()
+                }
+            }}
             {move || {
                 band.get()
                     .map(|b| {
                         view! { <div class="face-box band" style=place_style(b)></div> }
                     })
             }}
-            <Show when=move || drawing.get()>
+            // Finding people: a light runs down the picture until the answer.
+            <Show when=move || faces.looking.get()>
+                <div class="face-scan" aria-hidden="true">
+                    <span class="face-scan-band"></span>
+                </div>
+                <span class="face-hint">{move || t!("find-people-looking")}</span>
+            </Show>
+            <Show when=move || drawing.get() && !faces.looking.get()>
                 <span class="face-hint" aria-live="polite">
                     {move || t!("people-draw-hint")}
                 </span>

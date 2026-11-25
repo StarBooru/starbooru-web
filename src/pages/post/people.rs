@@ -1,10 +1,12 @@
 //! The viewer's People card: who is in the picture, each with their face,
 //! the character, their franchise and whom they dress as, then their clothes
 //! and looks by slot; and in its place the editor for them, where each
-//! person's face is marked on the picture (`faces.rs`). Saving goes through
-//! `PUT /posts/{id}/figures`: the server keeps the post's tags in step,
-//! fills in the franchise of a character it knows, and cuts each face out a
-//! moment later.
+//! person's face is marked on the picture (`faces.rs`). Where the server has
+//! the People tool, Find people adds whom it finds in the picture, new until
+//! saved; elsewhere Suggest people asks the tagging model. Saving goes
+//! through `PUT /posts/{id}/figures`: the server keeps the post's tags in
+//! step, fills in the franchise of a character it knows, and cuts each face
+//! out a moment later.
 
 use std::cell::RefCell;
 use std::collections::BTreeMap;
@@ -14,8 +16,8 @@ use leptos::ev::{MouseEvent, SubmitEvent};
 use leptos::prelude::*;
 use leptos::task::spawn_local;
 use starbooru_core::{
-    FaceBox, Figure, FigureKind, MAX_FIGURE_TAGS, MAX_FIGURES, Post, Slot, TagSuggestions,
-    cosplay_tag,
+    FaceBox, Figure, FigureKind, FoundPeople, MAX_FIGURE_TAGS, MAX_FIGURES, Post, Slot,
+    TagSuggestions, cosplay_tag,
 };
 use wasm_bindgen::JsCast;
 
@@ -26,7 +28,8 @@ use crate::components::banner::ErrorBanner;
 use crate::components::icons::{Ico, Icon};
 use crate::components::select::{Choice, Select};
 use crate::components::tag_box::TagBox;
-use crate::logic::faces::crop_view;
+use crate::logic::faces::{crop_view, is_preview};
+use crate::logic::finding::{Outcome, Trouble, new_people, outcome, trouble};
 use crate::logic::people::{
     Draft, Field, PeopleError, SlotGroup, figures_update, filled_in, numbers, people_changed,
     people_known, slot_groups,
@@ -166,9 +169,15 @@ fn FaceDisc(
             .filter(|u| !picture.covered.get() && broken.with(|b| b.as_deref() != Some(u)));
         if let Some(url) = crop {
             let failed = url.clone();
+            // Found but not saved: the server's preview comes inline.
+            let src = if is_preview(&url) {
+                url
+            } else {
+                api::media(&url)
+            };
             return view! {
                 <img
-                    src=api::media(&url)
+                    src=src
                     alt=""
                     decoding="async"
                     draggable="false"
@@ -205,8 +214,10 @@ fn FaceDisc(
 /// The people of the post on the page, and the way to change them for
 /// whoever `editable` says may. `editing` says the editor is open, which
 /// `on_edit` asks for; `unsaved`, whether closing it would lose changes;
-/// `kept`, that People went off with the editor holding changes. `faces`
-/// is shared with the stage, which outlines whom the card points at.
+/// `kept`, that People went off with the editor holding changes;
+/// `waiting`, that the server may still be finding the people of a new
+/// upload. `faces` is shared with the stage, which outlines whom the card
+/// points at.
 #[component]
 pub fn PeopleCard(
     #[prop(into)] post: Signal<Option<Arc<Post>>>,
@@ -214,6 +225,7 @@ pub fn PeopleCard(
     #[prop(into)] editing: Signal<bool>,
     unsaved: RwSignal<bool>,
     #[prop(into)] kept: Signal<bool>,
+    #[prop(into)] waiting: Signal<bool>,
     faces: Faces,
     picture: Picture,
     on_edit: Callback<()>,
@@ -244,7 +256,22 @@ pub fn PeopleCard(
         let (id, figures) = figures.get();
         if figures.is_empty() {
             return Some(
-                view! { <p class="muted hint">{move || t!("people-none")}</p> }.into_any(),
+                view! {
+                    {move || {
+                        if waiting.get() {
+                            view! {
+                                <p class="muted hint people-waiting" role="status">
+                                    <Ico icon=Icon::Sparkle size=16 />
+                                    <span>{t!("people-looking")}</span>
+                                </p>
+                            }
+                                .into_any()
+                        } else {
+                            view! { <p class="muted hint">{t!("people-none")}</p> }.into_any()
+                        }
+                    }}
+                }
+                .into_any(),
             );
         }
         let kinds: Vec<FigureKind> = figures.iter().map(|f| f.kind).collect();
@@ -332,6 +359,8 @@ fn person(
 ) -> impl IntoView {
     let kind = figure.kind;
     let key = u64::try_from(index).unwrap_or(u64::MAX);
+    // Just found by the server: in after the ones before.
+    let order = faces.arrival(key);
     let summary = {
         let figure = figure.clone();
         move || person_summary(&figure, number)
@@ -423,6 +452,8 @@ fn person(
         <section
             class="figure"
             class:lit=move || faces.lit.get().or(faces.pinned.get()) == Some(key)
+            class:arriving=order.is_some()
+            style=order.map(|i| format!("--i: {i}"))
             role="group"
             aria-label=summary
             on:mouseenter=move |_| light()
@@ -458,6 +489,8 @@ struct Row {
     saved: Option<(FaceBox, String)>,
     /// The franchise the server filled in at the last save.
     filled: Option<String>,
+    /// Found by the AI and not saved yet.
+    found: bool,
 }
 
 impl Row {
@@ -484,6 +517,7 @@ impl Row {
             face: ArcRwSignal::new(draft.face),
             saved,
             filled,
+            found: false,
         }
     }
 
@@ -512,6 +546,19 @@ impl Row {
         for text in self.slots.values() {
             text.track();
         }
+    }
+}
+
+/// Why finding people failed, in words. `said` is what the app says of any
+/// failed request.
+fn find_text(why: Trouble, said: String) -> String {
+    match why {
+        Trouble::Starting => t!("find-people-starting"),
+        Trouble::NoMemory => t!("find-people-no-memory"),
+        Trouble::Off => t!("find-people-off"),
+        Trouble::NoPicture => t!("find-people-no-picture"),
+        Trouble::Provider(reason) => t!("find-people-failed", reason = reason),
+        Trouble::Other => said,
     }
 }
 
@@ -571,6 +618,7 @@ fn PeopleEditor(
                 .map(|row| Mark {
                     key: row.key,
                     face: row.face.clone(),
+                    found: row.found,
                 })
                 .collect()
         });
@@ -587,9 +635,23 @@ fn PeopleEditor(
     let problem = RwSignal::new(None::<String>);
     let invalid = RwSignal::new(None::<(u64, Field)>);
     let status = LocalResource::new(api::ai_status);
-    let ai = move || status.get().flatten().is_some_and(|s| s.tagging);
+    // The People tool finds faces too; without it, the tagging model
+    // suggests people without them.
+    let tools = Memo::new(move |_| {
+        status
+            .get()
+            .flatten()
+            .map_or((false, false), |s| (s.people, s.tagging))
+    });
+    let can_find = move || tools.get().0 && !kept.get();
+    let ai = move || !tools.get().0 && tools.get().1;
     let asking = RwSignal::new(false);
     let none_found = RwSignal::new(false);
+    // Finding people: the stage shows it looking. What the last answer came
+    // to, or why it failed and whether trying again may help.
+    let finding = faces.looking;
+    let found = RwSignal::new(None::<Outcome>);
+    let find_error = RwSignal::new(None::<(String, bool)>);
 
     if let Some(key) = rows.with_untracked(|r| r.first().map(|row| row.key)) {
         focus_box(box_id(key, Field::Character));
@@ -753,10 +815,133 @@ fn PeopleEditor(
         });
     };
 
+    // Whom the AI found joins the people already here, after them; a face
+    // someone already has is left out, and so is the empty person the
+    // editor starts with.
+    let take_found = move |answer: FoundPeople| {
+        let Some(have) = rows.try_with_untracked(|r| {
+            r.iter()
+                .filter(|row| !row.draft().is_blank())
+                .map(|row| row.face.get_untracked())
+                .collect::<Vec<_>>()
+        }) else {
+            return;
+        };
+        let total = answer.figures.len();
+        let room = MAX_FIGURES.saturating_sub(have.len());
+        let added = new_people(&have, answer.figures, room);
+        let Some(joining) = added
+            .iter()
+            .map(|f| {
+                let preview = f.face.zip(f.face_url.clone());
+                make(Draft::of(f), preview, None).map(|row| Row { found: true, ..row })
+            })
+            .collect::<Option<Vec<Row>>>()
+        else {
+            return;
+        };
+        found.try_set(Some(outcome(total, joining.len())));
+        if joining.is_empty() {
+            return;
+        }
+        invalid.try_set(None);
+        problem.try_set(None);
+        faces.arrive(joining.iter().map(|row| row.key).collect());
+        rows.try_update(|r| {
+            r.retain(|row| !row.draft().is_blank());
+            r.extend(joining);
+        });
+    };
+    let find = move || {
+        if finding.get_untracked() {
+            return;
+        }
+        finding.set(true);
+        found.set(None);
+        find_error.set(None);
+        // The answer shows on the picture first.
+        reveal_stage();
+        spawn_local(async move {
+            let result = api::attempt(move |c| async move { c.find_people(id).await }).await;
+            finding.try_set(false);
+            match result {
+                Ok(answer) => take_found(answer),
+                Err(refused) => {
+                    let why = trouble(refused.status, refused.code.as_deref(), &refused.message);
+                    if why == Trouble::Off {
+                        // The button goes with the next look at the server.
+                        api::forget_server_answers();
+                        status.refetch();
+                    }
+                    let retry = why.retries();
+                    find_error.try_set(Some((find_text(why, refused.message), retry)));
+                }
+            }
+        });
+    };
+
     view! {
         <form class="card edit people-edit" id="people" on:submit=save on:input=typed>
             <h2 class="card-title">{move || t!("people-title")}</h2>
             <p class="muted hint">{move || t!("people-hint")}</p>
+            // First, above the people: what it finds shows on the picture
+            // beside it, and the note says how many came.
+            <Show when=can_find>
+                <div class="people-find">
+                    <button
+                        type="button"
+                        class="btn tonal suggest-btn find-btn"
+                        class:busy=move || finding.get()
+                        aria-busy=move || if finding.get() { "true" } else { "false" }
+                        disabled=move || {
+                            finding.get() || rows.with(|r| r.len() >= MAX_FIGURES)
+                        }
+                        on:click=move |_| find()
+                    >
+                        <Ico icon=Icon::Sparkle size=18 />
+                        <span>
+                            {move || {
+                                if finding.get() {
+                                    t!("find-people-looking")
+                                } else {
+                                    t!("find-people")
+                                }
+                            }}
+                        </span>
+                    </button>
+                    {move || {
+                        found
+                            .get()
+                            .map(|o| {
+                                let (text, added) = match o {
+                                    Outcome::Added(count) => {
+                                        (t!("find-people-found", count = count), true)
+                                    }
+                                    Outcome::NoneNew => (t!("find-people-none-new"), false),
+                                    Outcome::Nobody => (t!("find-people-none"), false),
+                                };
+                                view! {
+                                    <p class="find-note" class:added=added role="status">
+                                        {added.then(|| view! { <Ico icon=Icon::Check size=16 /> })}
+                                        <span>{text}</span>
+                                    </p>
+                                }
+                            })
+                    }}
+                </div>
+            </Show>
+            // Outside, as the button goes when the tool was turned off.
+            {move || {
+                find_error
+                    .get()
+                    .map(|(message, retry)| {
+                        let on_retry = retry.then(|| Callback::new(move |()| find()));
+                        match on_retry {
+                            Some(r) => view! { <ErrorBanner message=message on_retry=r /> }.into_any(),
+                            None => view! { <ErrorBanner message=message /> }.into_any(),
+                        }
+                    })
+            }}
             <For
                 each=move || rows.get()
                 key=|row| row.key
@@ -777,8 +962,6 @@ fn PeopleEditor(
                     }
                 }
             />
-            // Room here for finding the people in the picture, once the
-            // server can.
             <div class="people-tools">
                 <button
                     type="button"
@@ -1001,13 +1184,30 @@ fn PersonFields(
             t!("people-face-mark-named", person = label.get())
         }
     };
+    let found = row.found;
+    let order = faces.arrival(key);
     view! {
         <fieldset
             class="figure-edit"
+            id=format!("person-{key}")
             class:lit=move || faces.lit.get() == Some(key)
+            class:found=found
+            class:arriving=order.is_some()
+            style=order.map(|i| format!("--i: {i}"))
             on:focusin=move |_| faces.lit.set(Some(key))
         >
-            <legend>{move || label.get()}</legend>
+            <legend>
+                {move || label.get()}
+                {found
+                    .then(|| {
+                        view! {
+                            <span class="suggest-badge found-badge">
+                                <Ico icon=Icon::Sparkle size=14 />
+                                {move || t!("people-found-badge")}
+                            </span>
+                        }
+                    })}
+            </legend>
             <div class="figure-row">
                 <div class="figure-face">
                     <button

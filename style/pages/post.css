@@ -225,6 +225,41 @@ html:has(.stage) { overscroll-behavior-x: none; }
 }
 @keyframes face-in { from { opacity: 0; scale: 1.3; } }
 .app[data-effects="lite"] .face-box { animation: none; }
+/* Found by the AI and not saved yet: in the tertiary, like the badge of a
+   suggested tag. They come in one after another (`--i`), as do the people
+   the server found after an upload, whose boxes then go again. */
+.face-box.found { border-color: var(--tertiary); }
+.face-box.edit.found.lit { background: oklch(from var(--tertiary) l c h / 0.14); }
+.face-box.found .face-number { background: var(--tertiary); color: var(--on-tertiary); }
+.face-box.found .face-handle { border-color: var(--tertiary); }
+.face-box.arriving { animation: face-in var(--med) var(--ease-spring) calc(var(--i, 0) * 90ms) both; }
+.face-box.passing { animation: face-pass 3s var(--ease) calc(var(--i, 0) * 90ms) both; }
+@keyframes face-pass {
+  from { opacity: 0; scale: 1.3; }
+  10% { opacity: 1; scale: 1; }
+  80% { opacity: 1; }
+  to { opacity: 0; }
+}
+/* Looking for people: a soft light runs down the picture. */
+.face-scan {
+  position: absolute; inset: 0; overflow: hidden; border-radius: calc(var(--r, 0px) / var(--z, 1)); pointer-events: none;
+  background: oklch(from var(--tertiary) l c h / 0.12);
+  animation: fade-in var(--med) var(--ease);
+}
+.face-scan-band {
+  position: absolute; left: 0; right: 0; top: 0; height: 30%;
+  background: linear-gradient(to bottom, transparent, oklch(from var(--tertiary) l c h / 0.4) 85%, var(--tertiary));
+  translate: 0 -100%; animation: face-scan 2.4s var(--ease) infinite;
+}
+@keyframes face-scan { to { translate: 0 340%; } }
+/* Still, without the light, where motion is unwelcome: the tint says it. */
+.app[data-effects="lite"] :is(.face-box.arriving, .face-box.passing, .face-scan) { animation: none; }
+.app:is([data-effects="lite"], [data-saver="on"]) .face-scan-band { display: none; }
+@media (prefers-reduced-motion: reduce) {
+  .face-scan-band { display: none; }
+  .face-box.passing { animation: none; }
+}
+.app[data-saver="on"] .face-box.passing { animation: none; }
 
 /* The file didn't load: why, and Retry, over the foot of the stage. */
 .stage-error {
@@ -426,7 +461,7 @@ html:has(.stage) { overscroll-behavior-x: none; }
   content: ""; width: 8px; height: 8px; border-radius: 999px; background: var(--primary);
   animation: pulse 1.6s var(--ease) infinite;
 }
-.app[data-effects="lite"] :is(.edit-chip.added, .diff, .suggested, .suggested-chip, .face-disc.marking) { animation: none; }
+.app[data-effects="lite"] :is(.edit-chip.added, .diff, .suggested, .suggested-chip, .face-disc.marking, .figure-edit.arriving, .figure.arriving, .find-note, .people-waiting .icon) { animation: none; }
 .app[data-effects="lite"] :is(.tag-edit.dirty .edit-note::before, .suggest-btn.busy .icon, .suggested.asking .icon) { animation: none; }
 /* In one column the notices would cover Save: they go above it. */
 @media (max-width: 900px) {
@@ -523,6 +558,29 @@ html:has(.stage) { overscroll-behavior-x: none; }
 .slot-grid .text-box > textarea { padding: 7px 10px; }
 .slot-grid .tag-offers { grid-column: 1 / -1; }
 .people-tools { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-bottom: 12px; }
+.find-btn { padding: 0 16px 0 12px; font-size: inherit; }
+.find-btn .icon { color: var(--tertiary); }
+.find-btn.busy:disabled { opacity: 1; }
+.find-btn.busy { background: color-mix(in srgb, var(--tertiary) 16%, var(--surface)); color: var(--on-surface); }
+/* What finding people came to, beside the button. */
+.people-find { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; margin-bottom: 12px; }
+.find-note { display: flex; align-items: center; gap: 4px; margin: 0; font-size: 14px; color: var(--on-surface-2); animation: fade-in var(--med) var(--ease); }
+.find-note.added { color: var(--on-surface); font-weight: 500; }
+.find-note.added .icon { color: var(--tertiary); }
+.people-edit > .banner { margin: 0 0 12px; }
+/* A person the AI found: dashed like a suggested tag, with "New" by their
+   name until saved. */
+.figure-edit.found { border-style: dashed; border-color: color-mix(in srgb, var(--tertiary) 60%, var(--outline)); background: color-mix(in srgb, var(--tertiary) 4%, transparent); }
+.figure-edit.found.lit { border-color: var(--tertiary); box-shadow: 0 0 0 1px var(--tertiary); }
+.figure-edit.found .face-num { background: var(--tertiary); color: var(--on-tertiary); }
+.figure-edit.found.lit .face-disc { box-shadow: 0 0 0 3px var(--tertiary); }
+.figure-edit legend { display: inline-flex; align-items: center; gap: 8px; }
+.found-badge { display: inline-flex; align-items: center; gap: 3px; letter-spacing: 0.04em; }
+.figure-edit { scroll-margin: calc(var(--bar-end) + 12px) 0 16px; }
+.figure-edit.arriving, .figure.arriving { animation: fade-up var(--med) var(--ease) calc(var(--i, 0) * 90ms) both; }
+/* The server may still be finding the people of a new upload. */
+.people-waiting { display: flex; align-items: center; gap: 8px; margin: 0; }
+.people-waiting .icon { color: var(--tertiary); animation: pulse 1.6s var(--ease) infinite; }
 .post-swatches { display: flex; flex-wrap: wrap; gap: 6px; }
 .post-swatches .swatch { width: 24px; height: 24px; }
 .meta a { overflow-wrap: anywhere; }

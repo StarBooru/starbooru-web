@@ -37,6 +37,8 @@
   --primary-container: oklch(0.9 min(0.06, var(--c)) var(--h));
   --on-primary-container: oklch(0.28 min(0.1, var(--c)) var(--h));
   --tertiary: oklch(0.62 min(0.15, var(--c)) calc(var(--h) + 70));
+  /* text on the tertiary: dark, as it's mid to light in both themes */
+  --on-tertiary: oklch(0.2 min(0.05, var(--c)) calc(var(--h) + 70));
   /* tag categories: text and edge of their chips. Their chroma stays with any
      accent, a grey too, as it's what tells the categories apart. */
   --cat-artist: oklch(0.5 0.16 calc(var(--h) + 110));
@@ -135,6 +137,7 @@
   --primary-container: oklch(0.37 min(0.1, var(--c)) var(--h));
   --on-primary-container: oklch(0.92 min(0.05, var(--c)) var(--h));
   --tertiary: oklch(0.75 min(0.12, var(--c)) calc(var(--h) + 70));
+  --on-tertiary: oklch(0.2 min(0.05, var(--c)) calc(var(--h) + 70));
   --cat-artist: oklch(0.8 0.12 calc(var(--h) + 110));
   --cat-character: oklch(0.8 0.11 calc(var(--h) + 215));
   --cat-copyright: oklch(0.8 0.12 calc(var(--h) + 40));
@@ -173,6 +176,7 @@
     --primary-container: oklch(0.37 min(0.1, var(--c)) var(--h));
     --on-primary-container: oklch(0.92 min(0.05, var(--c)) var(--h));
     --tertiary: oklch(0.75 min(0.12, var(--c)) calc(var(--h) + 70));
+    --on-tertiary: oklch(0.2 min(0.05, var(--c)) calc(var(--h) + 70));
     --cat-artist: oklch(0.8 0.12 calc(var(--h) + 110));
     --cat-character: oklch(0.8 0.11 calc(var(--h) + 215));
     --cat-copyright: oklch(0.8 0.12 calc(var(--h) + 40));

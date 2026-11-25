@@ -4,7 +4,8 @@
 //! post that loads goes first in the history Explore lists. The tags card
 //! turns into the tag editor in place, and the people card (shown while
 //! People are on in Settings) into theirs, which marks faces on the stage;
-//! the media editor opens over the whole window.
+//! the media editor opens over the whole window. A picture uploaded a moment
+//! ago is asked for again a few times while the server finds its people.
 
 mod edit;
 mod editor;
@@ -20,6 +21,7 @@ use std::cell::RefCell;
 use std::collections::VecDeque;
 use std::sync::Arc;
 
+use chrono::Utc;
 use leptos::prelude::*;
 use leptos::task::spawn_local;
 use leptos_router::NavigateOptions;
@@ -50,6 +52,7 @@ use crate::components::stars::StarVote;
 use crate::components::tag_menu::TagPress;
 use crate::logic::blacklist::still_hidden;
 use crate::logic::editor::offer;
+use crate::logic::finding::{CHECKS_MS, waits_for_people};
 use crate::logic::people::{PeopleShown, closes_when_off, faces_pending, people_shown};
 use crate::logic::reverse::offered;
 use crate::logic::settings::{Group, anchored};
@@ -229,6 +232,12 @@ pub fn PostView() -> impl IntoView {
     let people = Memo::new(move |_| people_shown(people_on.get(), people_editing.get()));
     // Whom the card points at, and the editor's boxes, for the stage.
     let faces = Faces::new();
+    // The server finds the people of a new upload by itself, when its People
+    // tool is on: the card says it's looking while the post is asked again.
+    let ai = LocalResource::new(api::ai_status);
+    let people_tool = Memo::new(move |_| ai.get().flatten().is_some_and(|s| s.people));
+    let waiting_people = RwSignal::new(false);
+    let waited_for = StoredValue::new(None::<i64>);
     Effect::watch(
         move || people_on.get(),
         move |on, _, _| {
@@ -388,6 +397,7 @@ pub fn PostView() -> impl IntoView {
         editing.set(false);
         people_editing.set(false);
         faces.reset();
+        waiting_people.set(false);
         media_editing.set(false);
         sharing.set(None);
         reversing.set(None);
@@ -711,6 +721,8 @@ pub fn PostView() -> impl IntoView {
     });
     let start_people = Callback::new(move |()| {
         if here() && editable.get_untracked() && people_on.get_untracked() {
+            // The people who just came are the card's, not the editor's.
+            faces.arrived.set(Vec::new());
             people_editing.set(true);
         }
     });
@@ -762,6 +774,69 @@ pub fn PostView() -> impl IntoView {
             }
         });
     };
+    // Asks for a new upload again at 3, 8 and 20 seconds, until its people
+    // come, the page moves on or someone starts marking them by hand. They
+    // come in one after another, their boxes passing over the picture.
+    let wait_for_people = move |id: i64| {
+        let at = generation.get_value();
+        waiting_people.set(true);
+        spawn_local(async move {
+            let still = move || {
+                generation.try_get_value() == Some(at)
+                    && people_editing.try_get_untracked() == Some(false)
+            };
+            for ms in CHECKS_MS {
+                dom::sleep(ms).await;
+                if !still() {
+                    break;
+                }
+                let Ok(p) = api::call(move |c| async move { c.post(id).await }).await else {
+                    continue;
+                };
+                if !still() {
+                    break;
+                }
+                if p.figures.is_empty() {
+                    continue;
+                }
+                let (count, cutting) = (p.figures.len(), faces_pending(&p));
+                let p = Arc::new(p);
+                keep(Arc::clone(&p));
+                gallery::update_post(Arc::clone(&p));
+                faces.arrive((0..u64::try_from(count).unwrap_or(0)).collect());
+                post.try_update(|shown| {
+                    if let Some(shown) = shown.as_mut().filter(|s| s.id == id) {
+                        *shown = p;
+                    }
+                });
+                waiting_people.try_set(false);
+                if cutting {
+                    // After they've come in, or they'd come in again.
+                    dom::sleep(4_500).await;
+                    if still() {
+                        wait_for_faces(id);
+                    }
+                }
+                return;
+            }
+            if generation.try_get_value() == Some(at) {
+                waiting_people.try_set(false);
+            }
+        });
+    };
+    Effect::new(move |_| {
+        if !people_on.get() || !people_tool.get() {
+            return;
+        }
+        let Some(p) = post.get() else {
+            return;
+        };
+        let fresh = id.get_untracked() == Some(p.id) && waited_for.get_value() != Some(p.id);
+        if fresh && waits_for_people(&p, Utc::now(), true) {
+            waited_for.set_value(Some(p.id));
+            wait_for_people(p.id);
+        }
+    });
     let people_saved = Callback::new(move |p: Post| {
         let (id, waiting) = (p.id, faces_pending(&p));
         if take(p) {
@@ -1049,6 +1124,7 @@ pub fn PostView() -> impl IntoView {
                             editing=people_editing
                             unsaved=people_unsaved
                             kept=Signal::derive(move || people.get() == PeopleShown::Kept)
+                            waiting=waiting_people
                             faces=faces
                             picture=picture
                             on_edit=start_people

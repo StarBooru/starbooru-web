@@ -40,6 +40,16 @@ impl Draft {
         }
     }
 
+    /// Nothing typed and no face: the person the editor starts with, or one
+    /// added and left empty. Their kind alone says nothing.
+    pub fn is_blank(&self) -> bool {
+        let tidy = self.tidy();
+        tidy == Self {
+            kind: self.kind,
+            ..Self::default()
+        }
+    }
+
     /// As typed, without the spaces that say nothing: names trimmed, one
     /// space between words, empty slots left out.
     fn tidy(&self) -> Self {
@@ -578,6 +588,23 @@ mod tests {
             &[draft(FigureKind::Girl, &[(Slot::Hair, "red_hair")])],
             &[]
         ));
+    }
+
+    #[test]
+    fn a_person_with_nothing_typed_is_blank() {
+        assert!(Draft::default().is_blank());
+        let mut d = draft(FigureKind::Other, &[(Slot::Hair, "  "), (Slot::Eyes, "")]);
+        d.character = " ".into();
+        assert!(d.is_blank());
+        let mut named = d.clone();
+        named.franchise = "zelda".into();
+        assert!(!named.is_blank());
+        let mut tagged = d.clone();
+        tagged.slots.insert(Slot::Hair, "red_hair".into());
+        assert!(!tagged.is_blank());
+        let mut marked = d;
+        marked.face = Some(face(1, 1, 10, 10));
+        assert!(!marked.is_blank());
     }
 
     #[test]

@@ -1,6 +1,6 @@
 # Roadmap
 
-_Status as of 2026-11-25: sections 1 to 4, 6, 7, 9 and 10 are done, and all of 5 that the app can do alone. Section 8 (polish) is set aside for now. Next: section 5 (people), its server side first. Scope comes from starbooru-server's `docs/checklist.md`, and sections 4 to 10 from the owner's lists of 2026-11-23. Items marked (server) need starbooru-server, whose `docs/roadmap.md` has its side._
+_Status as of 2026-11-25: sections 1 to 7, 9 and 10 are done. Section 8 (polish) is set aside for now. Scope comes from starbooru-server's `docs/checklist.md`, and sections 4 to 10 from the owner's lists of 2026-11-23. Items marked (server) need starbooru-server, whose `docs/roadmap.md` has its side._
 
 ## 1. Foundation
 
@@ -62,10 +62,10 @@ Both modes:
 ## 5. People
 
 - [x] A setting to turn People on and off
-- [ ] AI that finds faces on upload, anime ones included: it keeps a crop of each face and fills in the name, the franchise, whether it's a cosplay, and the clothing and looks (server)
-- [ ] A franchise (copyright) on each person, to group people by franchise (server)
-- [ ] People in Explore (server)
-- [ ] Popular characters in Explore, in public mode (server)
+- [x] AI that finds faces on upload, anime ones included: it keeps a crop of each face and fills in the name, the franchise, whether it's a cosplay, and the clothing and looks (server)
+- [x] A franchise (copyright) on each person, to group people by franchise (server)
+- [x] People in Explore (server)
+- [x] Popular characters in Explore, in public mode (server)
 
 ## 6. Browsing and sharing
 

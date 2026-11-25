@@ -20,8 +20,8 @@ use crate::components::icons::Icon;
 use crate::logic::admin::{
     ApiFormError, BUSY_POLL_MS, IDLE_ROUNDS, ModeChoice, ModelState, api_form_error_text,
     api_request, busy, choose_mode, clear_key_request, duration, effective_preset, hardware_line,
-    model_request, model_state, model_time, percent, preset_request, sentence, translate_request,
-    wanted_model,
+    model_request, model_state, model_time, percent, preset_request, sentence, tools_in_order,
+    translate_request, wanted_model,
 };
 use crate::logic::viewer::human_size;
 use crate::{api, dom};
@@ -31,8 +31,19 @@ type Status = RwSignal<Option<AiAdminStatus>>;
 fn tool_label(tool: AiTool) -> String {
     match tool {
         AiTool::Tagging => t!("admin-ai-tagging"),
+        AiTool::People => t!("admin-ai-people"),
         AiTool::Translation => t!("admin-ai-translation"),
         AiTool::Comics => t!("admin-ai-comics"),
+    }
+}
+
+/// What a tool does, in a line under its name.
+fn tool_about(tool: AiTool) -> String {
+    match tool {
+        AiTool::Tagging => t!("admin-ai-tagging-about"),
+        AiTool::People => t!("admin-ai-people-about"),
+        AiTool::Translation => t!("admin-ai-translation-about"),
+        AiTool::Comics => t!("admin-ai-comics-about"),
     }
 }
 
@@ -157,9 +168,11 @@ pub(super) fn AiCard() -> impl IntoView {
     let ready = Memo::new(move |_| status.with(|s| s.as_ref().is_some_and(|s| s.runtime.ready)));
     let tools = Memo::new(move |_| {
         status.with(|s| {
-            s.iter()
-                .flat_map(|s| s.tools.iter().map(|t| t.tool))
-                .collect::<Vec<_>>()
+            tools_in_order(
+                s.iter()
+                    .flat_map(|s| s.tools.iter().map(|t| t.tool))
+                    .collect(),
+            )
         })
     });
     let waiting = move || error.with(Option::is_none).then(|| view! { <Waiting /> });
@@ -320,7 +333,10 @@ fn ToolBlock(
     view! {
         <div class="ai-tool">
             <div class="ai-tool-head">
-                <h3>{move || tool_label(tool)}</h3>
+                <div class="ai-tool-name">
+                    <h3>{move || tool_label(tool)}</h3>
+                    <p class="muted">{move || tool_about(tool)}</p>
+                </div>
                 {state}
             </div>
             <div class="segmented" role="radiogroup" aria-label=move || tool_label(tool)>

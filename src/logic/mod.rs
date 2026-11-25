@@ -11,6 +11,7 @@ pub mod duplicates;
 pub mod editor;
 pub mod explore;
 pub mod faces;
+pub mod finding;
 pub mod float;
 pub mod forum;
 pub mod gallery;

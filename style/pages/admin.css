@@ -55,9 +55,11 @@ a.seg { display: inline-flex; align-items: center; justify-content: center; text
 .ai-tool .seg { display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 48px; line-height: 1.25; }
 .ai-tool .seg small { font-size: 12px; font-weight: 400; text-transform: none; }
 .ai-tool .field, .ai-tool .check { margin: 0; }
-.ai-tool-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: 28px; }
+.ai-tool-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; min-height: 28px; }
+.ai-tool-name { display: grid; gap: 2px; min-width: 0; }
 .ai-tool-head h3 { margin: 0; font-size: 16px; font-weight: 600; }
-.ai-tool-head .pill { flex: none; max-width: none; }
+.ai-tool-name p { margin: 0; font-size: 14px; line-height: 1.4; }
+.ai-tool-head .pill { flex: none; max-width: none; margin-top: 1px; }
 .ai-note { margin: 0; font-size: 14px; overflow-wrap: anywhere; }
 .ai-tool .banner { margin: 0; }
 .ai-models summary { cursor: pointer; font-size: 14px; font-weight: 500; padding: 4px 0; }

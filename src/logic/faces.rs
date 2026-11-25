@@ -2,7 +2,7 @@
 //! thousandths of the picture's width and height from its top-left corner,
 //! as the server keeps it: from the pointer on the screen to a box, drawn,
 //! moved and resized inside the picture, and back to the screen, with the
-//! square the server cuts a face to.
+//! square the server cuts a face to and when two boxes mark the same face.
 
 use starbooru_core::{FACE_SCALE, FaceBox};
 
@@ -202,6 +202,40 @@ pub fn place_style(face: FaceBox) -> String {
     format!("left: {left:.2}%; top: {top:.2}%; width: {width:.2}%; height: {height:.2}%")
 }
 
+/// How much of the smaller of two boxes they share, from 0 to 1. A face
+/// marked by hand may be larger or smaller than the one the AI finds, and
+/// one inside the other is the same face. The share is the same in pixels,
+/// whatever the picture's shape.
+pub fn overlap(a: FaceBox, b: FaceBox) -> f64 {
+    let span = |at: u16, len: u16| (f64::from(at), f64::from(at) + f64::from(len));
+    let shared = |(a0, a1): (f64, f64), (b0, b1): (f64, f64)| (a1.min(b1) - a0.max(b0)).max(0.0);
+    let across = shared(span(a.x, a.w), span(b.x, b.w));
+    let down = shared(span(a.y, a.h), span(b.y, b.h));
+    let smaller = (f64::from(a.w) * f64::from(a.h)).min(f64::from(b.w) * f64::from(b.h));
+    if smaller > 0.0 {
+        (across * down / smaller).min(1.0)
+    } else {
+        0.0
+    }
+}
+
+/// Two boxes sharing at least this much of the smaller are one face.
+pub const SAME_FACE: f64 = 0.5;
+
+/// Whether two boxes mark the same face.
+pub fn same_face(a: FaceBox, b: FaceBox) -> bool {
+    overlap(a, b) >= SAME_FACE
+}
+
+/// Whether `url` is a crop the server sent before it kept one: a JPEG or
+/// PNG in a `data:` address, as finding people answers. Anything else in a
+/// `data:` address isn't shown.
+pub fn is_preview(url: &str) -> bool {
+    ["data:image/jpeg;base64,", "data:image/png;base64,"]
+        .iter()
+        .any(|head| url.starts_with(head))
+}
+
 /// The square the server cuts `face` to, as a picture's background: its size
 /// and position in percent, so a circle shows the crop before the server
 /// has made it.
@@ -393,6 +427,39 @@ mod tests {
             place_style(face),
             "left: 41.20%; top: 9.60%; width: 13.00%; height: 18.00%"
         );
+    }
+
+    #[test]
+    fn boxes_over_the_same_face_overlap() {
+        let face = at_box(400, 200, 100, 100);
+        assert_eq!(overlap(face, face), 1.0);
+        // Marked loosely by hand around the AI's: the small one is inside.
+        let loose = at_box(370, 160, 180, 200);
+        assert_eq!(overlap(face, loose), 1.0);
+        assert!(same_face(loose, face));
+        // Half of it over the other.
+        let half = at_box(450, 200, 100, 100);
+        assert!((overlap(face, half) - 0.5).abs() < 1e-9);
+        assert!(same_face(face, half));
+        // Side by side, touching or a little over: two people.
+        assert_eq!(overlap(face, at_box(500, 200, 100, 100)), 0.0);
+        let neighbour = at_box(480, 220, 100, 100);
+        assert!(!same_face(face, neighbour), "{}", overlap(face, neighbour));
+        assert_eq!(overlap(face, at_box(0, 0, 10, 10)), 0.0);
+        // An empty box overlaps nothing.
+        assert_eq!(overlap(face, at_box(420, 220, 0, 10)), 0.0);
+        // Whichever goes first.
+        assert_eq!(overlap(half, face), overlap(face, half));
+    }
+
+    #[test]
+    fn only_a_pictures_crop_shows_from_a_data_address() {
+        assert!(is_preview("data:image/jpeg;base64,/9j/4AAQ"));
+        assert!(is_preview("data:image/png;base64,iVBOR"));
+        assert!(!is_preview("data:text/html;base64,PHNjcmlwdD4="));
+        assert!(!is_preview("data:image/svg+xml;base64,PHN2Zz4="));
+        assert!(!is_preview("/media/face/a.jpg?sig=x"));
+        assert!(!is_preview(""));
     }
 
     #[test]

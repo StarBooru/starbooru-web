@@ -427,6 +427,19 @@ pub fn update_of(s: &AiToolSettings) -> AiToolUpdate {
     }
 }
 
+/// The tools as the AI card lists them: People straight after Tagging, as it
+/// runs after it on a new upload and reads its tags. A server lists only
+/// the tools it has.
+pub fn tools_in_order(mut tools: Vec<AiTool>) -> Vec<AiTool> {
+    tools.sort_by_key(|tool| match tool {
+        AiTool::Tagging => 0,
+        AiTool::People => 1,
+        AiTool::Translation => 2,
+        AiTool::Comics => 3,
+    });
+    tools
+}
+
 /// The preset in effect: Balanced stands in for one this machine can't meet.
 pub fn effective_preset(tool: &AiToolStatus) -> AiPreset {
     let met = tool
@@ -980,6 +993,37 @@ mod tests {
             ..AiToolStatus::default()
         });
         assert!(busy(&status));
+    }
+
+    #[test]
+    fn people_come_after_tagging() {
+        use AiTool::{Comics, People, Tagging, Translation};
+        // As a 0.6 server lists them, the newer tool last.
+        assert_eq!(
+            tools_in_order(AiTool::ALL.to_vec()),
+            [Tagging, People, Translation, Comics]
+        );
+        // An older server has no People.
+        assert_eq!(
+            tools_in_order(vec![Comics, Translation, Tagging]),
+            [Tagging, Translation, Comics]
+        );
+        assert!(tools_in_order(Vec::new()).is_empty());
+        // The whole answer of a 0.6 server reads, People included.
+        let status: AiAdminStatus = serde_json::from_value(serde_json::json!({
+            "hardware": serde_json::to_value(Hardware::default()).unwrap(),
+            "runtime": {"ready": true, "reason": null, "gpu": null},
+            "autotag": false, "auto_translate": "",
+            "tools": [{"tool": "tagging", "settings": {"mode": "off", "preset": "balanced",
+                "model": "", "api_url": "", "api_model": "", "api_key_set": false},
+                "presets": [], "models": [], "active": null, "state": "off", "error": null}],
+            "more_tools": [{"tool": "people", "settings": {"mode": "local", "preset": "balanced",
+                "model": "", "api_url": "", "api_model": "", "api_key_set": false},
+                "presets": [], "models": [], "active": null, "state": "ready", "error": null}],
+        }))
+        .unwrap();
+        let tools: Vec<AiTool> = status.tools.iter().map(|t| t.tool).collect();
+        assert_eq!(tools, [Tagging, People]);
     }
 
     #[test]
