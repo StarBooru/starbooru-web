@@ -236,6 +236,18 @@ where
 
 // ---------- server settings ----------
 
+/// What a field's `aria-describedby` lists: the ids of the lines under it
+/// that show, such as what's wrong and its hint, in that order. `None` with
+/// none, so the attribute goes.
+pub fn described(lines: &[(&str, bool)]) -> Option<String> {
+    let ids: Vec<&str> = lines
+        .iter()
+        .filter(|(_, shown)| *shown)
+        .map(|(id, _)| *id)
+        .collect();
+    (!ids.is_empty()).then(|| ids.join(" "))
+}
+
 /// What the server settings' form says of what's typed.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct SettingsCheck {
@@ -613,6 +625,33 @@ mod tests {
     use starbooru_core::{AiPresetOption, AiRuntimeStatus, Role};
 
     use super::*;
+
+    #[test]
+    fn a_field_points_at_the_lines_under_it_that_show() {
+        assert_eq!(
+            described(&[("name-error", true), ("name-hint", true)]).as_deref(),
+            Some("name-error name-hint")
+        );
+        assert_eq!(
+            described(&[("name-error", false), ("name-hint", true)]).as_deref(),
+            Some("name-hint")
+        );
+        assert_eq!(described(&[("name-error", false)]), None);
+        assert_eq!(described(&[]), None);
+    }
+
+    #[test]
+    fn errors_are_said_outside_the_labels_they_belong_to() {
+        // Inside a <label>, a field's error would be read as its name.
+        for (page, source) in [
+            ("home.rs", include_str!("../pages/admin/home.rs")),
+            ("server.rs", include_str!("../pages/admin/server.rs")),
+        ] {
+            let (code, _) = source.split_once("#[cfg(test)]").unwrap_or((source, ""));
+            assert!(!code.contains(r#"<label class="field"#), "{page}");
+            assert!(code.contains("aria-describedby"), "{page}");
+        }
+    }
 
     fn now() -> DateTime<Utc> {
         DateTime::from_timestamp(1_800_000_000, 0).unwrap()

@@ -19,17 +19,16 @@ use starbooru_core::{
     FaceBox, Figure, FigureKind, FoundPeople, MAX_FIGURE_TAGS, MAX_FIGURES, Post, Slot,
     TagSuggestions, cosplay_tag,
 };
-use wasm_bindgen::JsCast;
 
-use super::faces::{Faces, Mark, reveal_stage};
+use super::faces::{Faces, LAYER_ID, Mark, face_box_id, face_tool_id, focus_soon, reveal_stage};
 use super::side::chip;
 use crate::api;
 use crate::components::banner::ErrorBanner;
 use crate::components::icons::{Ico, Icon};
 use crate::components::select::{Choice, Select};
 use crate::components::tag_box::TagBox;
-use crate::logic::faces::{crop_view, is_preview};
-use crate::logic::finding::{Outcome, Trouble, new_people, outcome, trouble};
+use crate::logic::faces::{centred, crop_view, is_preview};
+use crate::logic::finding::{Outcome, Trouble, join_found, outcome, trouble};
 use crate::logic::people::{
     Draft, Field, PeopleError, SlotGroup, figures_update, filled_in, numbers, people_changed,
     people_known, slot_groups,
@@ -125,15 +124,7 @@ fn box_id(key: u64, field: Field) -> String {
 
 /// Puts the caret in the box with this id, once it's on the page.
 fn focus_box(id: String) {
-    request_animation_frame(move || {
-        if let Some(el) = web_sys::window()
-            .and_then(|w| w.document())
-            .and_then(|d| d.get_element_by_id(&id))
-            .and_then(|el| el.dyn_into::<web_sys::HtmlElement>().ok())
-        {
-            let _ = el.focus();
-        }
-    });
+    focus_soon(id, false);
 }
 
 /// What the card needs of the picture for its faces.
@@ -489,8 +480,18 @@ struct Row {
     saved: Option<(FaceBox, String)>,
     /// The franchise the server filled in at the last save.
     filled: Option<String>,
-    /// Found by the AI and not saved yet.
-    found: bool,
+    /// What the AI found of them that isn't saved yet.
+    found: Found,
+}
+
+/// What the AI found of a person in the editor, until saving.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum Found {
+    Nothing,
+    /// Someone new.
+    New,
+    /// Someone there already, without a box: their face and what was empty.
+    Again,
 }
 
 impl Row {
@@ -517,7 +518,7 @@ impl Row {
             face: ArcRwSignal::new(draft.face),
             saved,
             filled,
-            found: false,
+            found: Found::Nothing,
         }
     }
 
@@ -554,6 +555,7 @@ impl Row {
 fn find_text(why: Trouble, said: String) -> String {
     match why {
         Trouble::Starting => t!("find-people-starting"),
+        Trouble::Busy => t!("find-people-busy"),
         Trouble::NoMemory => t!("find-people-no-memory"),
         Trouble::Off => t!("find-people-off"),
         Trouble::NoPicture => t!("find-people-no-picture"),
@@ -611,19 +613,6 @@ fn PeopleEditor(
             unsaved.set(now);
         }
     });
-    // The stage draws the boxes the rows hold.
-    Effect::new(move |_| {
-        let marks: Vec<Mark> = rows.with(|r| {
-            r.iter()
-                .map(|row| Mark {
-                    key: row.key,
-                    face: row.face.clone(),
-                    found: row.found,
-                })
-                .collect()
-        });
-        faces.marks.set(marks);
-    });
     on_cleanup(move || {
         unsaved.try_set(false);
         faces.marks.try_set(Vec::new());
@@ -657,16 +646,35 @@ fn PeopleEditor(
         focus_box(box_id(key, Field::Character));
     }
 
-    // Person `key`'s heading, numbered among those of their kind.
+    // Person `key`'s heading, numbered among those of their kind. The stage
+    // may ask after the editor has gone.
     let label_of = move |key: u64| {
-        rows.with(|r| {
+        rows.try_with(|r| {
             let kinds: Vec<FigureKind> = r.iter().map(|row| row.kind.get()).collect();
             let at = r.iter().position(|row| row.key == key)?;
             let number = numbers(&kinds).get(at).copied().unwrap_or(0);
             Some(person_label(*kinds.get(at)?, number))
         })
+        .flatten()
         .unwrap_or_default()
     };
+    // The stage draws the boxes the rows hold.
+    Effect::new(move |_| {
+        let marks: Vec<Mark> = rows.with(|r| {
+            r.iter()
+                .map(|row| {
+                    let key = row.key;
+                    Mark {
+                        key,
+                        face: row.face.clone(),
+                        found: row.found != Found::Nothing,
+                        label: Arc::new(move || label_of(key)),
+                    }
+                })
+                .collect()
+        });
+        faces.marks.set(marks);
+    });
     // Their place in the list, as the stage numbers their box.
     let place_of =
         move |key: u64| rows.with(|r| r.iter().position(|row| row.key == key).map_or(0, |i| i + 1));
@@ -815,39 +823,88 @@ fn PeopleEditor(
         });
     };
 
-    // Whom the AI found joins the people already here, after them; a face
+    // Whom the AI found: someone here without a box gets the one found for
+    // them, in their place; the rest join after the people here. A face
     // someone already has is left out, and so is the empty person the
     // editor starts with.
     let take_found = move |answer: FoundPeople| {
-        let Some(have) = rows.try_with_untracked(|r| {
-            r.iter()
-                .filter(|row| !row.draft().is_blank())
-                .map(|row| row.face.get_untracked())
-                .collect::<Vec<_>>()
+        let Some((have, before)) = rows.try_with_untracked(|r| {
+            let drafts: Vec<Draft> = r.iter().map(Row::draft).collect();
+            let before: Vec<(u64, Option<String>)> =
+                r.iter().map(|row| (row.key, row.filled.clone())).collect();
+            (drafts, before)
         }) else {
             return;
         };
         let total = answer.figures.len();
-        let room = MAX_FIGURES.saturating_sub(have.len());
-        let added = new_people(&have, answer.figures, room);
-        let Some(joining) = added
+        let room = MAX_FIGURES.saturating_sub(have.iter().filter(|d| !d.is_blank()).count());
+        let joined = join_found(&have, answer.figures, room);
+        // In their own place, as someone new to the list: their box and
+        // fields come in like the others'.
+        let Some(again) = joined
+            .paired
+            .into_iter()
+            .map(|p| {
+                let filled = before.get(p.person).and_then(|(_, f)| f.clone());
+                let row = make(p.draft, p.preview, filled)?;
+                Some((
+                    p.person,
+                    Row {
+                        found: Found::Again,
+                        ..row
+                    },
+                ))
+            })
+            .collect::<Option<Vec<(usize, Row)>>>()
+        else {
+            return;
+        };
+        let Some(joining) = joined
+            .added
             .iter()
             .map(|f| {
                 let preview = f.face.zip(f.face_url.clone());
-                make(Draft::of(f), preview, None).map(|row| Row { found: true, ..row })
+                make(Draft::of(f), preview, None).map(|row| Row {
+                    found: Found::New,
+                    ..row
+                })
             })
             .collect::<Option<Vec<Row>>>()
         else {
             return;
         };
-        found.try_set(Some(outcome(total, joining.len())));
-        if joining.is_empty() {
+        found.try_set(Some(outcome(total, again.len() + joining.len())));
+        if again.is_empty() && joining.is_empty() {
             return;
         }
         invalid.try_set(None);
         problem.try_set(None);
-        faces.arrive(joining.iter().map(|row| row.key).collect());
+        // Whoever was being marked or lit may have a new key now.
+        let gone: Vec<u64> = again
+            .iter()
+            .filter_map(|(at, _)| before.get(*at).map(|(key, _)| *key))
+            .collect();
+        for held in [faces.drawing, faces.lit] {
+            if held
+                .try_get_untracked()
+                .flatten()
+                .is_some_and(|k| gone.contains(&k))
+            {
+                held.try_set(None);
+            }
+        }
+        let arriving = again
+            .iter()
+            .map(|(_, row)| row.key)
+            .chain(joining.iter().map(|row| row.key))
+            .collect();
+        faces.arrive(arriving);
         rows.try_update(|r| {
+            for (at, row) in again {
+                if let Some(place) = r.get_mut(at) {
+                    *place = row;
+                }
+            }
             r.retain(|row| !row.draft().is_blank());
             r.extend(joining);
         });
@@ -1118,17 +1175,34 @@ fn PersonFields(
         (face.get() == Some(was)).then_some(url)
     });
     let marking = Signal::derive(move || faces.drawing.get() == Some(key));
+    // The picture takes the focus, and says what can be done there.
     let start_marking = move || {
         faces.lit.set(Some(key));
         faces.drawing.set(Some(key));
         reveal_stage();
+        focus_soon(LAYER_ID.to_owned(), false);
     };
-    let press_disc = move |_| {
+    // From the keyboard: their box on the picture takes the keys, a box in
+    // the middle when they have none yet.
+    let to_box = move || {
+        if face.with_untracked(Option::is_none) {
+            face.set(Some(centred(picture.size.get_untracked())));
+        }
+        faces.drawing.set(None);
+        faces.lit.set(Some(key));
+        reveal_stage();
+        focus_soon(face_box_id(key), false);
+    };
+    // A click from the keyboard has no pointer, so `detail` is 0.
+    let keyed = |e: &MouseEvent| e.detail() == 0;
+    let press_disc = move |e: MouseEvent| {
         if !picture.boxes.get_untracked() {
             return;
         }
         if marking.get_untracked() {
             faces.drawing.set(None);
+        } else if keyed(&e) {
+            to_box();
         } else if face.with_untracked(Option::is_some) {
             faces.lit.set(Some(key));
             reveal_stage();
@@ -1136,13 +1210,31 @@ fn PersonFields(
             start_marking();
         }
     };
+    // The button beside the face swaps as marking ends or the face comes and
+    // goes: the focus, gone with the old one or left on the picture, comes
+    // to the new one.
+    Effect::watch(
+        move || (marking.get(), face.with(Option::is_some)),
+        move |(marking, _), _, _| {
+            if !*marking {
+                focus_soon(face_tool_id(key), true);
+            }
+        },
+        false,
+    );
     let face_tool = move || {
         if !picture.boxes.get() {
             return None;
         }
+        let id = face_tool_id(key);
         Some(if marking.get() {
             view! {
-                <button type="button" class="btn text small face-tool" on:click=move |_| faces.drawing.set(None)>
+                <button
+                    type="button"
+                    class="btn text small face-tool"
+                    id=id
+                    on:click=move |_| faces.drawing.set(None)
+                >
                     {move || t!("cancel")}
                 </button>
             }
@@ -1152,6 +1244,7 @@ fn PersonFields(
                 <button
                     type="button"
                     class="btn text small face-tool"
+                    id=id
                     aria-label=move || t!("people-face-remove-named", person = label.get())
                     on:click=move |_| face.set(None)
                 >
@@ -1165,8 +1258,11 @@ fn PersonFields(
                 <button
                     type="button"
                     class="btn tonal small face-tool"
+                    id=id
                     aria-label=move || t!("people-face-mark-named", person = label.get())
-                    on:click=move |_| start_marking()
+                    on:click=move |e: MouseEvent| {
+                        if keyed(&e) { to_box() } else { start_marking() }
+                    }
                 >
                     <Ico icon=Icon::Face size=18 />
                     {move || t!("people-face-mark")}
@@ -1186,24 +1282,30 @@ fn PersonFields(
     };
     let found = row.found;
     let order = faces.arrival(key);
+    // Someone new, or someone here who got what was found of them.
+    let badge: Option<fn() -> String> = match found {
+        Found::Nothing => None,
+        Found::New => Some(|| t!("people-found-badge")),
+        Found::Again => Some(|| t!("people-found-again-badge")),
+    };
     view! {
         <fieldset
             class="figure-edit"
             id=format!("person-{key}")
             class:lit=move || faces.lit.get() == Some(key)
-            class:found=found
+            class:found=found != Found::Nothing
             class:arriving=order.is_some()
             style=order.map(|i| format!("--i: {i}"))
             on:focusin=move |_| faces.lit.set(Some(key))
         >
             <legend>
                 {move || label.get()}
-                {found
-                    .then(|| {
+                {badge
+                    .map(|text| {
                         view! {
                             <span class="suggest-badge found-badge">
                                 <Ico icon=Icon::Sparkle size=14 />
-                                {move || t!("people-found-badge")}
+                                {text}
                             </span>
                         }
                     })}

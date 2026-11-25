@@ -2,7 +2,7 @@
 //! or a paste carries, a folder's name as a tag, sizes and the words beside a
 //! transfer's bar, and what the server's refusal of a file means.
 
-use starbooru_core::{FORMATS, Transfer, normalize_tag, post_link};
+use starbooru_core::{AiStatus, FORMATS, Transfer, normalize_tag, post_link};
 
 use super::tags::{BadTag, parse_tags};
 // Kept here too: the upload pages and the admin panel import it from here.
@@ -255,9 +255,78 @@ pub fn too_big(size: u64, limit: u64) -> bool {
     limit > 0 && size > limit
 }
 
+/// What the upload's AI switch does, as its label says.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum AiSwitch {
+    /// The AI tags the uploads.
+    Tags,
+    /// It tags them and then finds their people: turned off, the server
+    /// does neither.
+    TagsAndPeople,
+}
+
+/// The switch `GET /ai` calls for, and whether it starts on, as the server
+/// tags an upload whose uploader doesn't say. `None` when the server can't
+/// tag. The server finds the people of an upload unless its uploader turns
+/// the AI off, so only a switch that starts on can stop that, and says so;
+/// one that starts off adds the tags, and turned off again leaves it to the
+/// server ([`chosen`]).
+pub fn ai_switch(status: &AiStatus) -> Option<(AiSwitch, bool)> {
+    match (status.tagging, status.people && status.autotag) {
+        (false, _) => None,
+        (true, false) => Some((AiSwitch::Tags, status.autotag)),
+        (true, true) => Some((AiSwitch::TagsAndPeople, true)),
+    }
+}
+
+/// What an upload says of the AI with the switch `on`, when the server
+/// would have it `server`: nothing when they agree, so the server decides.
+pub fn chosen(on: bool, server: bool) -> Option<bool> {
+    (on != server).then_some(on)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn the_ai_switch_says_what_turning_it_off_stops() {
+        let ai = |tagging, people, autotag| AiStatus {
+            enabled: tagging || people,
+            tagging,
+            people,
+            autotag,
+            ..AiStatus::default()
+        };
+        assert_eq!(
+            ai_switch(&ai(true, false, true)),
+            Some((AiSwitch::Tags, true))
+        );
+        assert_eq!(
+            ai_switch(&ai(true, false, false)),
+            Some((AiSwitch::Tags, false))
+        );
+        // With the People tool, turning it off stops both, and it says so.
+        assert_eq!(
+            ai_switch(&ai(true, true, true)),
+            Some((AiSwitch::TagsAndPeople, true))
+        );
+        // Off from the start, it only adds tags: the people are found
+        // either way.
+        assert_eq!(
+            ai_switch(&ai(true, true, false)),
+            Some((AiSwitch::Tags, false))
+        );
+        // Nothing to tag with: no switch, as before.
+        assert_eq!(ai_switch(&ai(false, true, true)), None);
+        assert_eq!(ai_switch(&ai(false, false, false)), None);
+        assert_eq!(ai_switch(&AiStatus::default()), None);
+        // The upload says only what differs from the server.
+        assert_eq!(chosen(true, true), None);
+        assert_eq!(chosen(false, true), Some(false));
+        assert_eq!(chosen(true, false), Some(true));
+        assert_eq!(chosen(false, false), None);
+    }
 
     #[test]
     fn a_name_or_a_type_can_say_yes_and_the_rest_are_looked_into() {

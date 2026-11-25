@@ -24,18 +24,72 @@ use web_sys::{Element, KeyboardEvent};
 
 use crate::dom;
 use crate::logic::faces::{
-    Corner, Frame, TAP_PIXELS, at, drawn, moved, place_style, resized, step, tapped,
+    Corner, Frame, TAP_PIXELS, at, centred, drawn, keyed, moved, place_style, resized, step, tapped,
 };
 use crate::logic::viewer::fit_style;
 use crate::logic::zoom::Zoom;
 
 /// One of the editor's people, with the box it holds for them. `found`:
-/// the AI found them and they aren't saved yet.
+/// the AI found them and they aren't saved yet. `label` names them, as
+/// their heading in the editor does.
 #[derive(Clone)]
 pub(super) struct Mark {
     pub key: u64,
     pub face: ArcRwSignal<Option<FaceBox>>,
     pub found: bool,
+    pub label: Arc<dyn Fn() -> String + Send + Sync>,
+}
+
+/// The id of the editor's person `key`'s box on the picture.
+pub(super) fn face_box_id(key: u64) -> String {
+    format!("face-box-{key}")
+}
+
+/// The id of the button beside person `key`'s face in the editor: Mark the
+/// face, Cancel or Remove the face, whichever shows.
+pub(super) fn face_tool_id(key: u64) -> String {
+    format!("person-{key}-face-tool")
+}
+
+/// The id of the layer over the picture, which has the focus while a face
+/// is being drawn.
+pub(super) const LAYER_ID: &str = "face-layer";
+
+/// Whether the focus is nowhere in particular: on the page itself, as when
+/// the element that had it went, or on the layer over the picture.
+fn focus_lost(doc: &web_sys::Document) -> bool {
+    match doc.active_element() {
+        None => true,
+        Some(active) => {
+            active.id() == LAYER_ID
+                || doc
+                    .body()
+                    .is_some_and(|b| active.is_same_node(Some(b.as_ref())))
+        }
+    }
+}
+
+/// Moves the focus to the element with this id once it's on the page. With
+/// `if_lost`, only when the focus is nowhere in particular, and the page
+/// doesn't scroll for it.
+pub(super) fn focus_soon(id: String, if_lost: bool) {
+    request_animation_frame(move || {
+        let Some(doc) = web_sys::window().and_then(|w| w.document()) else {
+            return;
+        };
+        if if_lost && !focus_lost(&doc) {
+            return;
+        }
+        let Some(el) = doc
+            .get_element_by_id(&id)
+            .and_then(|el| el.dyn_into::<web_sys::HtmlElement>().ok())
+        else {
+            return;
+        };
+        let options = web_sys::FocusOptions::new();
+        options.set_prevent_scroll(if_lost);
+        let _ = el.focus_with_options(&options);
+    });
 }
 
 /// What the People card, its editor and the stage share about the faces.
@@ -348,7 +402,8 @@ pub(super) fn FaceLayer(
     };
 
     // Escape lets go of a press, or stops drawing, before anything else
-    // hears it.
+    // hears it. Enter while drawing puts a box in the middle instead, to
+    // move and resize with the keys.
     let watch = StoredValue::new(None::<dom::Watch>);
     layer.on_load(move |_| {
         let Some(window) = web_sys::window() else {
@@ -358,12 +413,34 @@ pub(super) fn FaceLayer(
             let Some(e) = e.dyn_ref::<KeyboardEvent>() else {
                 return;
             };
-            let busy = drag.try_with_value(Option::is_some) == Some(true)
-                || faces.drawing.try_get_untracked().flatten().is_some();
-            if e.key() == "Escape" && busy {
-                e.prevent_default();
-                e.stop_propagation();
-                let_go();
+            let pressing = drag.try_with_value(Option::is_some) == Some(true);
+            let drawing = faces.drawing.try_get_untracked().flatten();
+            match e.key().as_str() {
+                "Escape" if pressing || drawing.is_some() => {
+                    e.prevent_default();
+                    e.stop_propagation();
+                    let_go();
+                }
+                // Only from the picture: a button keeps its own Enter.
+                "Enter"
+                    if !pressing
+                        && web_sys::window()
+                            .and_then(|w| w.document())
+                            .is_some_and(|d| focus_lost(&d)) =>
+                {
+                    let Some(key) = drawing else {
+                        return;
+                    };
+                    e.prevent_default();
+                    e.stop_propagation();
+                    if let Some(face) = faces.face_of(key) {
+                        face.try_set(Some(centred(size.try_get_untracked().flatten())));
+                    }
+                    faces.drawing.try_set(None);
+                    faces.lit.try_set(Some(key));
+                    focus_soon(face_box_id(key), false);
+                }
+                _ => {}
             }
         });
         watch.set_value(Some(w));
@@ -383,7 +460,9 @@ pub(super) fn FaceLayer(
         style
     };
 
-    // The editor's boxes, each with its number; the one lit has corners.
+    // The editor's boxes, each with its number; the one lit has corners,
+    // and takes the focus for the keys: the arrows move it, and with Shift
+    // resize it. Enter or Escape goes back to the person in the editor.
     let edited = move || {
         view! {
             <For
@@ -393,45 +472,85 @@ pub(super) fn FaceLayer(
                     let key = mark.key;
                     let face = mark.face.clone();
                     let found = mark.found;
+                    let label = mark.label.clone();
                     let number = move || {
                         faces.marks.with(|m| m.iter().position(|m| m.key == key).map_or(0, |i| i + 1))
                     };
                     let lit = move || faces.lit.get() == Some(key);
-                    // The box is made again as it moves: only the first one
-                    // comes in.
+                    // Just found: in after the ones before it, the first
+                    // time only.
                     let entered = StoredValue::new(false);
+                    let keys = {
+                        let face = face.clone();
+                        move |e: KeyboardEvent| {
+                            match e.key().as_str() {
+                                "Enter" | "Escape" => focus_soon(face_tool_id(key), false),
+                                pressed => {
+                                    if e.ctrl_key() || e.meta_key() || e.alt_key() {
+                                        return;
+                                    }
+                                    let shape = size.get_untracked();
+                                    let Some(next) = face
+                                        .get_untracked()
+                                        .and_then(|now| keyed(now, pressed, e.shift_key(), shape))
+                                    else {
+                                        return;
+                                    };
+                                    face.set(Some(next));
+                                }
+                            }
+                            // Not the stage's: it would step to another post.
+                            e.prevent_default();
+                            e.stop_propagation();
+                        }
+                    };
+                    let shown = {
+                        let face = face.clone();
+                        Memo::new(move |_| face.with(Option::is_some))
+                    };
                     move || {
-                        let shown = face.get()?;
-                        // Just found: in after the ones before it.
-                        let order = if entered.get_value() {
-                            None
-                        } else {
-                            entered.set_value(true);
-                            faces.arrival(key)
-                        };
-                        let style = match order {
-                            Some(i) => format!("{}; --i: {i}", place_style(shown)),
-                            None => place_style(shown),
-                        };
-                        Some(view! {
-                            <div
-                                class="face-box edit face-edit"
-                                class:lit=lit
-                                class:found=found
-                                class:arriving=order.is_some()
-                                data-key=key.to_string()
-                                style=style
-                            >
-                                <span class="face-number">{number}</span>
-                                <Show when=lit>
-                                    {Corner::ALL
-                                        .into_iter()
-                                        .map(|c| {
-                                            view! { <span class="face-handle" data-corner=c.as_str()></span> }
-                                        })
-                                        .collect_view()}
-                                </Show>
-                            </div>
+                        shown.get().then(|| {
+                            let order = if entered.get_value() {
+                                None
+                            } else {
+                                entered.set_value(true);
+                                faces.arrival(key)
+                            };
+                            let face = face.clone();
+                            // The same element as it moves, so it keeps the focus.
+                            let style = move || {
+                                let place = face.get().map(place_style).unwrap_or_default();
+                                match order {
+                                    Some(i) => format!("{place}; --i: {i}"),
+                                    None => place,
+                                }
+                            };
+                            let label = label.clone();
+                            view! {
+                                <div
+                                    class="face-box edit face-edit"
+                                    id=face_box_id(key)
+                                    class:lit=lit
+                                    class:found=found
+                                    class:arriving=order.is_some()
+                                    data-key=key.to_string()
+                                    style=style
+                                    role="application"
+                                    tabindex=move || lit().then_some("0")
+                                    aria-label=move || t!("people-face-box", person = label())
+                                    on:keydown=keys.clone()
+                                >
+                                    <span class="face-number" aria-hidden="true">{number}</span>
+                                    <Show when=lit>
+                                        {Corner::ALL
+                                            .into_iter()
+                                            .map(|c| {
+                                                view! { <span class="face-handle" data-corner=c.as_str()></span> }
+                                            })
+                                            .collect_view()}
+                                    </Show>
+                                </div>
+                            }
                         })
                     }
                 }
@@ -476,7 +595,12 @@ pub(super) fn FaceLayer(
     view! {
         <div
             node_ref=layer
+            id=LAYER_ID
             class="face-layer"
+            // Drawing, it has the focus, and says what the keys do there.
+            tabindex=move || drawing.get().then_some("-1")
+            role=move || drawing.get().then_some("application")
+            aria-label=move || (drawing.get() && !faces.looking.get()).then(|| t!("people-draw-hint-keys"))
             class:drawing=move || drawing.get()
             class:face-edit=move || drawing.get()
             style=style
@@ -511,7 +635,7 @@ pub(super) fn FaceLayer(
                 <span class="face-hint">{move || t!("find-people-looking")}</span>
             </Show>
             <Show when=move || drawing.get() && !faces.looking.get()>
-                <span class="face-hint" aria-live="polite">
+                <span class="face-hint" aria-hidden="true">
                     {move || t!("people-draw-hint")}
                 </span>
             </Show>

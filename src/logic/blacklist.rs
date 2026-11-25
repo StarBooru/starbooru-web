@@ -3,6 +3,8 @@
 //! search it was opened from doesn't name, and a guest's list kept on the
 //! device.
 
+use std::collections::BTreeMap;
+
 use serde::{Deserialize, Serialize};
 use starbooru_core::blacklist::{BlacklistError, Entry, split_entries};
 use starbooru_core::{PostTag, Rating, parse_query};
@@ -129,13 +131,24 @@ pub fn put_back(now: &[String], before: &[String], entry: &str) -> Vec<String> {
     join(&tags, &ratings)
 }
 
+/// What each tag a search asked for names in the tag tree: the tag it is
+/// (an alias resolves to its tag) and the tags above it, as `GET
+/// /tags/{name}` says, for the tags looked up so far. A tag the server
+/// doesn't have names nothing more.
+pub type Above = BTreeMap<String, Vec<String>>;
+
 /// The entries a post matched that the search it was opened from doesn't
 /// name, so they still cover it. A search names a rating entry with the
-/// same `rating:`, and a tag entry with the tag, or with a tag of the post
-/// whose tree it heads (`details` has each tag's top). The server shows
-/// such a post in that search's results; with one entry left unnamed it
-/// wouldn't.
-pub fn still_hidden(blacklisted: &[String], q: &str, details: &[PostTag]) -> Vec<String> {
+/// same `rating:`, and a tag entry with the tag, with a tag of the post
+/// whose tree it heads (`details` has each tag's top), or with a tag under
+/// it (`above` has what was looked up). The server shows such a post in
+/// that search's results; with one entry left unnamed it wouldn't.
+pub fn still_hidden(
+    blacklisted: &[String],
+    q: &str,
+    details: &[PostTag],
+    above: &Above,
+) -> Vec<String> {
     let Ok(search) = parse_query(q) else {
         return blacklisted.to_vec();
     };
@@ -145,6 +158,9 @@ pub fn still_hidden(blacklisted: &[String], q: &str, details: &[PostTag]) -> Vec
                 || details
                     .iter()
                     .any(|t| t.name == *asked && t.section.as_deref() == Some(entry))
+                || above
+                    .get(asked)
+                    .is_some_and(|names| names.iter().any(|n| n == entry))
         })
     };
     blacklisted
@@ -156,6 +172,33 @@ pub fn still_hidden(blacklisted: &[String], q: &str, details: &[PostTag]) -> Vec
         })
         .cloned()
         .collect()
+}
+
+/// The tags of search `q` to look up in the tree before a post it opened
+/// can be shown uncovered: none while only ratings cover it, or once each
+/// is in `above`. A tag in the middle of the tree has its top in the post's
+/// details already, but not the tags between.
+pub fn to_look_up(
+    blacklisted: &[String],
+    q: &str,
+    details: &[PostTag],
+    above: &Above,
+) -> Vec<String> {
+    let covered_by_a_tag = still_hidden(blacklisted, q, details, above)
+        .iter()
+        .any(|e| matches!(Entry::parse(e), Ok(Entry::Tag(_))));
+    if !covered_by_a_tag {
+        return Vec::new();
+    }
+    parse_query(q)
+        .map(|search| {
+            search
+                .include
+                .into_iter()
+                .filter(|t| !above.contains_key(t))
+                .collect()
+        })
+        .unwrap_or_default()
 }
 
 /// A guest's own list on one server, kept on the device. Until one is
@@ -291,22 +334,61 @@ mod tests {
     fn a_search_that_names_an_entry_uncovers_it() {
         let flags = list(&["cat", "rating:explicit"]);
         let details = [tag("cat", None), tag("boots", Some("footwear"))];
-        assert_eq!(still_hidden(&flags, "", &details), flags);
+        let none = Above::new();
+        let hidden = |entries: &[String], q: &str| still_hidden(entries, q, &details, &none);
+        assert_eq!(hidden(&flags, ""), flags);
         // Only what the search names: the rest still covers it.
-        assert_eq!(
-            still_hidden(&flags, "cat sky", &details),
-            ["rating:explicit"]
-        );
-        assert!(still_hidden(&flags, "cat rating:e", &details).is_empty());
-        assert!(still_hidden(&flags, "rating:explicit artist:cat", &details).is_empty());
+        assert_eq!(hidden(&flags, "cat sky"), ["rating:explicit"]);
+        assert!(hidden(&flags, "cat rating:e").is_empty());
+        assert!(hidden(&flags, "rating:explicit artist:cat").is_empty());
         // Leaving a tag out, or the rating, names nothing.
-        assert_eq!(still_hidden(&flags, "-cat -rating:e", &details), flags);
+        assert_eq!(hidden(&flags, "-cat -rating:e"), flags);
         // A tag under the entry's tree, as the post's tags say.
         let footwear = list(&["footwear"]);
-        assert!(still_hidden(&footwear, "boots", &details).is_empty());
-        assert_eq!(still_hidden(&footwear, "sandals", &details), footwear);
+        assert!(hidden(&footwear, "boots").is_empty());
+        assert_eq!(hidden(&footwear, "sandals"), footwear);
         // A search that doesn't read names nothing.
-        assert_eq!(still_hidden(&flags, "rating:zzz cat", &details), flags);
+        assert_eq!(hidden(&flags, "rating:zzz cat"), flags);
+    }
+
+    #[test]
+    fn a_tag_in_the_middle_of_the_tree_is_named_by_the_tags_under_it() {
+        // clothing › footwear › boots: the post's details know only the top.
+        let details = [tag("boots", Some("clothing")), tag("sky", None)];
+        let footwear = list(&["footwear"]);
+        let mut above = Above::new();
+        assert_eq!(still_hidden(&footwear, "boots", &details, &above), footwear);
+        assert_eq!(
+            to_look_up(&footwear, "boots sky", &details, &above),
+            ["boots", "sky"]
+        );
+        above.insert("boots".into(), list(&["boots", "clothing", "footwear"]));
+        above.insert("sky".into(), list(&["sky"]));
+        assert!(still_hidden(&footwear, "boots", &details, &above).is_empty());
+        assert!(to_look_up(&footwear, "boots sky", &details, &above).is_empty());
+        // The top is named as before, and a tag not under it names nothing.
+        assert!(still_hidden(&list(&["clothing"]), "boots", &details, &above).is_empty());
+        assert_eq!(still_hidden(&footwear, "sky", &details, &above), footwear);
+        // An alias stands for its tag.
+        above.insert("kitty".into(), list(&["cat"]));
+        assert!(still_hidden(&list(&["cat"]), "kitty", &details, &above).is_empty());
+        // Nothing to look up while the search names every entry, only a
+        // rating covers the post, or the search has no tags.
+        let rated = list(&["rating:explicit"]);
+        assert!(to_look_up(&rated, "boots", &details, &Above::new()).is_empty());
+        assert!(to_look_up(&list(&["boots"]), "boots", &details, &Above::new()).is_empty());
+        assert!(to_look_up(&footwear, "rating:s", &details, &Above::new()).is_empty());
+        // Only what isn't known yet.
+        assert_eq!(
+            to_look_up(&footwear, "sky moon", &details, &above),
+            ["moon"]
+        );
+        // A rating left unnamed still covers it, whatever the tree says.
+        let both = list(&["footwear", "rating:explicit"]);
+        assert_eq!(
+            still_hidden(&both, "boots", &details, &above),
+            ["rating:explicit"]
+        );
     }
 
     #[test]

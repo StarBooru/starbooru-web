@@ -188,6 +188,8 @@ html:has(.stage) { overscroll-behavior-x: none; }
 .stage.swiping > .face-layer { opacity: 0; }
 /* Marking a face: the next drag on the picture draws it. */
 .face-layer.drawing { pointer-events: auto; cursor: crosshair; touch-action: none; }
+/* Drawing already shows on it: the hint and the cursor. */
+.face-layer:focus { outline: none; }
 .face-box {
   position: absolute; box-sizing: border-box;
   border: calc(2.5px / var(--z, 1)) solid var(--primary); border-radius: calc(12px / var(--z, 1));
@@ -199,6 +201,12 @@ html:has(.stage) { overscroll-behavior-x: none; }
 .face-box.edit { pointer-events: auto; cursor: pointer; touch-action: none; border-style: dashed; animation: none; }
 .face-box.edit.lit { cursor: move; border-style: solid; background: oklch(from var(--primary) l c h / 0.14); }
 .face-box.band { border-style: dashed; background: oklch(from var(--primary) l c h / 0.12); animation: none; }
+/* Moved and resized with the keys: a ring a little outside the box. */
+.face-box.edit:focus { outline: none; }
+.face-box.edit:focus-visible {
+  outline: calc(3px / var(--z, 1)) solid var(--primary); outline-offset: calc(3px / var(--z, 1));
+}
+.face-box.edit.found:focus-visible { outline-color: var(--tertiary); }
 .face-number {
   position: absolute; left: 0; bottom: 100%; margin-bottom: calc(4px / var(--z, 1));
   display: grid; place-items: center; min-width: 22px; height: 22px; padding: 0 6px; border-radius: 999px;

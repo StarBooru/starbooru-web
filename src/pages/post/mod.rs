@@ -21,7 +21,7 @@ use std::cell::RefCell;
 use std::collections::VecDeque;
 use std::sync::Arc;
 
-use chrono::Utc;
+use chrono::{DateTime, Utc};
 use leptos::prelude::*;
 use leptos::task::spawn_local;
 use leptos_router::NavigateOptions;
@@ -50,9 +50,9 @@ use crate::components::reverse::ReverseMenu;
 use crate::components::snackbar::{notify, notify_undo};
 use crate::components::stars::StarVote;
 use crate::components::tag_menu::TagPress;
-use crate::logic::blacklist::still_hidden;
+use crate::logic::blacklist::{still_hidden, to_look_up};
 use crate::logic::editor::offer;
-use crate::logic::finding::{CHECKS_MS, waits_for_people};
+use crate::logic::finding::{next_look, waits_for_people};
 use crate::logic::people::{PeopleShown, closes_when_off, faces_pending, people_shown};
 use crate::logic::reverse::offered;
 use crate::logic::settings::{Group, anchored};
@@ -63,7 +63,7 @@ use crate::logic::viewer::{
 };
 use crate::logic::votes::{Ballot, Tally, next_vote};
 use crate::logic::zoom::Zoom;
-use crate::{blacklist, dom, instance, power, route, store};
+use crate::{activity, blacklist, dom, instance, power, route, store};
 
 /// Posts kept for the viewer to show at once: the tile just clicked and the
 /// neighbours fetched ahead.
@@ -187,7 +187,7 @@ fn hidden_by(p: &Post, q: &str) -> Vec<String> {
     if p.blacklisted.is_empty() || blacklist::uncovered(p.id) {
         return Vec::new();
     }
-    still_hidden(&p.blacklisted, q, &p.tag_details)
+    blacklist::with_above(|above| still_hidden(&p.blacklisted, q, &p.tag_details, above))
 }
 
 /// What the page can show.
@@ -504,6 +504,27 @@ pub fn PostView() -> impl IntoView {
         post.with(|p| p.as_deref().map(|p| hidden_by(p, &q)).unwrap_or_default())
     });
     let covered = Memo::new(move |_| covering.with(|c| !c.is_empty()));
+    // A search may name a tag under an entry, deeper than the post's tags
+    // say: where its tags sit in the tree is asked, and the cover follows.
+    Effect::new(move |_| {
+        if !covered.get() {
+            return;
+        }
+        let q = q.get();
+        let wanted = post.with(|p| {
+            p.as_deref()
+                .filter(|p| !q.trim().is_empty() && !blacklist::uncovered(p.id))
+                .map(|p| {
+                    blacklist::with_above(|above| {
+                        to_look_up(&p.blacklisted, &q, &p.tag_details, above)
+                    })
+                })
+                .unwrap_or_default()
+        });
+        if !wanted.is_empty() {
+            blacklist::look_up(wanted);
+        }
+    });
     let thumb = Memo::new(move |_| {
         if covered.get() {
             return None;
@@ -774,10 +795,12 @@ pub fn PostView() -> impl IntoView {
             }
         });
     };
-    // Asks for a new upload again at 3, 8 and 20 seconds, until its people
-    // come, the page moves on or someone starts marking them by hand. They
-    // come in one after another, their boxes passing over the picture.
-    let wait_for_people = move |id: i64| {
+    // Asks for a new upload again at 3, 8 and 20 seconds, then every ten
+    // while it's under three minutes old (`logic::finding::next_look`),
+    // until its people come, the page moves on or someone starts marking
+    // them by hand. They come in one after another, their boxes passing
+    // over the picture.
+    let wait_for_people = move |id: i64, created: DateTime<Utc>| {
         let at = generation.get_value();
         waiting_people.set(true);
         spawn_local(async move {
@@ -785,7 +808,9 @@ pub fn PostView() -> impl IntoView {
                 generation.try_get_value() == Some(at)
                     && people_editing.try_get_untracked() == Some(false)
             };
-            for ms in CHECKS_MS {
+            let mut looked = 0;
+            while let Some(ms) = next_look(looked, Utc::now() - created) {
+                looked += 1;
                 dom::sleep(ms).await;
                 if !still() {
                     break;
@@ -832,9 +857,10 @@ pub fn PostView() -> impl IntoView {
             return;
         };
         let fresh = id.get_untracked() == Some(p.id) && waited_for.get_value() != Some(p.id);
-        if fresh && waits_for_people(&p, Utc::now(), true) {
+        let looked_for = activity::people_looked_for(p.id);
+        if fresh && waits_for_people(&p, Utc::now(), true, looked_for) {
             waited_for.set_value(Some(p.id));
-            wait_for_people(p.id);
+            wait_for_people(p.id, p.created_at);
         }
     });
     let people_saved = Callback::new(move |p: Post| {

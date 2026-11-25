@@ -657,7 +657,7 @@ explore-people = Persone
 explore-people-all = Vedi tutte
 explore-popular-characters = Personaggi popolari
 explore-characters-note = nei post piaciuti { $when }
-explore-no-characters = Nessun post con personaggi è piaciuto { $when }.
+explore-no-characters = Nessun post piaciuto { $when } ha personaggi.
 nothing-matches = Nessun risultato per “{ $query }”.
 explore-recent = Visti di recente
 explore-recent-clear = Svuota
@@ -1005,6 +1005,8 @@ people-face-remove = Togli il viso
 people-face-remove-named = Togli il viso di { $person }
 people-face-show = Mostra dov'è { $person }
 people-draw-hint = Trascina sul viso
+people-draw-hint-keys = Trascina sul viso, o premi Invio per un riquadro al centro
+people-face-box = Viso di { $person }. Le frecce lo spostano, Maiusc con le frecce lo ridimensiona, Invio o Esc torna indietro.
 people-error-face = Il viso di { $person } esce dall'immagine. Prova a segnarlo di nuovo.
 people-posts =
     { $count ->
@@ -1013,7 +1015,11 @@ people-posts =
     }
 people-person = { $name }, { $posts }
 people-person-of = { $name }, { $franchise }, { $posts }
-people-person-voted = { $person }, { $votes } voti
+people-person-voted =
+    { $count ->
+        [one] { $person }, { $votes } voto
+       *[other] { $person }, { $votes } voti
+    }
 people-order = Ordina le persone
 people-by-franchise = Per franchise
 people-most-posts = Più post
@@ -1054,11 +1060,13 @@ find-people-found =
 find-people-none-new = Nessuna persona nuova
 find-people-none = Nessuna persona trovata
 find-people-starting = Il modello delle persone si sta avviando. Riprova tra un minuto.
+find-people-busy = Lo strumento Persone è occupato con altre immagini. Riprova tra un minuto.
 find-people-no-memory = Questo server non ha abbastanza memoria per trovare le persone.
-find-people-off = La ricerca delle persone è spenta su questo server.
+find-people-off = La ricerca delle persone è disattivata su questo server.
 find-people-no-picture = Questo post non ha un'immagine in cui cercare le persone.
 find-people-failed = L'IA non ha risposto: { $reason }.
 people-found-badge = Nuova
+people-found-again-badge = Aggiornata
 people-looking = Cerco le persone nell'immagine…
 post-details = Dettagli
 rating = Classificazione
@@ -1168,6 +1176,7 @@ upload-files = Scegli i file
 upload-folder = Scegli una cartella
 upload-folder-tags = Tagga i file con il nome della loro cartella
 upload-autotag = Fai aggiungere i tag all'AI
+upload-autotag-people = Fai aggiungere all'AI i tag e le persone
 upload-link = Aggiungi un link
 upload-clear = Svuota l'elenco
 upload-drop = Trascina o incolla qui file o link
@@ -1727,7 +1736,7 @@ admin-server-lead = Si applicano subito e hanno la precedenza sulle variabili d'
 admin-settings-unread = Le impostazioni non sono ancora state caricate. Ricarica la pagina e riprova.
 admin-home-title = Pagina iniziale
 admin-home-on = Mostra una pagina iniziale
-admin-home-on-hint = L'app si apre lì, e il logo ci riporta.
+admin-home-on-hint = L'app si apre su questa pagina e il logo porta qui.
 admin-home-heading = Titolo
 admin-home-subtitle = Riga sotto il titolo
 admin-home-query = Sfondo

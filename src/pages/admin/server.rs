@@ -22,7 +22,7 @@ use crate::api;
 use crate::components::banner::ErrorBanner;
 use crate::components::confirm::ConfirmButton;
 use crate::components::icons::{Ico, Icon};
-use crate::logic::admin::check_settings;
+use crate::logic::admin::{check_settings, described};
 use crate::logic::viewer::human_size;
 use crate::pages::trash::empty_whole_bin;
 use crate::route;
@@ -179,74 +179,110 @@ fn ServerCard(settings: RwSignal<Option<ServerSettings>>) -> impl IntoView {
             <p class="muted hint">{move || t!("admin-server-lead")}</p>
             <Show when=move || loaded.get() fallback=|| view! { <Waiting /> }>
                 <form on:submit=save on:input=move |_| saved.set(false)>
-                    <label class="field">
-                        <span>{move || t!("admin-name")}</span>
+                    <div class="field">
+                        <label for="admin-name">{move || t!("admin-name")}</label>
                         <input
+                            id="admin-name"
                             maxlength=MAX_INSTANCE_NAME_CHARS
                             autocomplete="off"
                             aria-invalid=move || invalid(!check.get().name_ok)
+                            aria-describedby=move || {
+                                described(&[
+                                    ("admin-name-error", !check.get().name_ok),
+                                    ("admin-name-hint", true),
+                                ])
+                            }
                             bind:value=name
                         />
                         <Show when=move || !check.get().name_ok>
-                            <small class="field-error">
+                            <small class="field-error" id="admin-name-error">
                                 {move || t!("admin-name-error", max = MAX_INSTANCE_NAME_CHARS)}
                             </small>
                         </Show>
-                        <small class="muted field-hint">{move || t!("admin-name-hint")}</small>
-                    </label>
+                        <small class="muted field-hint" id="admin-name-hint">
+                            {move || t!("admin-name-hint")}
+                        </small>
+                    </div>
                     <div class="field">
                         <label class="check">
-                            <input type="checkbox" bind:checked=open />
+                            <input
+                                type="checkbox"
+                                aria-describedby="admin-registration-hint"
+                                bind:checked=open
+                            />
                             <span>{move || t!("admin-registration")}</span>
                         </label>
-                        <small class="muted field-hint">{move || t!("admin-registration-hint")}</small>
+                        <small class="muted field-hint" id="admin-registration-hint">
+                            {move || t!("admin-registration-hint")}
+                        </small>
                     </div>
-                    <label class="field">
-                        <span>{move || t!("admin-trash-days")}</span>
+                    <div class="field">
+                        <label for="admin-trash-days">{move || t!("admin-trash-days")}</label>
                         <input
+                            id="admin-trash-days"
                             type="number"
                             inputmode="numeric"
                             min="0"
                             max=MAX_TRASH_DAYS
                             aria-invalid=move || invalid(!check.get().days_ok)
+                            aria-describedby=move || {
+                                described(&[
+                                    ("admin-trash-days-error", !check.get().days_ok),
+                                    ("admin-trash-days-hint", true),
+                                ])
+                            }
                             bind:value=days
                         />
                         <Show when=move || !check.get().days_ok>
-                            <small class="field-error">
+                            <small class="field-error" id="admin-trash-days-error">
                                 {move || t!("admin-trash-days-error", max = MAX_TRASH_DAYS)}
                             </small>
                         </Show>
-                        <small class="muted field-hint">{move || t!("admin-trash-days-hint")}</small>
-                    </label>
+                        <small class="muted field-hint" id="admin-trash-days-hint">
+                            {move || t!("admin-trash-days-hint")}
+                        </small>
+                    </div>
                     <div class="field">
                         <label class="check">
-                            <input type="checkbox" bind:checked=meta_tags />
+                            <input
+                                type="checkbox"
+                                aria-describedby="admin-auto-tags-hint"
+                                bind:checked=meta_tags
+                            />
                             <span>{move || t!("admin-auto-tags")}</span>
                         </label>
-                        <small class="muted field-hint">{move || t!("admin-auto-tags-hint")}</small>
+                        <small class="muted field-hint" id="admin-auto-tags-hint">
+                            {move || t!("admin-auto-tags-hint")}
+                        </small>
                     </div>
                     <Show when=move || public.get()>
-                        <label class="field tag-votes-field">
-                            <span>{move || t!("admin-tag-votes")}</span>
+                        <div class="field tag-votes-field">
+                            <label for="tag-votes">{move || t!("admin-tag-votes")}</label>
                             <span class="minus-input">
                                 <span class="minus" aria-hidden="true">"\u{2212}"</span>
                                 <input
+                                    id="tag-votes"
                                     type="number"
                                     inputmode="numeric"
                                     min="0"
                                     max=MAX_TAG_VOTE_THRESHOLD
                                     aria-invalid=move || invalid(!check.get().threshold_ok)
-                                    aria-describedby="tag-votes-note"
+                                    aria-describedby=move || {
+                                        described(&[
+                                            ("tag-votes-error", !check.get().threshold_ok),
+                                            ("tag-votes-note", true),
+                                        ])
+                                    }
                                     bind:value=threshold
                                 />
                             </span>
                             <Show when=move || !check.get().threshold_ok>
-                                <small class="field-error">
+                                <small class="field-error" id="tag-votes-error">
                                     {move || t!("admin-tag-votes-error", max = MAX_TAG_VOTE_THRESHOLD)}
                                 </small>
                             </Show>
                             <small class="muted field-hint" id="tag-votes-note">{threshold_note}</small>
-                        </label>
+                        </div>
                     </Show>
                     {move || error.get().map(|message| view! { <ErrorBanner message=message /> })}
                     <div class="row-end">

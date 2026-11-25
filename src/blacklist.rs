@@ -6,7 +6,8 @@
 //! what the app kept of posts the list may now hide or show.
 //!
 //! Also the posts uncovered with Show in the viewer: for the rest of the
-//! visit, or until the list changes.
+//! visit, or until the list changes; and where the tags a search names sit
+//! in the tag tree, looked up once a visit for a post it would leave covered.
 
 use std::cell::{Cell, RefCell};
 use std::collections::HashSet;
@@ -16,7 +17,7 @@ use leptos::task::spawn_local;
 
 use crate::components::mention;
 use crate::components::snackbar::notify_undo;
-use crate::logic::blacklist::{self, guest_owner};
+use crate::logic::blacklist::{self, Above, guest_owner};
 use crate::pages::{gallery, home, post};
 use crate::{api, instance, store};
 
@@ -47,8 +48,11 @@ thread_local! {
     static WANTED: RefCell<Option<(String, Vec<String>)>> = const { RefCell::new(None) };
     static SENDING: Cell<bool> = const { Cell::new(false) };
     static UNCOVERED: RefCell<HashSet<i64>> = RefCell::new(HashSet::new());
-    /// Bumped when the uncovered posts change.
+    /// Bumped when the uncovered posts change, or what's known of the tree.
     static SHOWN: ArcRwSignal<u32> = ArcRwSignal::new(0);
+    /// Where the tags searched for sit in the tree, and those being asked.
+    static ABOVE: RefCell<Above> = const { RefCell::new(Above::new()) };
+    static ASKING: RefCell<HashSet<String>> = RefCell::new(HashSet::new());
 }
 
 /// Whose list the app uses now: the account's, or the guests' of a server,
@@ -259,9 +263,44 @@ pub fn uncovered(id: i64) -> bool {
     UNCOVERED.with_borrow(|u| u.contains(&id))
 }
 
-/// Makes the view calling it follow the posts uncovered.
+/// Makes the view calling it follow the posts uncovered, and what's known
+/// of the tree.
 pub fn track_uncovered() {
     SHOWN.with(|s| s.track());
+}
+
+/// Reads what's known of where the tags searched for sit in the tree.
+pub fn with_above<R>(f: impl FnOnce(&Above) -> R) -> R {
+    ABOVE.with_borrow(f)
+}
+
+/// Asks the server where `tags` sit in the tree, each once a visit. A tag
+/// it doesn't have names nothing; one that couldn't be asked is asked again
+/// next time.
+pub fn look_up(tags: Vec<String>) {
+    for tag in tags {
+        let known = ABOVE.with_borrow(|a| a.contains_key(&tag));
+        if known || !ASKING.with_borrow_mut(|a| a.insert(tag.clone())) {
+            continue;
+        }
+        spawn_local(async move {
+            let name = tag.clone();
+            let answer = api::fetch(move |c| async move { c.tag(&name).await }).await;
+            ASKING.with_borrow_mut(|a| a.remove(&tag));
+            let names = match answer {
+                Ok(detail) => {
+                    let mut names: Vec<String> =
+                        detail.ancestors.into_iter().map(|t| t.name).collect();
+                    names.push(detail.tag.name);
+                    names
+                }
+                Err(failure) if failure.missing => Vec::new(),
+                Err(_) => return,
+            };
+            ABOVE.with_borrow_mut(|a| a.insert(tag, names));
+            SHOWN.with(|s| s.update(|n| *n = n.wrapping_add(1)));
+        });
+    }
 }
 
 /// Forgets the list at sign-out or sign-in, so the next reader's is read.
@@ -270,4 +309,5 @@ pub fn forget() {
     WANTED.with_borrow_mut(|w| *w = None);
     set_saving(Saving::Idle);
     UNCOVERED.with_borrow_mut(HashSet::clear);
+    ABOVE.with_borrow_mut(Above::clear);
 }

@@ -24,6 +24,7 @@ use crate::api::{self, Refused};
 use crate::components::snackbar::notify;
 use crate::dom;
 use crate::files::{self, Picked};
+use crate::logic::finding::Unlooked;
 use crate::logic::jobs::{Ended, finished, merge, poll_every};
 use crate::logic::queue::{AT_ONCE, Batch, Outcome, Queue, Source, Status};
 use crate::logic::upload::{Refusal, duplicate_post, human_size, refusal, too_big};
@@ -70,6 +71,15 @@ thread_local! {
     static WATCHED: RefCell<HashSet<i64>> = RefCell::new(HashSet::new());
     /// How the files sent since the queue was last still ended.
     static RUN: Cell<Ended> = const { Cell::new(Ended { done: 0, duplicate: 0, failed: 0 }) };
+    /// The uploads of this visit sent with the AI off, which the server
+    /// finds no people in.
+    static UNLOOKED: RefCell<Unlooked> = RefCell::new(Unlooked::default());
+}
+
+/// Whether the server looks for the people of post `id` by itself: not
+/// when it was uploaded here with the AI off.
+pub fn people_looked_for(id: i64) -> bool {
+    UNLOOKED.with_borrow(|u| u.looked_for(id))
 }
 
 /// Reads the queue. Inside a view, it redraws when the queue changes.
@@ -336,13 +346,14 @@ async fn send(key: u64, attempt: u32) {
         );
         return;
     }
+    let autotag = plan.autotag;
     let upload = FileUpload {
         file_name: name.clone(),
         size,
         tags: plan.tags,
         rating: plan.rating,
         source: plan.source,
-        autotag: plan.autotag,
+        autotag,
     };
     let reading = Rc::clone(&stop);
     let work = api::attempt(move |client| async move {
@@ -387,7 +398,10 @@ async fn send(key: u64, attempt: u32) {
         return;
     }
     let outcome = match result {
-        Ok(post) => Outcome::Posted(post.id),
+        Ok(post) => {
+            UNLOOKED.with_borrow_mut(|u| u.uploaded(post.id, autotag));
+            Outcome::Posted(post.id)
+        }
         Err(refused) => outcome_of(refused, limit),
     };
     end(key, attempt, outcome);
@@ -430,6 +444,7 @@ async fn send_imports(batch: Vec<(u64, ImportRequest)>) {
     for chunk in batch.chunks(MAX_IMPORT_BATCH) {
         let keys: Vec<u64> = chunk.iter().map(|(k, _)| *k).collect();
         let requests: Vec<ImportRequest> = chunk.iter().map(|(_, r)| r.clone()).collect();
+        let sent = requests.clone();
         let answer = api::call(move |c| async move { c.queue_imports(requests).await }).await;
         // Signed out meanwhile: the list was that account's, and has gone.
         if store::owner() != owner {
@@ -437,6 +452,7 @@ async fn send_imports(batch: Vec<(u64, ImportRequest)>) {
         }
         match answer {
             Ok(jobs) => {
+                UNLOOKED.with_borrow_mut(|u| u.queued(&sent, &jobs));
                 WATCHED.with_borrow_mut(|w| w.extend(jobs.iter().map(|j| j.id)));
                 JOBS.with(|j| j.update(|list| *list = merge(list, jobs)));
                 update(|q| q.imported(&keys));
@@ -459,6 +475,7 @@ pub async fn queue_imports(requests: Vec<ImportRequest>) -> Result<(), String> {
         if store::owner() != owner {
             return Ok(());
         }
+        UNLOOKED.with_borrow_mut(|u| u.queued(chunk, &jobs));
         WATCHED.with_borrow_mut(|w| w.extend(jobs.iter().map(|j| j.id)));
         JOBS.with(|j| j.update(|list| *list = merge(list, jobs)));
     }
@@ -514,6 +531,7 @@ async fn poll() {
     if store::owner() != owner {
         return;
     }
+    UNLOOKED.with_borrow_mut(|u| u.imports(&now));
     let ended = WATCHED.with_borrow_mut(|w| finished(w, &now));
     if let Some(ended) = ended {
         // Out of any view: the language is read, not followed.
@@ -598,6 +616,7 @@ pub fn Activity() -> impl IntoView {
         WATCHED.with_borrow_mut(HashSet::clear);
         RUN.set(Ended::default());
         STALE.set(true);
+        UNLOOKED.with_borrow_mut(|u| *u = Unlooked::default());
     });
 }
 

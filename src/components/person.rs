@@ -12,6 +12,16 @@ use crate::api;
 use crate::logic::characters::{signed, spoken};
 use crate::logic::search::short_count;
 
+/// A popular character's name for a reader, with the votes their posts got.
+fn voted(person: String, votes: i64) -> String {
+    t!(
+        "people-person-voted",
+        person = person,
+        votes = signed(votes),
+        count = votes
+    )
+}
+
 /// One person. `href` is where it leads; `votes`, given for popular
 /// characters, shows as a badge; `franchise` says whether to name the
 /// franchise, which a heading over it may say already. `index` staggers
@@ -49,7 +59,7 @@ pub fn PersonFace(
         ),
     };
     let label = match votes {
-        Some(v) => t!("people-person-voted", person = label, votes = signed(v)),
+        Some(v) => voted(label, v),
         None => label,
     };
     // The face, else a post's thumbnail; a picture that won't load gives
@@ -102,5 +112,24 @@ pub fn PersonFace(
             {series}
             {votes}
         </a>
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::i18n::{Lang, set_lang};
+
+    #[test]
+    fn one_vote_or_many() {
+        set_lang(Lang::English);
+        assert_eq!(voted("saber".into(), 1), "saber, +1 vote");
+        assert_eq!(voted("saber".into(), 12), "saber, +12 votes");
+        assert_eq!(voted("saber".into(), -1), "saber, -1 vote");
+        assert_eq!(voted("saber".into(), 0), "saber, 0 votes");
+        set_lang(Lang::Italian);
+        assert_eq!(voted("saber".into(), 1), "saber, +1 voto");
+        assert_eq!(voted("saber".into(), 3), "saber, +3 voti");
+        set_lang(Lang::English);
     }
 }

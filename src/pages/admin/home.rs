@@ -16,6 +16,7 @@ use crate::components::banner::ErrorBanner;
 use crate::components::brand::Mark;
 use crate::components::icons::{Ico, Icon};
 use crate::components::tag_box::TagBox;
+use crate::logic::admin::described;
 use crate::logic::gallery::tint;
 use crate::logic::home::{HomeField, check_home, field_of, home_error_text, preview_query};
 use crate::logic::search::{Latest, TYPING_PAUSE_MS};
@@ -113,8 +114,10 @@ pub(super) fn HomeCard(settings: RwSignal<Option<ServerSettings>>) -> impl IntoV
         });
     };
     let invalid = |bad: bool| if bad { "true" } else { "false" };
-    let error_line =
-        |text: Option<String>| text.map(|m| view! { <small class="field-error break">{m}</small> });
+    // Under the field and outside its label, so it isn't read as its name.
+    let error_line = |id: &'static str, text: Option<String>| {
+        text.map(|m| view! { <small class="field-error break" id=id>{m}</small> })
+    };
 
     view! {
         <section class="card home-card" id="home">
@@ -149,25 +152,29 @@ pub(super) fn HomeCard(settings: RwSignal<Option<ServerSettings>>) -> impl IntoV
                     </button>
                     <div class="home-form">
                         <div class="home-fields">
-                            <label class="field">
-                                <span>{move || t!("admin-home-heading")}</span>
+                            <div class="field">
+                                <label for="home-title">{move || t!("admin-home-heading")}</label>
                                 <input
+                                    id="home-title"
                                     autocomplete="off"
                                     placeholder=move || name.get()
                                     aria-invalid=move || invalid(title_problem().is_some())
+                                    aria-describedby=move || described(&[("home-title-error", title_problem().is_some())])
                                     bind:value=title
                                 />
-                                {move || error_line(title_problem())}
-                            </label>
-                            <label class="field">
-                                <span>{move || t!("admin-home-subtitle")}</span>
+                                {move || error_line("home-title-error", title_problem())}
+                            </div>
+                            <div class="field">
+                                <label for="home-subtitle">{move || t!("admin-home-subtitle")}</label>
                                 <input
+                                    id="home-subtitle"
                                     autocomplete="off"
                                     aria-invalid=move || invalid(subtitle_problem().is_some())
+                                    aria-describedby=move || described(&[("home-subtitle-error", subtitle_problem().is_some())])
                                     bind:value=subtitle
                                 />
-                                {move || error_line(subtitle_problem())}
-                            </label>
+                                {move || error_line("home-subtitle-error", subtitle_problem())}
+                            </div>
                             <div class="field">
                                 <label for="home-query">{move || t!("admin-home-query")}</label>
                                 <TagBox
@@ -176,25 +183,28 @@ pub(super) fn HomeCard(settings: RwSignal<Option<ServerSettings>>) -> impl IntoV
                                     one_line=true
                                     floating=true
                                     invalid=Signal::derive(move || query_problem().is_some())
+                                    described_by=Signal::derive(move || described(&[("home-query-error", query_problem().is_some())]))
                                     placeholder=Signal::derive(|| t!("admin-home-query-placeholder"))
                                 />
-                                {move || error_line(query_problem())}
+                                {move || error_line("home-query-error", query_problem())}
                             </div>
-                            <label class="field">
-                                <span class="range-head">
+                            <div class="field">
+                                <label class="range-head" for="home-posts">
                                     {move || t!("admin-home-posts")}
                                     <strong class="range-value">{move || posts.get()}</strong>
-                                </span>
+                                </label>
                                 <input
+                                    id="home-posts"
                                     type="range"
                                     min=MIN_HOME_POSTS
                                     max=MAX_HOME_POSTS
                                     step="1"
                                     aria-invalid=move || invalid(posts_problem().is_some())
+                                    aria-describedby=move || described(&[("home-posts-error", posts_problem().is_some())])
                                     bind:value=posts
                                 />
-                                {move || error_line(posts_problem())}
-                            </label>
+                                {move || error_line("home-posts-error", posts_problem())}
+                            </div>
                         </div>
                         <HomePreview
                             name=name

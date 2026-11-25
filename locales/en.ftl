@@ -1008,6 +1008,8 @@ people-face-remove = Remove the face
 people-face-remove-named = Remove the face of { $person }
 people-face-show = Show where { $person } is
 people-draw-hint = Drag over the face
+people-draw-hint-keys = Drag over the face, or press Enter for a box in the middle
+people-face-box = Face of { $person }. The arrows move it, Shift with the arrows resizes it, Enter or Escape goes back.
 people-error-face = The face of { $person } isn't inside the picture. Mark it again.
 people-posts =
     { $count ->
@@ -1016,7 +1018,11 @@ people-posts =
     }
 people-person = { $name }, { $posts }
 people-person-of = { $name }, { $franchise }, { $posts }
-people-person-voted = { $person }, { $votes } votes
+people-person-voted =
+    { $count ->
+        [one] { $person }, { $votes } vote
+       *[other] { $person }, { $votes } votes
+    }
 people-order = Order people
 people-by-franchise = By franchise
 people-most-posts = Most posts
@@ -1057,11 +1063,13 @@ find-people-found =
 find-people-none-new = No one new found
 find-people-none = No one found
 find-people-starting = The People model is starting. Try again in a minute.
+find-people-busy = The People tool is busy with other pictures. Try again in a minute.
 find-people-no-memory = This server doesn't have enough memory to find people.
 find-people-off = Finding people is turned off on this server.
 find-people-no-picture = This post has no picture to find people in.
 find-people-failed = The AI didn't answer: { $reason }.
 people-found-badge = New
+people-found-again-badge = Updated
 people-looking = Looking for the people in the picture…
 post-details = Details
 rating = Rating
@@ -1171,6 +1179,7 @@ upload-files = Choose files
 upload-folder = Choose a folder
 upload-folder-tags = Tag files with their folder name
 upload-autotag = Let the AI tag these uploads
+upload-autotag-people = Let the AI tag these uploads and find their people
 upload-link = Add a link
 upload-clear = Clear list
 upload-drop = Drop or paste files or links

@@ -114,14 +114,55 @@ pub fn drawn(from: (f64, f64), to: (f64, f64), shape: Option<(i32, i32)>) -> Fac
     fit(from.0, from.1, right, bottom)
 }
 
-/// The square box a tap at `at` makes, around it.
-pub fn tapped(at: (f64, f64), shape: Option<(i32, i32)>) -> FaceBox {
-    let (w, h) = square(shape, TAP);
+/// A square `per_mille` thousandths of the shorter side around `at`.
+fn square_at(at: (f64, f64), shape: Option<(i32, i32)>, per_mille: f64) -> FaceBox {
+    let (w, h) = square(shape, per_mille);
     let (left, top) = (at.0 - w / 2.0, at.1 - h / 2.0);
     // Kept whole at the picture's edges: moved in rather than cut.
     let left = left.clamp(0.0, (SCALE - w).max(0.0));
     let top = top.clamp(0.0, (SCALE - h).max(0.0));
     fit(left, top, left + w, top + h)
+}
+
+/// The square box a tap at `at` makes, around it.
+pub fn tapped(at: (f64, f64), shape: Option<(i32, i32)>) -> FaceBox {
+    square_at(at, shape, TAP)
+}
+
+/// A box marked from the keyboard is a square this many thousandths of the
+/// shorter side.
+const PLACED: f64 = 250.0;
+/// How far an arrow moves a box, or with Shift resizes it, in thousandths.
+const KEY_STEP: f64 = 10.0;
+
+/// The box marked from the keyboard: a square in the middle of the picture,
+/// for the arrows to move and resize.
+pub fn centred(shape: Option<(i32, i32)>) -> FaceBox {
+    square_at((SCALE / 2.0, SCALE / 2.0), shape, PLACED)
+}
+
+/// `face` after the key `key` (as the browser names it): an arrow moves it,
+/// and with `shift` resizes it from its bottom-right corner, inside the
+/// picture and never smaller than the least. `None` for any other key.
+pub fn keyed(face: FaceBox, key: &str, shift: bool, shape: Option<(i32, i32)>) -> Option<FaceBox> {
+    let (dx, dy) = match key {
+        "ArrowLeft" => (-KEY_STEP, 0.0),
+        "ArrowRight" => (KEY_STEP, 0.0),
+        "ArrowUp" => (0.0, -KEY_STEP),
+        "ArrowDown" => (0.0, KEY_STEP),
+        _ => return None,
+    };
+    if !shift {
+        return Some(moved(face, dx, dy));
+    }
+    let right = f64::from(face.x) + f64::from(face.w);
+    let bottom = f64::from(face.y) + f64::from(face.h);
+    Some(resized(
+        face,
+        Corner::BottomRight,
+        (right + dx, bottom + dy),
+        shape,
+    ))
 }
 
 /// `face` moved by `dx`, `dy` on the box's scale, its size kept and its
@@ -365,6 +406,54 @@ mod tests {
             at_box(0, 840, 160, 160)
         );
         assert!(tapped((1000.0, 0.0), None).is_valid());
+    }
+
+    #[test]
+    fn the_keyboard_marks_a_square_in_the_middle() {
+        assert_eq!(centred(Some((1000, 1000))), at_box(375, 375, 250, 250));
+        // A square on a wide picture: narrower on the box's scale.
+        assert_eq!(centred(Some((2000, 1000))), at_box(438, 375, 125, 250));
+        assert_eq!(centred(Some((1000, 4000))), at_box(375, 469, 250, 63));
+        assert!(centred(None).is_valid());
+        assert!(centred(Some((0, 0))).is_valid());
+    }
+
+    #[test]
+    fn the_arrows_move_a_box_and_with_shift_resize_it() {
+        let shape = Some((1000, 1000));
+        let face = at_box(100, 100, 200, 200);
+        let key = |k: &str, shift| keyed(face, k, shift, shape);
+        assert_eq!(key("ArrowLeft", false), Some(at_box(90, 100, 200, 200)));
+        assert_eq!(key("ArrowRight", false), Some(at_box(110, 100, 200, 200)));
+        assert_eq!(key("ArrowUp", false), Some(at_box(100, 90, 200, 200)));
+        assert_eq!(key("ArrowDown", false), Some(at_box(100, 110, 200, 200)));
+        // Shift: the top-left corner stays, the bottom-right one moves.
+        assert_eq!(key("ArrowRight", true), Some(at_box(100, 100, 210, 200)));
+        assert_eq!(key("ArrowLeft", true), Some(at_box(100, 100, 190, 200)));
+        assert_eq!(key("ArrowDown", true), Some(at_box(100, 100, 200, 210)));
+        assert_eq!(key("ArrowUp", true), Some(at_box(100, 100, 200, 190)));
+        // Other keys are someone else's.
+        assert_eq!(key("Enter", false), None);
+        assert_eq!(key("a", true), None);
+        // At the edges and at the least, it stops.
+        let corner = at_box(0, 990, 30, 10);
+        assert_eq!(keyed(corner, "ArrowLeft", false, shape), Some(corner));
+        assert_eq!(keyed(corner, "ArrowDown", false, shape), Some(corner));
+        let small = at_box(500, 500, 30, 30);
+        assert_eq!(keyed(small, "ArrowLeft", true, shape), Some(small));
+        assert_eq!(keyed(small, "ArrowUp", true, shape), Some(small));
+        let wide = at_box(900, 0, 100, 100);
+        assert_eq!(
+            keyed(wide, "ArrowRight", true, shape),
+            Some(wide),
+            "the picture's right edge"
+        );
+        // A wide picture's least is narrower on the box's scale.
+        let thin = at_box(500, 500, 20, 30);
+        assert_eq!(
+            keyed(thin, "ArrowLeft", true, Some((2000, 1000))),
+            Some(at_box(500, 500, 15, 30))
+        );
     }
 
     #[test]

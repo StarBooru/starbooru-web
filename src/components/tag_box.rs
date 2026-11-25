@@ -48,6 +48,9 @@ pub fn TagBox(
     /// Its name, where no `label` names it.
     #[prop(optional, into)]
     label: Option<Signal<String>>,
+    /// The ids of what's said about it under it, such as what's wrong.
+    #[prop(optional, into)]
+    described_by: Option<Signal<Option<String>>>,
     /// The offers float over what's under the box instead of pushing it.
     #[prop(optional)]
     floating: bool,
@@ -313,6 +316,7 @@ pub fn TagBox(
                 aria-activedescendant=active
                 aria-invalid=move || invalid.get().then_some("true")
                 aria-label=move || label.map(|l| l.get())
+                aria-describedby=move || described_by.and_then(|d| d.get())
                 placeholder=move || placeholder.map(|p| p.get())
                 prop:value=move || text.get()
                 on:input=move |e| {

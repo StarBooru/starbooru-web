@@ -6,6 +6,7 @@
 //! gallery. A guest's reads carry their blacklist, as every read does.
 
 use std::cell::RefCell;
+use std::time::Duration;
 
 use leptos::prelude::*;
 use leptos::task::spawn_local;
@@ -18,11 +19,12 @@ use super::shell::SearchBox;
 use crate::components::banner::{ErrorBanner, Spinner};
 use crate::components::brand::Mark;
 use crate::logic::gallery::tint;
-use crate::logic::home::{Column, background, columns_for};
+use crate::logic::home::{Column, laid_out, relaid, room};
 use crate::{api, dom, instance, route, store};
 
-/// The space under each tile, and between columns, in pixels.
-const GAP: f64 = 12.0;
+/// How long the window has to stay one size before the background is laid
+/// out for it.
+const RESIZE_PAUSE: Duration = Duration::from_millis(150);
 
 thread_local! {
     /// What `GET /home` said, and for whom.
@@ -133,27 +135,43 @@ pub fn HomePage() -> impl IntoView {
 
 /// The background: the posts in columns that drift up and down, each drawn
 /// twice over so its loop has no seam. Decoration only, out of reach of the
-/// pointer and the keyboard. Laid out again when the window's width changes.
+/// pointer and the keyboard. A moment after the window stops changing size,
+/// laid out again if it has another number of columns or a column would
+/// fall short; otherwise the tiles stay as they are.
 #[component]
 fn Drift(posts: Vec<HomePost>) -> impl IntoView {
-    let size = RwSignal::new(dom::window_size());
+    let sizes: Vec<(u32, u32)> = posts.iter().map(|p| (p.width, p.height)).collect();
+    let (width, height) = dom::window_size();
+    let columns = RwSignal::new(laid_out(&sizes, room(width, height)));
+    let sizes = StoredValue::new(sizes);
+    let timer = StoredValue::new(None::<TimeoutHandle>);
     let watch = dom::on_window("resize", move || {
-        let now = dom::window_size();
-        let wider = size
-            .try_with_untracked(|(w, h)| (now.0 - w).abs() > 1.0 || now.1 > *h + 1.0)
-            .unwrap_or(false);
-        if wider {
-            size.try_set(now);
+        if let Some(t) = timer.try_update_value(Option::take).flatten() {
+            t.clear();
         }
+        let settled = set_timeout_with_handle(
+            move || {
+                let (width, height) = dom::window_size();
+                let next = columns
+                    .try_with_untracked(|shown| {
+                        sizes.try_with_value(|s| relaid(shown, s, room(width, height)))
+                    })
+                    .flatten()
+                    .flatten();
+                if let Some(next) = next {
+                    columns.try_set(next);
+                }
+            },
+            RESIZE_PAUSE,
+        );
+        timer.try_set_value(settled.ok());
     });
     let watch = SendWrapper::new(watch);
-    on_cleanup(move || watch.take().stop());
-    let sizes: Vec<(u32, u32)> = posts.iter().map(|p| (p.width, p.height)).collect();
-    let columns = Memo::new(move |_| {
-        let (width, height) = size.get();
-        let n = columns_for(width);
-        let column = (width / n as f64).max(1.0);
-        background(&sizes, n, height / column + 0.5, GAP / column)
+    on_cleanup(move || {
+        watch.take().stop();
+        if let Some(t) = timer.try_update_value(Option::take).flatten() {
+            t.clear();
+        }
     });
     let posts = StoredValue::new(posts);
     let column = move |(i, c): (usize, Column)| {

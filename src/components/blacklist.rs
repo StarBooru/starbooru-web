@@ -64,6 +64,7 @@ pub fn BlacklistEditor(
     let adding = RwSignal::new(String::new());
     let error = RwSignal::new(None::<String>);
     let box_id = format!("{id}-add");
+    let error_id = format!("{id}-error");
 
     // What's typed goes on the list, or says why it can't.
     let commit = move || {
@@ -219,6 +220,10 @@ pub fn BlacklistEditor(
                     one_line=true
                     floating=true
                     invalid=Signal::derive(move || error.with(Option::is_some))
+                    described_by=Signal::derive({
+                        let error_id = error_id.clone();
+                        move || error.with(Option::is_some).then(|| error_id.clone())
+                    })
                     placeholder=Signal::derive(|| t!("blacklist-add"))
                     label=Signal::derive(|| t!("blacklist-add"))
                 />
@@ -232,7 +237,11 @@ pub fn BlacklistEditor(
                     <Ico icon=Icon::Add />
                 </button>
             </form>
-            {move || error.get().map(|m| view! { <p class="field-error break" role="alert">{m}</p> })}
+            {move || {
+                error
+                    .get()
+                    .map(|m| view! { <p class="field-error break" id=error_id.clone() role="alert">{m}</p> })
+            }}
             <Show when=move || !shown_fixes().is_empty()>
                 <div class="did-you-mean" role="status">
                     <span class="muted">{move || t!("post-did-you-mean")}</span>

@@ -49,8 +49,16 @@ pub fn start(path: &str, has_q: bool, fresh: bool, home: Option<bool>, last: &st
 const RATIO_RANGE: (f64, f64) = (0.6, 1.6);
 /// How long a column takes to move by its own width, in seconds.
 const SECONDS_PER_WIDTH: f64 = 16.0;
-/// The most times a column repeats its posts to fill the screen.
-const MAX_REPEATS: usize = 6;
+/// The most tiles a column holds with its posts repeated, however short
+/// they are: enough for a tall screen of wide pictures.
+const MAX_TILES: usize = 32;
+/// The space under each tile and between the columns, and the room at
+/// either side of them, in CSS pixels, as `.home-drift` and `.drift-tile`
+/// have them in home.css.
+pub const GAP: f64 = 12.0;
+const SIDE: f64 = 6.0;
+/// How much taller than the screen a column is at least, for a width of 1.
+const SPARE: f64 = 0.5;
 
 /// One tile of a column: the post's place in the list, and its height for
 /// a width of 1.
@@ -82,6 +90,45 @@ pub fn columns_for(width: f64) -> usize {
     }
 }
 
+/// How wide each of `columns` columns is in a window `width` pixels wide:
+/// what the room at the sides and the gaps between them leave.
+pub fn column_width(width: f64, columns: usize) -> f64 {
+    let n = columns.max(1) as f64;
+    let width = (width - SIDE * 2.0 - GAP * (n - 1.0)) / n;
+    if width.is_finite() {
+        width.max(1.0)
+    } else {
+        1.0
+    }
+}
+
+/// What the background needs of a window: its columns, how tall each is
+/// at least and the gap under a tile, both for a width of 1.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct Room {
+    pub columns: usize,
+    pub least: f64,
+    pub gap: f64,
+}
+
+/// What a window `width` × `height` pixels needs: columns at least the
+/// screen's height and a little more, so a column drawn twice over and
+/// moved by its own height never shows its end.
+pub fn room(width: f64, height: f64) -> Room {
+    let columns = columns_for(width);
+    let column = column_width(width, columns);
+    let height = if height.is_finite() {
+        height.max(0.0)
+    } else {
+        0.0
+    };
+    Room {
+        columns,
+        least: height / column + SPARE,
+        gap: GAP / column,
+    }
+}
+
 fn ratio(width: u32, height: u32) -> f64 {
     if width == 0 || height == 0 {
         return 1.0;
@@ -91,10 +138,10 @@ fn ratio(width: u32, height: u32) -> f64 {
 
 /// The posts of `sizes` (width, height) in `columns` columns, each into the
 /// shortest so far, every column at least `least` tall for a width of 1
-/// (repeating its posts, or borrowing others when there are fewer posts
-/// than columns). `gap` is the space after each tile, for a width of 1.
-/// Neighbouring columns move opposite ways. The page draws each column
-/// twice over, so its loop has no seam.
+/// (repeating its posts up to [`MAX_TILES`] tiles, or borrowing others when
+/// there are fewer posts than columns). `gap` is the space after each
+/// tile, for a width of 1. Neighbouring columns move opposite ways. The
+/// page draws each column twice over, so its loop has no seam.
 pub fn background(sizes: &[(u32, u32)], columns: usize, least: f64, gap: f64) -> Vec<Column> {
     let columns = columns.max(1);
     let mut out: Vec<Column> = (0..columns)
@@ -130,17 +177,41 @@ pub fn background(sizes: &[(u32, u32)], columns: usize, least: f64, gap: f64) ->
             column.tiles.push(t);
         }
         let own = column.tiles.clone();
-        let mut repeats = 1;
-        while column.height < least && repeats < MAX_REPEATS {
+        while column.height < least && column.tiles.len() + own.len() <= MAX_TILES {
             for t in &own {
                 column.height += t.ratio + gap;
                 column.tiles.push(*t);
             }
-            repeats += 1;
         }
         column.seconds = column.height * SECONDS_PER_WIDTH;
     }
     out
+}
+
+/// The background for a window that needs `room`.
+pub fn laid_out(sizes: &[(u32, u32)], room: Room) -> Vec<Column> {
+    background(sizes, room.columns, room.least, room.gap)
+}
+
+/// The background again after the window changed to need `room`, or `None`
+/// to keep `shown`: laying it out again brings every tile in anew, so only
+/// when the number of columns changes or one would now be too short and
+/// gets more tiles.
+pub fn relaid(shown: &[Column], sizes: &[(u32, u32)], room: Room) -> Option<Vec<Column>> {
+    let tall_enough = |c: &Column| {
+        let tall: f64 = c.tiles.iter().map(|t| t.ratio + room.gap).sum();
+        tall >= room.least
+    };
+    if shown.len() == room.columns.max(1) && shown.iter().all(tall_enough) {
+        return None;
+    }
+    let next = laid_out(sizes, room);
+    let tiles = |cols: &[Column]| -> Vec<Vec<usize>> {
+        cols.iter()
+            .map(|c| c.tiles.iter().map(|t| t.index).collect())
+            .collect()
+    };
+    (tiles(&next) != tiles(shown)).then_some(next)
 }
 
 // ---------- the administration's form ----------
@@ -346,7 +417,7 @@ mod tests {
         assert_eq!(cols.len(), 4);
         for c in &cols {
             assert!(c.height >= 3.0, "{c:?}");
-            assert!(c.tiles.len() <= MAX_REPEATS);
+            assert!(c.tiles.len() <= MAX_TILES);
         }
         assert_eq!(cols[2].tiles[0].index, 0);
         assert_eq!(cols[3].tiles[0].index, 1);
@@ -356,9 +427,77 @@ mod tests {
                 .iter()
                 .all(|c| c.tiles.is_empty())
         );
-        // However short, the repeats stop.
+        // However short, the repeats stop, and only whole.
         let cols = background(&[(100, 60)], 1, 1000.0, 0.0);
-        assert_eq!(cols[0].tiles.len(), MAX_REPEATS);
+        assert_eq!(cols[0].tiles.len(), MAX_TILES);
+        let cols = background(&[(100, 60), (100, 60), (100, 60)], 1, 1000.0, 0.0);
+        assert_eq!(cols[0].tiles.len(), MAX_TILES / 3 * 3);
+    }
+
+    #[test]
+    fn a_column_is_the_window_less_its_sides_and_gaps() {
+        // 1920 px in 8 columns: 6 px each side and seven 12 px gaps.
+        assert_eq!(column_width(1920.0, 8), 228.0);
+        assert_eq!(column_width(390.0, 3), 118.0);
+        assert_eq!(column_width(f64::NAN, 3), 1.0);
+        assert_eq!(column_width(10.0, 8), 1.0);
+        assert_eq!(column_width(100.0, 0), 88.0);
+        // The same sizes as the page's CSS.
+        let css = include_str!("../../style/pages/home.css");
+        assert!(css.contains("display: flex; gap: 12px; padding: 0 6px;"));
+        assert!(css.contains("overflow: hidden; margin-bottom: 12px;"));
+    }
+
+    /// How tall each column is on the screen, in pixels, in a window
+    /// `width` × `height`.
+    fn drawn_heights(sizes: &[(u32, u32)], width: f64, height: f64) -> Vec<f64> {
+        let room = room(width, height);
+        let column = column_width(width, room.columns);
+        laid_out(sizes, room)
+            .iter()
+            .map(|c| c.tiles.iter().map(|t| t.ratio * column + GAP).sum())
+            .collect()
+    }
+
+    #[test]
+    fn a_few_wide_pictures_still_fill_a_big_screen() {
+        let wide = [(1920, 1080); 12];
+        for (width, height) in [(1920.0, 1080.0), (2560.0, 1440.0), (3840.0, 2160.0)] {
+            let heights = drawn_heights(&wide, width, height);
+            assert_eq!(heights.len(), 8, "{width}");
+            for h in heights {
+                assert!(h >= height, "{width}×{height}: a column of {h} px");
+            }
+        }
+        // A phone, and a tall screen on its side.
+        for (width, height) in [(390.0, 844.0), (1080.0, 1920.0), (1440.0, 2560.0)] {
+            for h in drawn_heights(&wide, width, height) {
+                assert!(h >= height, "{width}×{height}: a column of {h} px");
+            }
+        }
+        // One post alone, borrowed by every column.
+        for h in drawn_heights(&[(1920, 1080)], 1920.0, 1080.0) {
+            assert!(h >= 1080.0, "{h}");
+        }
+    }
+
+    #[test]
+    fn resizing_lays_the_background_out_again_only_when_it_must() {
+        let sizes: Vec<(u32, u32)> = (0..24).map(|i| (1000, 600 + i * 40)).collect();
+        let at = |w: f64, h: f64| room(w, h);
+        let shown = laid_out(&sizes, at(1280.0, 800.0));
+        // A few pixels either way, or shorter: it's kept as it is.
+        assert_eq!(relaid(&shown, &sizes, at(1280.0, 800.0)), None);
+        assert_eq!(relaid(&shown, &sizes, at(1300.0, 780.0)), None);
+        assert_eq!(relaid(&shown, &sizes, at(1280.0, 400.0)), None);
+        // Another number of columns, or a screen it no longer fills.
+        let fewer = relaid(&shown, &sizes, at(800.0, 800.0)).unwrap();
+        assert_eq!(fewer.len(), columns_for(800.0));
+        let taller = relaid(&shown, &sizes, at(1280.0, 2400.0)).unwrap();
+        assert!(taller.iter().all(|c| c.height >= at(1280.0, 2400.0).least));
+        // Nothing to show: nothing to lay out again.
+        let empty = laid_out(&[], at(1280.0, 800.0));
+        assert_eq!(relaid(&empty, &[], at(1280.0, 2400.0)), None);
     }
 
     #[test]

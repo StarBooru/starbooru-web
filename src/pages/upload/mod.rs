@@ -32,7 +32,7 @@ use crate::components::transfer::TransferBar;
 use crate::dom;
 use crate::files::{self, Dropped, Picked};
 use crate::logic::queue::{Batch, Queue, Status};
-use crate::logic::upload::{folder_tag, parse_urls, skipped_names, tag_problem};
+use crate::logic::upload::{self, AiSwitch, folder_tag, parse_urls, skipped_names, tag_problem};
 use crate::pages::bad_tag_text;
 
 thread_local! {
@@ -40,7 +40,8 @@ thread_local! {
     static SHARED_TAGS: ArcRwSignal<String> = ArcRwSignal::new(String::new());
     static RATING: ArcRwSignal<Rating> = ArcRwSignal::new(Rating::default());
     static SOURCE: ArcRwSignal<String> = ArcRwSignal::new(String::new());
-    /// `None` until the switch is pressed: the server's setting decides.
+    /// `None` while the switch is as the server would have it: the server
+    /// decides.
     static AUTOTAG: ArcRwSignal<Option<bool>> = ArcRwSignal::new(None);
     static FOLDER_TAGS: ArcRwSignal<bool> = ArcRwSignal::new(true);
 }
@@ -163,9 +164,8 @@ pub fn Upload() -> impl IntoView {
     let ai = LocalResource::new(api::ai_status);
     // Shown while unknown, as the reference did.
     let show_url = Memo::new(move |_| info.get().flatten().is_none_or(|i| i.url_import));
-    // The server's setting, or `None` when it can't tag.
-    let ai_tagging =
-        Memo::new(move |_| ai.get().flatten().filter(|s| s.tagging).map(|s| s.autotag));
+    // What the switch stops, and how it starts, or `None` without the AI.
+    let ai_switch = Memo::new(move |_| ai.get().flatten().as_ref().and_then(upload::ai_switch));
     activity::refresh();
 
     let take = move |list: Vec<Picked>| {
@@ -313,15 +313,19 @@ pub fn Upload() -> impl IntoView {
                         on_change=Callback::new(move |on| folder_tags.set(on))
                     />
                     {move || {
-                        ai_tagging
+                        ai_switch
                             .get()
-                            .map(|server| {
+                            .map(|(does, server)| {
+                                let label = move || match does {
+                                    AiSwitch::Tags => t!("upload-autotag"),
+                                    AiSwitch::TagsAndPeople => t!("upload-autotag-people"),
+                                };
                                 view! {
                                     <Switch
                                         icon=Icon::Sparkle
-                                        label=Signal::derive(|| t!("upload-autotag"))
+                                        label=Signal::derive(label)
                                         on=Signal::derive(move || autotag.get().unwrap_or(server))
-                                        on_change=Callback::new(move |on| autotag.set(Some(on)))
+                                        on_change=Callback::new(move |on| autotag.set(upload::chosen(on, server)))
                                     />
                                 }
                             })
