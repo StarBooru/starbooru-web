@@ -1,9 +1,11 @@
-//! Settings › Viewing and gestures: how thumbnails sit, what the viewer
-//! opens and keeps, the People card, what a swipe does, and the hand the
-//! app is held in. Each picture here shows the choice it stands for.
+//! Settings › Viewing and gestures: the blacklist (`blacklist.rs`), how
+//! thumbnails sit, what the viewer opens and keeps, the People card, what a
+//! swipe does, and the hand the app is held in. Each picture here shows the
+//! choice it stands for.
 
 use leptos::prelude::*;
 
+use super::blacklist::BlacklistCard;
 use super::controls::{pick, switch_row};
 use crate::components::icons::{Ico, Icon};
 use crate::components::select::{Choice, Select};
@@ -132,9 +134,13 @@ fn GesturesCard() -> impl IntoView {
     }
 }
 
-/// Settings › Viewing and gestures.
+/// Settings › Viewing and gestures. A guest has the blacklist alone: the
+/// rest is for what an account can do.
 #[component]
 pub(super) fn ViewingGroup() -> impl IntoView {
+    if instance::guest() {
+        return view! { <BlacklistCard /> }.into_any();
+    }
     let flush = Memo::new(|_| store::prefs().flush_tiles);
     let hand = Memo::new(|_| store::prefs().hand);
     let originals = Memo::new(|_| store::prefs().originals);
@@ -168,6 +174,7 @@ pub(super) fn ViewingGroup() -> impl IntoView {
         .collect_view();
 
     view! {
+        <BlacklistCard />
         <section class="card" id="thumbnails">
             <h3 class="card-title">{move || t!("settings-tiles")}</h3>
             <div class="picks two" role="radiogroup" aria-label=move || t!("settings-tiles")>
@@ -210,6 +217,7 @@ pub(super) fn ViewingGroup() -> impl IntoView {
             </div>
         </section>
     }
+    .into_any()
 }
 
 #[cfg(test)]

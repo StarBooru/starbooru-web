@@ -33,7 +33,10 @@ src/
                   forum and profile addresses
   api.rs        the shared Client, a session's or a guest's without a token, api::call (a 401 signs out),
                   errors in words
-  instance.rs   what the server is (private or public, likes or stars) from /info, and whether it takes guests
+  instance.rs   what the server is (private or public, likes or stars) from /info, whether it takes guests and
+                  has a home page
+  blacklist.rs  the reader's blacklist (an account's on the server, a guest's on the device), saving each change,
+                  and the posts uncovered with Show
   me.rs         the signed-in account's own profile on a public server, for the account button
   oidc.rs       sign-in through the identity provider, and linking it to the account, away and back to /oidc
   store.rs      session, preferences, the gallery's place in each search and the posts opened, in localStorage
@@ -48,13 +51,15 @@ src/
                   own page, saved/ the saved searches of the gallery and the boorus, settings/ the Settings groups,
                   admin/ the administration's tabs, legal.rs the privacy policy and the terms, account.rs a
                   public server's account button, profile/ a profile and the form and crop picker that edit
-                  your own, forum/ the forum's categories, threads and posts and the box to write in
+                  your own, forum/ the forum's categories, threads and posts and the box to write in, home.rs
+                  the home page and its drifting background
   components/   icons, brand, snackbar, tiles and their swipes, downloads, the tag box and its grip, a tag's menu,
                   the picture of what a search finds,
                   the button that asks "Sure?", the links to the legal pages, the menu that looks a picture up on
                   other sites, the video player, the Back button of the pages under a tab, Markdown as elements,
                   the five stars of a vote, what stands in for a page a guest or a public server can't use,
-                  an account's picture on a disc, and a post named in a forum post with its preview
+                  an account's picture on a disc, a post named in a forum post with its preview, and the
+                  blacklist's editor (chips, the box that adds, rating toggles)
   logic/        pure Rust with unit tests: server addresses, the gallery's lists and layout, zoom, the viewer's
                   tags, people, details and file names, the video player's clock, seek bar, keys and resting
                   controls, the word at the caret, the tag editor's text and chips, the category a new tag gets and
@@ -71,16 +76,18 @@ src/
                   was refused, which screen someone without a session gets and where a sign-in comes back to,
                   profiles: names, what an edit sends, a picture's checks and the crop picker's square, the
                   forum: a post cut where it names posts, pages joined, the wait between posts and who may do
-                  what, and tag votes: a press, the score shown and the tags an answer took off
+                  what, tag votes: a press, the score shown and the tags an answer took off, the blacklist: what's
+                  typed, ratings apart, what a search names and a guest's list per server, and the home page:
+                  where a visit starts, the background's columns and the administration's form
 locales/        en.ftl, it.ftl
 style/          tokens.css, base.css, shell.css, player.css, pages/<page>.css
 assets/         the icons, the web app manifest and the service worker (sw.js), copied to the root as they are
 index.html      Trunk's entry, with the loading screen
 ```
 
-Routes keep the first StarBooru app's paths, so links people saved still open: `/`, `/explore`, `/post/:id`, `/tags`, `/tag`, `/upload`, `/boorus`, `/boorus/post`, `/settings` and `/settings/<group>`, `/trash`, `/duplicates`, `/help`, `/admin`, `/oidc`, `/s/:token`, `/privacy`, `/terms`. The first thirteen show inside the shell; the rest open without signing in. A guest on a public server gets the shell too. A public server adds `/forum`, `/forum/c/:id`, `/forum/t/:id` (a post's anchor is `#p<id>`) and `/u/:name`, in the shell; on a private one they say there is no forum or no profiles.
+Routes keep the first StarBooru app's paths, so links people saved still open: `/`, `/explore`, `/post/:id`, `/tags`, `/tag`, `/upload`, `/boorus`, `/boorus/post`, `/settings` and `/settings/<group>`, `/trash`, `/duplicates`, `/help`, `/admin`, `/oidc`, `/s/:token`, `/privacy`, `/terms`. The first thirteen show inside the shell; the rest open without signing in. `/home`, the home page, is in the shell too. A guest on a public server gets the shell too. A public server adds `/forum`, `/forum/c/:id`, `/forum/t/:id` (a post's anchor is `#p<id>`) and `/u/:name`, in the shell; on a private one they say there is no forum or no profiles.
 
-Settings is a list of groups (`logic::settings::Group`): Account and security, Appearance, Viewing and gestures, Battery and effects, Library, Sharing and API keys, Help and about, with the administration at the foot for administrators. From 1000 px the list stays beside the open group, and `/settings` shows Appearance; narrower, `/settings` is the list and each group is a page with a Back. An address from before the groups, `/settings#keys` or `/settings/keys`, is replaced by the group's with the card's anchor (`/settings/sharing#keys`). Choices that change looks are drawn as small pictures in the app's own roles: `tokens.css` gives `.scheme-light` and `.scheme-dark` the two themes' roles, so the theme pictures show the other theme too.
+Settings is a list of groups (`logic::settings::Group`): Account and security, Appearance, Viewing and gestures (with the blacklist), Battery and effects, Library, Sharing and API keys, Help and about, with the administration at the foot for administrators. From 1000 px the list stays beside the open group, and `/settings` shows Appearance; narrower, `/settings` is the list and each group is a page with a Back. An address from before the groups, `/settings#keys` or `/settings/keys`, is replaced by the group's with the card's anchor (`/settings/sharing#keys`). Choices that change looks are drawn as small pictures in the app's own roles: `tokens.css` gives `.scheme-light` and `.scheme-dark` the two themes' roles, so the theme pictures show the other theme too.
 
 ## Styles
 
@@ -127,6 +134,8 @@ Component CSS uses only the role variables, never a literal colour. The navigati
   - Everything else goes to the network untouched, with no `respondWith`: `/api/`, `/media/`, `/remote/`, `/backups/`, `/healthz`, other origins (a session on another server included), and every request that isn't a GET. Nothing the API or `/media` returns is ever stored, so the cache holds no private data.
   - A new `sw.js` installs and takes over at once, and its activation deletes the app's other caches; bump `CACHE` when the worker starts keeping things another way. Offline, the shell starts and each page says it can't reach the server, as for any failed request.
 - **Updates.** For administrators only, the shell asks `GET /admin/updates` when the app starts and every 3 hours while it stays open, and keeps the answer in `updates.rs`. When a newer release is out, a pill under the top bar names it and leads to Administration › Updates; it stays off the viewers and that page. Hiding it is kept in the store per account and version, so it comes back for a newer one. A server older than 0.2.0 answers 404: the notice and the Updates tab stay away. The page shows the notes through `logic::markdown`, which builds elements and never HTML; only `http:`, `https:` and `mailto:` links survive, and pictures become their description. After Update now it asks every 1.5 s; once the run reaches `restarting` it knocks on `/info` every 2 s until the new version answers, then reloads the page, so the new version's bundle loads (navigations are network-first in the service worker).
+- **Blacklist.** Settings › Viewing has the card: tags as chips with their ×, the tag editor's box to add more (a space or Enter makes a chip, `rating:e` lights its toggle), "Did you mean" for a tag the collection doesn't have, and the four ratings as toggles. Each change is saved at once (`blacklist.rs`), one request at a time with the latest winning, and the list then shows what the server kept, so an alias becomes its tag in place. A removal says so with Undo; a failed save keeps the list as changed and says why, with Try again. A change drops the gallery's kept lists and previews, the viewer's kept posts, the posts named in the forum and the home page, so every page asks again. The viewer covers a post whose `blacklisted` has entries the search it came from doesn't name (`logic::blacklist::still_hidden`): hatching in the picture's place, the entries as chips, Show, which uncovers it for the rest of the visit, and the way to the card. Nothing of its picture is asked for, the posts ahead included, until Show. Recently viewed leaves such posts out unless uncovered, and a post named in the forum says what hid it instead of its picture. The share sheet shows no picture, and the list of share links keeps the covers of links the account made itself. A guest's list lives in the store per server (`prefs.guest_blacklists`), starts as the server's default from `GET /auth/blacklist`, goes with every read through the guest client's `with_guest_blacklist`, and can go back to the default. Administration › Server has the default list for new accounts and guests, in the same editor.
+- **The home page.** When `/info` says `home: true`, `/home` shows the brand's mark, the title and the line under it from `GET /home`, and the top bar's search box in the top bar's place, over the posts' thumbnails drifting by in columns, opposite ways, each in its tile's colour until it loads. A column is laid out from the posts' sizes (`logic::home::background`), drawn twice over and moved by half its height with a transform, so it loops without a seam; under reduced motion, reduced effects and the battery saver it stands still. A visit that starts at the bare `/` (a new tab or an installed app, kept in `sessionStorage`) opens there; a link with `?q=`, a reload, Back and the Gallery tab show the gallery as before. The page waits for `/info` before deciding, so the gallery doesn't flash by. The brand leads to it while it's on; with it off, `/home` shows the gallery. Administration › Server has its card: the switch, the title, the line, the background's search and the number of pictures, each checked as the server does, with a small picture of the page over what the search finds now. Saving it puts the switch in at once, as a mode switch does.
 - **Share link end dates.** The server takes a link's lifetime in whole days from when it makes it. A day picked on the calendar becomes the days from now to the end of that day on the browser's clock, rounded up, so the link ends on the day after, at the time of day it was made.
 
 The server decides which booru pictures it relays: the previews and samples of sites that serve them only to their own pages come as its signed `/api/v1/remote/media` addresses. Everything else loads in the browser straight from the booru, as the privacy page says, so the app shows a picture only from one of those addresses or over `https:`. Anything else (`http:`, `data:`, `//host`) gets the tile's colour instead.

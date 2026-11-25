@@ -1,6 +1,6 @@
 # Roadmap
 
-_Status as of 2026-11-24: sections 1 to 3, 6 and 9 are done, and all of 5 to 7 that the app can do alone. Section 8 (polish) is set aside for now. Next: section 10 (updates), then 4 and 5, each with its server side first. Scope comes from starbooru-server's `docs/checklist.md`, and sections 4 to 10 from the owner's lists of 2026-11-23. Items marked (server) need starbooru-server, whose `docs/roadmap.md` has its side._
+_Status as of 2026-11-25: sections 1 to 4, 6, 7, 9 and 10 are done, and all of 5 that the app can do alone. Section 8 (polish) is set aside for now. Next: section 5 (people), its server side first. Scope comes from starbooru-server's `docs/checklist.md`, and sections 4 to 10 from the owner's lists of 2026-11-23. Items marked (server) need starbooru-server, whose `docs/roadmap.md` has its side._
 
 ## 1. Foundation
 
@@ -56,8 +56,8 @@ Public mode:
 Both modes:
 
 - [x] Share links set up to suit each mode: in public mode a post is shared by its own address, in private mode by a share link as today (server)
-- [ ] A tag blacklist in Settings (server)
-- [ ] An optional home page that can be turned on or off and customised. The default, in StarBooru's look, has the logo above a search bar, over a moving background of the most popular posts rated safe (server)
+- [x] A tag blacklist in Settings (server)
+- [x] An optional home page that can be turned on or off and customised. The default, in StarBooru's look, has the logo above a search bar, over a moving background of the most popular posts rated safe (server)
 
 ## 5. People
 

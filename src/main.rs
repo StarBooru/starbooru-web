@@ -5,6 +5,7 @@ mod i18n;
 mod activity;
 mod api;
 mod app;
+mod blacklist;
 mod components;
 mod dom;
 mod files;

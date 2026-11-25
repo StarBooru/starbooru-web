@@ -1,9 +1,10 @@
 //! Administration › Server: the mode and the score kind (`modes.rs`), the
 //! settings that override the server's environment (its name, sign-ups, how
 //! long the recycle bin keeps posts, automatic meta tags, and on a public
-//! server the score at which votes take a tag off), emptying the bin
-//! at once, and the AI tools (`ai.rs`). The settings are read once for the
-//! cards that show them.
+//! server the score at which votes take a tag off), the home page
+//! (`home.rs`), the default blacklist (`blacklist.rs`), emptying the bin at
+//! once, and the AI tools (`ai.rs`). The settings are read once for the
+//! cards that show them; each card saves its own part.
 
 use leptos::ev::SubmitEvent;
 use leptos::prelude::*;
@@ -14,6 +15,8 @@ use starbooru_core::{Mode, ServerSettings};
 
 use super::Waiting;
 use super::ai::AiCard;
+use super::blacklist::DefaultBlacklistCard;
+use super::home::HomeCard;
 use super::modes::{ModeCard, ScoreCard};
 use crate::api;
 use crate::components::banner::ErrorBanner;
@@ -23,6 +26,27 @@ use crate::logic::admin::check_settings;
 use crate::logic::viewer::human_size;
 use crate::pages::trash::empty_whole_bin;
 use crate::route;
+
+/// Saves one part of the settings: the ones read last, as they are, with
+/// `change` made, and the other parts that have a card of their own left
+/// out so they stay as the server has them. The answer becomes the
+/// settings the cards show, and pages ask the server what it is again.
+pub(super) async fn save_part(
+    settings: RwSignal<Option<ServerSettings>>,
+    change: impl FnOnce(&mut ServerSettings),
+) -> Result<ServerSettings, String> {
+    let Some(mut request) = settings.try_get_untracked().flatten() else {
+        return Err(t!("admin-settings-unread"));
+    };
+    request.changes.clear();
+    request.default_blacklist = None;
+    request.home = None;
+    change(&mut request);
+    let saved = api::call(move |c| async move { c.set_admin_settings(&request).await }).await?;
+    settings.try_set(Some(saved.clone()));
+    api::forget_server_answers();
+    Ok(saved)
+}
 
 /// The tab: the settings, read once, for the cards that show them.
 #[component]
@@ -50,6 +74,8 @@ pub(super) fn ServerTab() -> impl IntoView {
             <ModeCard settings=settings on_reload=retry />
             <ScoreCard settings=settings />
             <ServerCard settings=settings />
+            <HomeCard settings=settings />
+            <DefaultBlacklistCard settings=settings />
         </Show>
         <BinCard />
         <AiCard />

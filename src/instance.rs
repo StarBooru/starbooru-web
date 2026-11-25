@@ -82,6 +82,16 @@ pub fn registration_open() -> bool {
     info().is_some_and(|i| i.registration_open)
 }
 
+/// Whether the server has its home page on: `None` until it has been asked.
+/// A server older than the home page says nothing of it, and one that
+/// didn't answer has none to show: both read as off.
+pub fn home() -> Option<bool> {
+    match info() {
+        Some(i) => Some(i.home),
+        None => known().then_some(false),
+    }
+}
+
 /// Whether the server in use has been asked what it is, so a page that
 /// differs by mode can show the right one at once. A server that didn't
 /// answer counts as asked: its pages say why when they fail.
@@ -147,6 +157,19 @@ pub fn settled(mode: Mode, score_kind: ScoreKind) {
                 info.mode = mode;
                 info.score_kind = score_kind;
                 info.guests = mode.guests();
+            }
+        });
+    });
+    refresh();
+}
+
+/// The home page an administrator just turned on or off, so the brand and
+/// the start follow before the server has been asked again.
+pub fn settled_home(on: bool) {
+    INFO.with(|i| {
+        i.update(|i| {
+            if let Some((_, info)) = i {
+                info.home = on;
             }
         });
     });

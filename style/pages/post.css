@@ -150,6 +150,29 @@ html:has(.stage) { overscroll-behavior-x: none; }
 }
 .stage.full .stage-back { display: none; }
 .stage.full .stage-tools { top: max(12px, env(safe-area-inset-top)); }
+/* A post the blacklist hides (post/mod.rs): hatching in the picture's place,
+   as big as it would be, with what hid it and Show. Shown, the picture zooms
+   in where it was. */
+.stage-cover {
+  grid-area: 1 / 1; display: grid; place-items: center; max-width: 100%; max-height: var(--fit-h);
+  min-width: min(100%, 340px); min-height: min(var(--fit-h), 300px); overflow: auto;
+  border-radius: inherit; box-shadow: 0 0 0 1px var(--glass-line), var(--shadow-1);
+  background: repeating-linear-gradient(135deg, var(--surface-2) 0 14px, var(--surface-3) 14px 28px);
+  animation: fade-in var(--med) var(--ease);
+}
+.cover-body { display: grid; justify-items: center; gap: 12px; padding: 24px; text-align: center; }
+.cover-icon {
+  display: grid; place-items: center; width: 56px; height: 56px; border-radius: 50%;
+  background: var(--surface); color: var(--on-surface-2); box-shadow: var(--shadow-1);
+}
+.cover-title { margin: 0; padding: 2px 12px; border-radius: 999px; background: var(--surface); font-weight: 600; }
+.cover-entries { justify-content: center; }
+.cover-entries .chip { background: var(--surface); }
+.cover-entries .chip.rated { text-transform: capitalize; }
+.cover-entries .chip:hover { transform: none; background: var(--surface); color: var(--on-surface); }
+.cover-actions { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; }
+.cover-actions .btn.text { background: var(--surface); }
+
 /* The file didn't load: why, and Retry, over the foot of the stage. */
 .stage-error {
   position: absolute; left: 12px; right: 12px; bottom: 12px; z-index: 3;

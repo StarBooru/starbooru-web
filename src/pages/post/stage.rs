@@ -152,10 +152,15 @@ pub fn Stage(
     /// once the post has come.
     #[prop(optional)]
     on_retry: Option<Callback<Callback<()>>>,
+    /// The blacklist hides the post: `cover` stands in the media's place,
+    /// and the media isn't asked for until it's uncovered.
+    #[prop(optional, into)]
+    covered: Signal<bool>,
+    #[prop(optional)] cover: Option<ViewFn>,
 ) -> impl IntoView {
     let stage: NodeRef<html::Section> = NodeRef::new();
     let kind = Memo::new(move |_| shown.with(|s| s.as_ref().map(|s| s.kind)));
-    let zoomable = move || kind.get().is_some_and(|k| k != MediaKind::Video);
+    let zoomable = move || !covered.get() && kind.get().is_some_and(|k| k != MediaKind::Video);
     let fingers = StoredValue::new_local(Fingers::default());
     let dragging = RwSignal::new(false);
     let swipe_x = RwSignal::new(None::<f64>);
@@ -570,6 +575,14 @@ pub fn Stage(
         }
     });
     let media = move || {
+        if covered.get() {
+            let size = shown.with_untracked(|s| s.as_ref().and_then(|s| s.size));
+            let cover = cover.clone()?;
+            return Some(
+                view! { <div class="stage-cover" style=fit_style(size)>{cover.run()}</div> }
+                    .into_any(),
+            );
+        }
         let (_, kind) = media_key.get()?;
         let entrance = enter_class(enter.get_untracked());
         let size = shown.with_untracked(|s| s.as_ref().and_then(|s| s.size));

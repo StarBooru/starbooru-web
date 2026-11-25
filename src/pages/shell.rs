@@ -27,6 +27,7 @@ use crate::components::icons::{Ico, Icon};
 use crate::dom::{self, caret_of};
 use crate::logic::boorus;
 use crate::logic::explore::{tidy, window};
+use crate::logic::home::{Start, start};
 use crate::logic::modes::{Screen, screen};
 use crate::logic::saved::Kind;
 use crate::logic::search::{
@@ -93,24 +94,55 @@ fn Frame(guest: bool) -> impl IntoView {
             }
         });
     }
-    // What the server is now: its mode and what a vote is.
+    // What the server is now: its mode, what a vote is, its home page.
     instance::refresh();
     let location = use_location();
     let path = location.pathname;
-    // Opening the app carries on from the last search.
+    // A visit that starts at the bare address opens on the home page, when
+    // the server has one; otherwise the app carries on from the last
+    // search. Until the server says, the page waits, so the gallery doesn't
+    // flash by on the way.
     let navigate = use_navigate();
     let query = use_query_map();
+    let fresh = !dom::visited();
+    let decide = move || {
+        let has_q = query.with_untracked(|q| q.get("q").is_some());
+        path.with_untracked(|p| {
+            start(
+                p,
+                has_q,
+                fresh,
+                instance::home(),
+                &store::last_search_untracked(),
+            )
+        })
+    };
+    let holding = RwSignal::new(untrack(decide) == Start::Wait);
+    let decided = StoredValue::new(false);
     Effect::new(move |_| {
-        let last = store::last_search_untracked();
-        let at_home = path.get_untracked() == "/" && query.with_untracked(|q| q.get("q").is_none());
-        if at_home && !last.trim().is_empty() {
-            let options = NavigateOptions {
-                replace: true,
-                ..NavigateOptions::default()
-            };
-            navigate(&route::gallery(&last), options);
+        // Follows the server's answer while waiting for it.
+        let _ = instance::home();
+        if decided.get_value() {
+            return;
         }
+        let options = NavigateOptions {
+            replace: true,
+            ..NavigateOptions::default()
+        };
+        match untrack(decide) {
+            Start::Wait => return,
+            Start::Stay => {}
+            Start::Home => navigate(route::HOME, options),
+            Start::Search(last) => navigate(&route::gallery(&last), options),
+        }
+        decided.set_value(true);
+        dom::mark_visited();
+        holding.set(false);
     });
+    // The home page has the search box and the mark of its own.
+    let on_home = Memo::new(move |_| path.with(|p| p == route::HOME));
+    let home_on = Memo::new(|_| instance::home() == Some(true));
+    let brand_href = move || if home_on.get() { route::HOME } else { "/" };
     // A public server has the forum in Upload's place and the account
     // button beside the navigation; a private one stays as it was.
     let public = Memo::new(|_| instance::public());
@@ -125,11 +157,13 @@ fn Frame(guest: bool) -> impl IntoView {
     let mine = Signal::derive(move || place.get() == Some(Place::Account));
     view! {
         <header class="topbar">
-            <a class="brand glass float" href="/" aria-label=move || t!("app-name")>
-                <Mark height=30 compact=true />
-                <Wordmark height=19 />
-            </a>
-            <SearchBox />
+            <Show when=move || !on_home.get()>
+                <a class="brand glass float" href=brand_href aria-label=move || t!("app-name")>
+                    <Mark height=30 compact=true />
+                    <Wordmark height=19 />
+                </a>
+                <SearchBox />
+            </Show>
             {move || {
                 if public.get() {
                     view! {
@@ -147,7 +181,9 @@ fn Frame(guest: bool) -> impl IntoView {
         </header>
         <main class="content">
             <UpdateNotice />
-            <Outlet />
+            <Show when=move || !holding.get()>
+                <Outlet />
+            </Show>
         </main>
         {move || {
             if public.get() {
@@ -233,8 +269,11 @@ fn search_href(scope: &Scope, q: &str, last_sites: &[String]) -> String {
 
 /// The search a page shows in the box: the gallery's, a post's and
 /// Explore's own, the booru browser's as its address carries it, the Tags
-/// page's filter, and the last search elsewhere.
+/// page's filter, none on the home page, and the last search elsewhere.
 fn shown_search(path: &str, q: Option<String>, last: &str) -> String {
+    if path == route::HOME {
+        return String::new();
+    }
     match scope_of(path, None, None) {
         Scope::Boorus(_) => boorus::from_address(&q.unwrap_or_default()),
         Scope::Explore(_) | Scope::Tags | Scope::Forum(_) => q.unwrap_or_default(),
@@ -330,9 +369,10 @@ fn reveal(i: usize) {
 /// all of it; on Explore and the booru browser, that page instead. It shows
 /// the search of the page it's on, and the gallery's last one elsewhere. The
 /// tag under the caret is completed from the collection's tags, or the
-/// boorus' (the ARIA combobox pattern).
+/// boorus' (the ARIA combobox pattern). The top bar has it, and the home page
+/// in the top bar's place (`hero`).
 #[component]
-fn SearchBox() -> impl IntoView {
+pub(crate) fn SearchBox(#[prop(optional)] hero: bool) -> impl IntoView {
     let query = use_query_map();
     let location = use_location();
     let path = location.pathname;
@@ -692,12 +732,17 @@ fn SearchBox() -> impl IntoView {
     view! {
         <form
             class="search glass float"
+            class:hero=hero
             role="search"
             data-typing=move || typing.get().then_some("")
             on:submit=submit
         >
             // Phones: the crown takes the search icon's place, and the way home with it.
-            <a class="search-home" href="/" aria-label=move || t!("app-name")>
+            <a
+                class="search-home"
+                href=move || if instance::home() == Some(true) { route::HOME } else { "/" }
+                aria-label=move || t!("app-name")
+            >
                 <Mark height=28 compact=true />
             </a>
             <Ico icon=Icon::Search />

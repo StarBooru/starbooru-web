@@ -74,10 +74,14 @@ impl Group {
 }
 
 impl Group {
-    /// Whether a guest has it: how the app looks, the help and legal pages,
-    /// and the account's, which invites one.
+    /// Whether a guest has it: how the app looks, the blacklist (Viewing has
+    /// nothing else for a guest), the help and legal pages, and the
+    /// account's, which invites one.
     pub fn for_guests(self) -> bool {
-        matches!(self, Group::Account | Group::Appearance | Group::About)
+        matches!(
+            self,
+            Group::Account | Group::Appearance | Group::Viewing | Group::About
+        )
     }
 
     /// The groups in the list, a guest's or an account's.
@@ -94,7 +98,7 @@ pub const FIRST: Group = Group::Appearance;
 
 /// The anchors of the cards, each with its group, and the names an older
 /// address may use for them. `""` is the top of the group.
-const ANCHORS: [(&str, Group, &str); 33] = [
+const ANCHORS: [(&str, Group, &str); 34] = [
     ("account", Group::Account, "account"),
     ("security", Group::Account, ""),
     ("sign-in", Group::Account, "sign-in"),
@@ -107,6 +111,7 @@ const ANCHORS: [(&str, Group, &str); 33] = [
     ("accent", Group::Appearance, "accent"),
     ("language", Group::Appearance, "language"),
     ("viewing", Group::Viewing, ""),
+    ("blacklist", Group::Viewing, "blacklist"),
     ("thumbnails", Group::Viewing, "thumbnails"),
     ("viewer", Group::Viewing, "viewer"),
     ("people", Group::Viewing, "viewer"),
@@ -505,6 +510,7 @@ mod tests {
             mode: Mode::Private,
             score_kind: starbooru_core::ScoreKind::Likes,
             guests: false,
+            home: false,
         }
     }
 
@@ -663,7 +669,12 @@ mod tests {
         assert_eq!(Group::shown(false), Group::ALL);
         assert_eq!(
             Group::shown(true),
-            [Group::Account, Group::Appearance, Group::About]
+            [
+                Group::Account,
+                Group::Appearance,
+                Group::Viewing,
+                Group::About
+            ]
         );
         assert!(FIRST.for_guests());
     }

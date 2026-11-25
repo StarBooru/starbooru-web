@@ -47,9 +47,10 @@ fn examples() -> [(&'static str, String); 18] {
     ]
 }
 
-/// The gallery is where a search goes, so that's where it's taught.
+/// The gallery is where a search goes, so that's where it's taught, and on
+/// the home page that leads there.
 pub fn plays_on(path: &str) -> bool {
-    matches!(path, "" | "/")
+    matches!(path, "" | "/" | crate::route::HOME)
 }
 
 /// Less motion asked for, or the battery saver on.
@@ -221,9 +222,10 @@ mod tests {
     use super::*;
 
     #[test]
-    fn it_plays_only_in_the_gallery() {
+    fn it_plays_only_in_the_gallery_and_on_the_home_page() {
         assert!(plays_on("/"));
         assert!(plays_on(""));
+        assert!(plays_on("/home"));
         for path in [
             "/post/1",
             "/explore",

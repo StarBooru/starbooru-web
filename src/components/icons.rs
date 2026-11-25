@@ -36,6 +36,8 @@ pub enum Icon {
     Explore,
     /// Seeing: how posts are shown.
     Eye,
+    /// Hidden by the blacklist: the eye, struck through.
+    EyeOff,
     /// Mirroring a picture; turned a quarter, top to bottom.
     Flip,
     Folder,
@@ -199,6 +201,12 @@ impl Icon {
             // MingCute eye_2_fill.
             Icon::Eye => Shape::Fill(
                 "M12.324 10.026c.411.067.796.266 1.09.56 1.364 1.364.162 3.696-1.738 3.388a2 2 0 0 1-1.09-.56c-1.364-1.364-.162-3.696 1.738-3.388m.333-5.001c1.398.103 2.773.51 4.037 1.11a12 12 0 0 1 2.991 2.003c.679.63 1.282 1.351 1.738 2.16.244.432.485.913.555 1.413.175 1.245-1.012 2.823-1.791 3.652-2.333 2.486-6.103 4.028-9.513 3.539-1.405-.202-2.771-.687-4.014-1.367-1.645-.9-3.154-2.185-4.083-3.833C2.287 13.189 2 12.606 2 12c0-1.133 1.089-2.593 1.813-3.363 2.168-2.31 5.656-3.847 8.844-3.612m-1.123 3.002a4 4 0 0 0-3.127 2.214c-1.387 2.829.938 6.094 4.059 5.732a4 4 0 0 0 3.127-2.214c1.387-2.829-.938-6.094-4.059-5.732",
+            ),
+            // Drawn for the app in its stroke style: the eye's outline and
+            // pupil, struck through.
+            Icon::EyeOff => Shape::Stroke(
+                "2",
+                "M3.2 12c1.9-3.9 5-6 8.8-6s6.9 2.1 8.8 6c-1.9 3.9-5 6-8.8 6s-6.9-2.1-8.8-6ZM12 9.4a2.6 2.6 0 1 0 0 5.2a2.6 2.6 0 1 0 0-5.2M4.5 4.5l15 15",
             ),
             Icon::Flip => Shape::Fill(
                 "M12 2a1 1 0 0 1 1 1v18a1 1 0 1 1-2 0v-1H5a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h6V3a1 1 0 0 1 1-1m4 16a1 1 0 1 1 0 2h-1a1 1 0 1 1 0-2zm4-1a1 1 0 0 1 1 1a2 2 0 0 1-2 2a1 1 0 1 1 0-2a1 1 0 0 1 1-1m0-4a1 1 0 0 1 1 1v1a1 1 0 1 1-2 0v-1a1 1 0 0 1 1-1m0-5a1 1 0 0 1 1 1v1a1 1 0 1 1-2 0V9a1 1 0 0 1 1-1m-1-4a2 2 0 0 1 2 2a1 1 0 1 1-2 0a1 1 0 1 1 0-2m-3 0a1 1 0 1 1 0 2h-1a1 1 0 1 1 0-2z",
@@ -433,7 +441,7 @@ pub fn Ico(icon: Icon, #[prop(default = 24)] size: u32) -> impl IntoView {
 mod tests {
     use super::*;
 
-    const ALL: [Icon; 80] = [
+    const ALL: [Icon; 81] = [
         Icon::Add,
         Icon::ArrowBack,
         Icon::Article,
@@ -458,6 +466,7 @@ mod tests {
         Icon::Edit,
         Icon::Explore,
         Icon::Eye,
+        Icon::EyeOff,
         Icon::Flip,
         Icon::Folder,
         Icon::Forum,

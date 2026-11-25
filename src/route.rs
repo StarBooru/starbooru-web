@@ -332,6 +332,8 @@ pub fn booru_post(u: &str, q: &str, s: &str) -> String {
 
 /// Explore's collection side.
 pub const EXPLORE: &str = "/explore";
+/// The home page, when the server has one on.
+pub const HOME: &str = "/home";
 /// The booru browser.
 pub const BOORUS: &str = "/boorus";
 

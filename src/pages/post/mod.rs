@@ -38,6 +38,7 @@ use super::share::ShareSheet;
 use super::{gallery, trash};
 use crate::api::{self, Failure};
 use crate::components::banner::{ErrorBanner, Spinner};
+use crate::components::blacklist::entry_label;
 use crate::components::download::DownloadLink;
 use crate::components::icons::{Ico, Icon};
 use crate::components::menu::{MenuAt, beside};
@@ -45,9 +46,11 @@ use crate::components::reverse::ReverseMenu;
 use crate::components::snackbar::{notify, notify_undo};
 use crate::components::stars::StarVote;
 use crate::components::tag_menu::TagPress;
+use crate::logic::blacklist::still_hidden;
 use crate::logic::editor::offer;
 use crate::logic::people::{PeopleShown, closes_when_off, people_shown};
 use crate::logic::reverse::offered;
+use crate::logic::settings::{Group, anchored};
 use crate::logic::stars::next_stars;
 use crate::logic::tags::may_edit_post;
 use crate::logic::viewer::{
@@ -55,7 +58,7 @@ use crate::logic::viewer::{
 };
 use crate::logic::votes::{Ballot, Tally, next_vote};
 use crate::logic::zoom::Zoom;
-use crate::{instance, power, route, store};
+use crate::{blacklist, instance, power, route, store};
 
 /// Posts kept for the viewer to show at once: the tile just clicked and the
 /// neighbours fetched ahead.
@@ -103,6 +106,13 @@ pub fn forget_kept(ids: &[i64]) {
     POSTS.with_borrow_mut(|kept| kept.retain(|p| !ids.contains(&p.id)));
 }
 
+/// Drops every copy kept, after a change to what each says, such as the
+/// entries of the blacklist it matches.
+pub fn forget_all_kept() {
+    POSTS.with_borrow_mut(VecDeque::clear);
+    WARMED.with_borrow_mut(VecDeque::clear);
+}
+
 /// The gallery is opening `post`, from its results for `q`: the viewer shows
 /// it at once while it loads the rest.
 pub fn opening(post: Arc<Post>, q: String) {
@@ -140,23 +150,39 @@ fn warm(p: &Post) {
 }
 
 /// Fetches the posts around one ahead, with their pictures, unless the
-/// battery saver is on.
-fn fetch_ahead(n: Neighbors) {
+/// battery saver is on. A picture the blacklist covers in search `q` isn't
+/// asked for.
+fn fetch_ahead(n: Neighbors, q: String) {
     if power::active_untracked() {
         return;
     }
+    let warm_shown = move |p: &Post| {
+        if hidden_by(p, &q).is_empty() {
+            warm(p);
+        }
+    };
     for id in [n.next, n.prev].into_iter().flatten() {
         if let Some(p) = kept(id).filter(|p| !p.tag_details.is_empty() || p.tags.is_empty()) {
-            warm(&p);
+            warm_shown(&p);
             continue;
         }
+        let warm_shown = warm_shown.clone();
         spawn_local(async move {
             if let Ok(p) = api::call(move |c| async move { c.post(id).await }).await {
-                warm(&p);
+                warm_shown(&p);
                 keep(Arc::new(p));
             }
         });
     }
+}
+
+/// The entries of the blacklist that cover post `p` opened from search
+/// `q`: none once it's uncovered, or when the search names them.
+fn hidden_by(p: &Post, q: &str) -> Vec<String> {
+    if p.blacklisted.is_empty() || blacklist::uncovered(p.id) {
+        return Vec::new();
+    }
+    still_hidden(&p.blacklisted, q, &p.tag_details)
 }
 
 /// What the page can show.
@@ -315,7 +341,7 @@ pub fn PostView() -> impl IntoView {
                 Ok(n) => {
                     neighbours.set(Some((id, n)));
                     drain();
-                    fetch_ahead(n);
+                    fetch_ahead(n, q.get_untracked());
                 }
                 Err(message) => {
                     if steps.get_value() != 0 {
@@ -455,7 +481,18 @@ pub fn PostView() -> impl IntoView {
                 .unwrap_or_default()
         })
     });
+    // What the blacklist covers the post with, if anything; nothing of its
+    // picture is asked for until Show.
+    let covering = Memo::new(move |_| {
+        blacklist::track_uncovered();
+        let q = q.get();
+        post.with(|p| p.as_deref().map(|p| hidden_by(p, &q)).unwrap_or_default())
+    });
+    let covered = Memo::new(move |_| covering.with(|c| !c.is_empty()));
     let thumb = Memo::new(move |_| {
+        if covered.get() {
+            return None;
+        }
         post.with(|p| {
             p.as_ref()
                 .and_then(|p| p.thumb_url.as_deref())
@@ -827,6 +864,19 @@ pub fn PostView() -> impl IntoView {
                         on_back=Callback::new(move |()| back())
                         on_edit=start_edit
                         on_retry=refetch
+                        covered=covered
+                        cover=ViewFn::from(move || {
+                            view! {
+                                <Cover
+                                    entries=covering
+                                    on_show=Callback::new(move |()| {
+                                        if let Some(id) = post.with_untracked(|p| p.as_ref().map(|p| p.id)) {
+                                            blacklist::uncover(id);
+                                        }
+                                    })
+                                />
+                            }
+                        })
                     />
                     <PostBar
                         post=post
@@ -992,6 +1042,41 @@ pub fn PostView() -> impl IntoView {
             Mode::Failed => failed().into_any(),
             Mode::Ready => ready().into_any(),
         }}
+    }
+}
+
+/// What stands in for a post the blacklist hides: the entries it matched,
+/// Show, which uncovers it for the rest of the visit, and the way to the
+/// list in Settings.
+#[component]
+fn Cover(entries: Memo<Vec<String>>, on_show: Callback<()>) -> impl IntoView {
+    let chips = move || {
+        entries
+            .get()
+            .into_iter()
+            .map(|e| {
+                let rated = e.starts_with("rating:");
+                view! { <span class="chip" class:rated=rated>{entry_label(&e)}</span> }
+            })
+            .collect_view()
+    };
+    view! {
+        <div class="cover-body" role="group" aria-label=move || t!("cover-title")>
+            <span class="cover-icon" aria-hidden="true">
+                <Ico icon=Icon::EyeOff size=28 />
+            </span>
+            <p class="cover-title">{move || t!("cover-title")}</p>
+            <div class="chips cover-entries">{chips}</div>
+            <div class="cover-actions">
+                <button type="button" class="btn" on:click=move |_| on_show.run(())>
+                    <Ico icon=Icon::Eye />
+                    {move || t!("cover-show")}
+                </button>
+                <a class="btn text" href=anchored(Group::Viewing, "blacklist")>
+                    {move || t!("cover-edit")}
+                </a>
+            </div>
+        </div>
     }
 }
 

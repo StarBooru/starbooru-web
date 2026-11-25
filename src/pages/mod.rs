@@ -10,6 +10,7 @@ pub mod explore;
 pub mod forum;
 pub mod gallery;
 pub mod help;
+pub mod home;
 pub mod legal;
 mod library;
 pub mod login;

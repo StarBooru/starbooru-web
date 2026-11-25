@@ -2,6 +2,7 @@
 
 pub mod address;
 pub mod admin;
+pub mod blacklist;
 pub mod boorus;
 pub mod bulk;
 pub mod drag_select;
@@ -12,6 +13,7 @@ pub mod float;
 pub mod forum;
 pub mod gallery;
 pub mod history;
+pub mod home;
 pub mod jobs;
 pub mod layout;
 pub mod legal;

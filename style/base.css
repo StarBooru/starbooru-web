@@ -234,6 +234,31 @@ button.chip:disabled:hover { background: var(--surface-2); color: var(--on-surfa
 .chip.removable:has(.chip-x:focus-visible) { border-color: var(--danger); outline: 3px solid var(--primary); outline-offset: 2px; }
 .chip-x:disabled { opacity: 0.45; cursor: default; }
 
+/* ---------- the blacklist (components/blacklist.rs) ---------- */
+
+/* Its tags as chips with their ×, a new one popping in; the box that adds
+   (the tag editor's, post.css); the ratings as chips that light up with a
+   struck-through eye while hidden. */
+.blacklist-editor { display: grid; gap: 14px; }
+.blacklist-editor .did-you-mean { margin: 0; }
+.blacklist-chips .chip { animation: pop-in var(--med) var(--ease-spring) both; }
+.blacklist-none { font-size: 14px; }
+.blacklist-ratings { display: grid; gap: 8px; }
+.blacklist-ratings-label { font-size: 14px; font-weight: 600; color: var(--on-surface-2); }
+.rating-toggle { gap: 0; text-transform: capitalize; }
+.rating-toggle .toggle-mark {
+  display: grid; width: 0; overflow: hidden; opacity: 0;
+  transition: width var(--med) var(--ease-spring), margin var(--med) var(--ease-spring), opacity var(--fast) var(--ease);
+}
+.rating-toggle.on .toggle-mark { width: 18px; margin-right: 6px; opacity: 1; }
+.blacklist-foot {
+  display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 4px 8px;
+  margin-top: 12px; font-size: 14px;
+}
+.saving-note { display: inline-flex; align-items: center; gap: 6px; font-size: 14px; }
+.blacklist-card .card-head { margin-bottom: 4px; }
+.mention-hidden { gap: 6px; padding: 12px; text-align: center; }
+
 /* The picture of what a search finds (components/preview.rs): its first
    post, over that post's colour while it comes. */
 

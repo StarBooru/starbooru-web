@@ -2,9 +2,10 @@
 //! day in earlier years and random picks. The last two are narrowed by `q`,
 //! which the top bar's search box sets while Explore is open (`shell.rs`);
 //! the server can't narrow a list of posts by id, so the history steps aside
-//! while a search is on. A public server also has Trending, the posts most
-//! liked over the window in `days`, and the tags most used on posts added in
-//! it; a private one has neither, and its address's `days` is ignored.
+//! while a search is on, and leaves out the posts the blacklist hides. A
+//! public server also has Trending, the posts most liked over the window in
+//! `days`, and the tags most used on posts added in it; a private one has
+//! neither, and its address's `days` is ignored.
 
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
@@ -30,7 +31,7 @@ use crate::logic::explore::{
 use crate::logic::history::{SHOWN, to_fetch};
 use crate::logic::layout::Place;
 use crate::logic::search::category_class;
-use crate::{api, dom, instance, power, route, store};
+use crate::{api, blacklist, dom, instance, power, route, store};
 
 /// How long the history takes to fold away once cleared: `--med`.
 const LEAVE_MS: u64 = 250;
@@ -295,9 +296,19 @@ pub fn Explore() -> impl IntoView {
                 )
                 .await;
                 let mut gone = Vec::new();
+                let mut hidden = Vec::new();
                 let mut came = Vec::new();
                 for (id, answer) in asking.into_iter().zip(answers) {
                     match answer {
+                        // One the blacklist hides stays in the history but
+                        // not here, unless it was uncovered in the viewer.
+                        Ok(p)
+                            if !p.deleted
+                                && !p.blacklisted.is_empty()
+                                && !blacklist::uncovered(id) =>
+                        {
+                            hidden.push(id);
+                        }
                         Ok(p) if !p.deleted => came.push(Arc::new(p)),
                         Ok(_) => gone.push(id),
                         Err(f) if f.missing => gone.push(id),
@@ -309,7 +320,8 @@ pub fn Explore() -> impl IntoView {
                 }
                 store::forget_opened(&gone);
                 let here = recent.try_update(|r| {
-                    r.ids.retain(|id| !gone.contains(id));
+                    r.ids
+                        .retain(|id| !gone.contains(id) && !hidden.contains(id));
                     r.posts.extend(came.into_iter().map(|p| (p.id, p)));
                 });
                 if here.is_none() {

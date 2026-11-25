@@ -282,6 +282,9 @@ pub fn check_settings(
         mode,
         score_kind,
         tag_vote_threshold,
+        // Left out, so they stay as they are: their own cards save them.
+        default_blacklist: None,
+        home: None,
         changes: Vec::new(),
     };
     // The days don't matter to the name's check.
@@ -786,6 +789,8 @@ mod tests {
                 mode: Mode::Private,
                 score_kind: ScoreKind::Stars,
                 tag_vote_threshold: None,
+                default_blacklist: None,
+                home: None,
                 changes: Vec::new(),
             })
         );

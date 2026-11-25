@@ -545,6 +545,26 @@ pub fn origin() -> Option<String> {
     web_sys::window()?.location().origin().ok()
 }
 
+const VISIT_KEY: &str = "starbooru-visit";
+
+fn session_storage() -> Option<web_sys::Storage> {
+    web_sys::window()?.session_storage().ok()?
+}
+
+/// Whether this tab has shown the app's pages already: a reload and Back
+/// keep the mark, a new tab or an installed app starting has none.
+pub fn visited() -> bool {
+    session_storage()
+        .and_then(|s| s.get_item(VISIT_KEY).ok().flatten())
+        .is_some()
+}
+
+pub fn mark_visited() {
+    if let Some(s) = session_storage() {
+        let _ = s.set_item(VISIT_KEY, "1");
+    }
+}
+
 /// The browser puts a page back where it was on Back by itself, which would
 /// fight the gallery putting its tile back. The app does it instead.
 pub fn manual_scroll_restoration() {

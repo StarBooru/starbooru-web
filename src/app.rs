@@ -16,6 +16,7 @@ use crate::pages::explore::Explore;
 use crate::pages::forum::{Forum, ForumCategoryPage, ForumThreadPage};
 use crate::pages::gallery::Gallery;
 use crate::pages::help::Help;
+use crate::pages::home::HomePage;
 use crate::pages::legal::{Privacy, Terms};
 use crate::pages::login::OidcReturn;
 use crate::pages::post::PostView;
@@ -93,6 +94,7 @@ fn AppRoutes() -> impl IntoView {
             <Route path=path!("/terms") view=Terms />
             <ParentRoute path=path!("") view=Shell>
                 <Route path=path!("/") view=Gallery />
+                <Route path=path!("/home") view=HomePage />
                 <Route path=path!("/explore") view=Explore />
                 <Route path=path!("/post/:id") view=PostView />
                 <Route path=path!("/tags") view=Tags />

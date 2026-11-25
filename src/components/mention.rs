@@ -14,6 +14,8 @@ use leptos::task::spawn_local;
 use starbooru_core::Post;
 
 use crate::components::banner::Spinner;
+use crate::components::blacklist::entry_label;
+use crate::components::icons::{Ico, Icon};
 use crate::{api, route};
 
 thread_local! {
@@ -22,6 +24,12 @@ thread_local! {
     static SEEN: RefCell<HashMap<i64, Option<Arc<Post>>>> = RefCell::new(HashMap::new());
     /// For each card's own id.
     static NEXT: Cell<u32> = const { Cell::new(0) };
+}
+
+/// Forgets the posts asked for, after a change to what they say, such as
+/// the blacklist's.
+pub fn forget_seen() {
+    SEEN.with_borrow_mut(HashMap::clear);
 }
 
 /// How long the pointer rests on the link before the card opens, so passing
@@ -127,6 +135,22 @@ pub fn Mention(id: i64, text: String) -> impl IntoView {
             Some(Found::Missing) => {
                 view! { <span class="mention-missing">{move || t!("mention-missing")}</span> }
                     .into_any()
+            }
+            // Left out: the card says what hid it instead.
+            Some(Found::Post(p)) if !p.blacklisted.is_empty() => {
+                let entries = p
+                    .blacklisted
+                    .iter()
+                    .map(|e| entry_label(e))
+                    .collect::<Vec<_>>()
+                    .join(", ");
+                view! {
+                    <span class="mention-missing mention-hidden">
+                        <Ico icon=Icon::EyeOff size=22 />
+                        <span>{move || t!("mention-hidden", entries = entries.clone())}</span>
+                    </span>
+                }
+                .into_any()
             }
             Some(Found::Post(p)) => match p.thumb_url.clone() {
                 Some(thumb) => view! { <img src=api::media(&thumb) alt="" decoding="async" /> }

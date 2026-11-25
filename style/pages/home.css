@@ -1,0 +1,126 @@
+/* The home page (pages/home.rs): the mark, the title and the search over
+   the posts drifting by in columns, under a scrim of the canvas so the words
+   read in every theme. The columns move by transform alone; under reduced
+   motion, reduced effects and the battery saver they stand still. Also the
+   administration's small picture of it (pages/admin/home.rs). */
+
+.home-page {
+  display: grid; place-items: center;
+  min-height: calc(100dvh - var(--bar-end) - 16px - 48px);
+}
+
+/* Behind everything on the page, the bars float over it. Each track holds
+   its column twice, so moving it by half loops without a seam. Each tile's
+   margin below it keeps the two halves the same height. */
+.home-drift {
+  position: fixed; inset: 0; z-index: 0; display: flex; gap: 12px; padding: 0 6px;
+  overflow: hidden; pointer-events: none; user-select: none; -webkit-user-select: none;
+  animation: fade-in var(--fade) var(--ease);
+}
+.drift-col { flex: 1 1 0; min-width: 0; }
+.drift-track {
+  will-change: transform;
+  animation: drift-up var(--secs) linear infinite;
+  animation-delay: calc(var(--secs) * var(--offset) * -1);
+}
+.drift-col:not(.up) .drift-track { animation-name: drift-down; }
+@keyframes drift-up { from { transform: translateY(0); } to { transform: translateY(-50%); } }
+@keyframes drift-down { from { transform: translateY(-50%); } to { transform: translateY(0); } }
+.drift-tile {
+  overflow: hidden; margin-bottom: 12px; border-radius: var(--radius-m);
+  background: var(--tint, var(--surface-2));
+}
+.drift-tile img {
+  display: block; width: 100%; height: 100%; object-fit: cover;
+  opacity: 0; transition: opacity var(--slow) var(--ease);
+}
+.drift-tile.loaded img { opacity: 1; }
+
+.home-scrim {
+  position: fixed; inset: 0; z-index: 0; pointer-events: none;
+  background: radial-gradient(ellipse 70% 60% at 50% 50%,
+    oklch(from var(--canvas) l c h / 0.92) 30%,
+    oklch(from var(--canvas) l c h / 0.74) 70%,
+    oklch(from var(--canvas) l c h / 0.6));
+}
+
+.home-hero {
+  position: relative; z-index: 1; display: grid; justify-items: center; gap: 10px;
+  width: min(680px, 100%); padding: 24px 0; text-align: center;
+}
+.home-mark { display: block; margin-bottom: 4px; color: var(--primary); animation: pop-in var(--slow) var(--ease-spring) both; }
+/* The star turns a quarter as the page comes, like the brand's on hover. */
+.home-mark .mark-star { animation: star-turn 900ms var(--ease-spring) 150ms both; }
+@keyframes star-turn { from { transform: rotate(-90deg) scale(0.8); } }
+.home-title { font-size: clamp(30px, 5vw, 52px); font-weight: 700; line-height: 1.1; letter-spacing: -0.01em; }
+.home-subtitle { margin: 0; max-width: 52ch; font-size: 18px; color: var(--on-surface-2); overflow-wrap: anywhere; }
+.home-hero > .banner { margin: 8px 0 0; }
+
+/* The top bar's search box, in its place for the page. */
+.search.hero {
+  grid-column: auto; justify-self: stretch; width: 100%; max-width: 640px; height: 60px; margin: 14px auto 0;
+  padding: 0 22px 0 20px; font-size: 17px; text-align: start;
+}
+.search.hero > .icon { width: 22px; height: 22px; }
+.search.hero .search-home { display: none; }
+.search.hero .suggestions { max-height: min(50vh, 420px); }
+@media (max-width: 760px) {
+  .home-page { min-height: calc(100dvh - var(--bar-end) - 12px - 96px - env(safe-area-inset-bottom)); }
+  .home-hero { gap: 8px; }
+  .home-mark svg { height: 64px; width: auto; }
+  .home-subtitle { font-size: 16px; }
+  .search.hero { height: 54px; padding-left: 16px; }
+  .search.hero > .icon { display: block; }
+  .search.hero .search-home { display: none; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .drift-track { animation: none; transform: translateY(calc(var(--offset) * -50%)); }
+  .home-drift, .home-mark, .home-mark .mark-star { animation: none; }
+}
+.app:is([data-saver="on"], [data-effects="lite"]) .drift-track {
+  animation: none; transform: translateY(calc(var(--offset) * -50%));
+}
+.app:is([data-saver="on"], [data-effects="lite"]) :is(.home-mark, .home-mark .mark-star) { animation: none; }
+
+/* ---------- the administration's picture of it ---------- */
+
+.home-form {
+  display: grid; grid-template-columns: minmax(0, 1fr) 260px; gap: 20px; align-items: start; margin-top: 16px;
+}
+.range-head { display: flex; justify-content: space-between; gap: 8px; }
+.range-value { color: var(--on-surface); font-variant-numeric: tabular-nums; }
+.home-fields .field input[type="range"] { margin-top: 4px; }
+.home-preview {
+  position: sticky; top: calc(var(--bar-end) + 16px); margin: 0; aspect-ratio: 3 / 4; overflow: hidden;
+  border-radius: var(--radius-m); background: var(--canvas); box-shadow: 0 0 0 1px var(--outline), var(--shadow-1);
+  transition: opacity var(--med) var(--ease), filter var(--med) var(--ease);
+}
+/* Off: the page won't show, so its picture steps back. */
+.home-preview.off { opacity: 0.6; filter: grayscale(1); }
+.preview-tiles {
+  position: absolute; inset: -8px; display: grid; grid-template-columns: repeat(3, 1fr); align-content: center; gap: 6px;
+}
+.preview-tile { aspect-ratio: 3 / 4; overflow: hidden; border-radius: 8px; background: var(--tint, var(--surface-2)); }
+.preview-tile img { display: block; width: 100%; height: 100%; object-fit: cover; animation: fade-in var(--med) var(--ease); }
+.preview-scrim {
+  position: absolute; inset: 0;
+  background: radial-gradient(ellipse 80% 55% at 50% 50%,
+    oklch(from var(--canvas) l c h / 0.92) 35%, oklch(from var(--canvas) l c h / 0.55));
+}
+.preview-hero {
+  position: absolute; inset: 0; display: grid; place-content: center; justify-items: center; gap: 4px;
+  padding: 12px; text-align: center;
+}
+.preview-hero .mark { color: var(--primary); }
+.preview-title { max-width: 100%; font-size: 17px; line-height: 1.2; overflow-wrap: anywhere; }
+.preview-subtitle { max-width: 100%; font-size: 11px; line-height: 1.3; color: var(--on-surface-2); overflow-wrap: anywhere; }
+.preview-search {
+  display: flex; align-items: center; width: 180px; max-width: 100%; height: 24px; margin-top: 6px; padding: 0 8px;
+  border-radius: 999px; background: var(--glass); color: var(--on-surface-2);
+  box-shadow: inset 0 1px 0 var(--glass-edge), 0 0 0 1px var(--glass-line), var(--shadow-1);
+}
+@media (max-width: 760px) {
+  .home-form { grid-template-columns: minmax(0, 1fr); }
+  .home-preview { position: relative; top: auto; order: -1; width: min(100%, 240px); justify-self: center; aspect-ratio: 4 / 5; }
+}

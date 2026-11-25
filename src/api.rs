@@ -12,13 +12,23 @@ use starbooru_client::{Client, ClientError};
 use starbooru_core::{AiStatus, RemoteSite, RemoteTagQuery, ServerInfo};
 
 use crate::instance;
+use crate::logic::blacklist::guest_owner;
 use crate::logic::search::{Answers, Hint, SUGGESTIONS};
 use crate::logic::upload::human_size;
 use crate::store::{self, Session};
 
+/// The client kept, with the server, the token and a guest's blacklist it
+/// was made for.
+struct KeptClient {
+    server: String,
+    token: String,
+    exclude: Option<Vec<String>>,
+    client: Client,
+}
+
 thread_local! {
     // One client per session, so its connections are reused.
-    static CLIENT: RefCell<Option<(String, String, Client)>> = const { RefCell::new(None) };
+    static CLIENT: RefCell<Option<KeptClient>> = const { RefCell::new(None) };
     static SERVER_INFO: RefCell<Kept<ServerInfo>> = const { RefCell::new(Kept::new()) };
     static AI_STATUS: RefCell<Kept<AiStatus>> = const { RefCell::new(Kept::new()) };
     static TAG_HINTS: RefCell<Answers<Hint>> = RefCell::new(Answers::default());
@@ -59,7 +69,7 @@ impl Who {
     fn owner(&self) -> String {
         match self {
             Who::Member(session) => owner(session),
-            Who::Guest(server) => format!("{server}|guest"),
+            Who::Guest(server) => guest_owner(server),
         }
     }
 }
@@ -71,21 +81,37 @@ pub fn client() -> Option<Client> {
 }
 
 fn client_of(who: &Who) -> Option<Client> {
-    cached(who.server(), who.token())
+    // A guest's reads carry the list they keep on the device, if they
+    // changed the server's default.
+    let exclude = match who {
+        Who::Member(_) => None,
+        Who::Guest(server) => store::guest_blacklist(server),
+    };
+    cached(who.server(), who.token(), exclude)
 }
 
-/// The client for `server` with `token`, an empty one being a guest's.
-fn cached(server: &str, token: &str) -> Option<Client> {
+/// The client for `server` with `token`, an empty one being a guest's, who
+/// sends `exclude` as their blacklist.
+fn cached(server: &str, token: &str, exclude: Option<Vec<String>>) -> Option<Client> {
     CLIENT.with_borrow_mut(|cache| {
-        if let Some((kept_server, kept_token, client)) = cache.as_ref()
-            && kept_server == server
-            && kept_token == token
+        if let Some(kept) = cache.as_ref()
+            && kept.server == server
+            && kept.token == token
+            && kept.exclude == exclude
         {
-            return Some(client.clone());
+            return Some(kept.client.clone());
         }
         let token = (!token.is_empty()).then(|| token.to_owned());
-        let client = Client::new(server).ok()?.with_token(token.clone());
-        *cache = Some((server.to_owned(), token.unwrap_or_default(), client.clone()));
+        let client = Client::new(server)
+            .ok()?
+            .with_token(token.clone())
+            .with_guest_blacklist(exclude.as_deref());
+        *cache = Some(KeptClient {
+            server: server.to_owned(),
+            token: token.unwrap_or_default(),
+            exclude,
+            client: client.clone(),
+        });
         Some(client)
     })
 }
@@ -103,6 +129,7 @@ pub fn forget() {
     instance::forget();
     forget_tags();
     REMOTE_HINTS.with_borrow_mut(|k| *k = Answers::default());
+    crate::blacklist::forget();
 }
 
 /// Drops what the server said of itself and of its AI tools, after an

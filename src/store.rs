@@ -22,6 +22,7 @@ use starbooru_core::color::Rgb;
 use starbooru_core::{AuthResponse, User};
 
 use crate::i18n::Lang;
+use crate::logic::blacklist::{self, GuestList};
 use crate::logic::saved::{Kind, Placed, Sort, search_key};
 use crate::logic::{address, history, spots, updates};
 
@@ -324,6 +325,11 @@ pub struct Prefs {
     /// put them in and the ones used last (`logic::saved::sorted`).
     #[serde(deserialize_with = "lenient")]
     pub saved: SavedPrefs,
+    /// A guest's own blacklist on each server they changed it on, under
+    /// the guests' owner key (`logic::blacklist::guest_owner`). Without
+    /// one, the server's default applies.
+    #[serde(deserialize_with = "lenient", skip_serializing_if = "Vec::is_empty")]
+    pub guest_blacklists: Vec<GuestList>,
     /// Settings this version doesn't have yet (the reference's, or a newer
     /// version's), written back untouched.
     #[serde(flatten)]
@@ -361,6 +367,7 @@ impl Default for Prefs {
             people: true,
             dismissed_updates: Vec::new(),
             saved: SavedPrefs::default(),
+            guest_blacklists: Vec::new(),
             other: Map::new(),
         }
     }
@@ -908,6 +915,21 @@ pub fn undo_dismiss_update(hidden: HiddenUpdate) {
     });
 }
 
+/// A guest's own blacklist on `server`, once they changed it; `None` while
+/// the server's default applies. Outside a view.
+pub fn guest_blacklist(server: &str) -> Option<Vec<String>> {
+    let owner = blacklist::guest_owner(server);
+    PREFS.with(|p| {
+        p.with_untracked(|p| blacklist::guest_list(&p.guest_blacklists, &owner).map(<[_]>::to_vec))
+    })
+}
+
+/// Keeps `entries` as a guest's list on `server`, or forgets it for `None`.
+pub fn set_guest_blacklist(server: &str, entries: Option<Vec<String>>) {
+    let owner = blacklist::guest_owner(server);
+    update_prefs(|p| blacklist::set_guest_list(&mut p.guest_blacklists, &owner, entries));
+}
+
 fn update_memory(change: impl FnOnce(&mut GalleryMemory)) {
     let owner = owner();
     MEMORY.with(|m| m.update(|m| change(m.for_owner(&owner))));
@@ -1144,6 +1166,10 @@ mod tests {
                     },
                     boorus: Placed::default(),
                 },
+                guest_blacklists: vec![GuestList {
+                    owner: "https://other.example|guest".into(),
+                    entries: vec!["cat".into(), "rating:explicit".into()],
+                }],
                 other: Map::new(),
             },
             memory: GalleryMemory {
@@ -1198,6 +1224,10 @@ mod tests {
         assert_eq!(
             value["prefs"]["boorus"][0],
             serde_json::json!({"api": "danbooru", "base": "http://nas:8000"})
+        );
+        assert_eq!(
+            value["prefs"]["guest_blacklists"][0]["entries"],
+            serde_json::json!(["cat", "rating:explicit"])
         );
     }
 
@@ -1777,6 +1807,47 @@ mod tests {
             updates::dismissed(&prefs.dismissed_updates, "s|1"),
             Some("0.3.0")
         );
+    }
+
+    #[test]
+    fn a_guests_blacklist_loads_from_before_it_existed() {
+        // Settings stored before guests had a list of their own.
+        let prefs = parse(r#"{"prefs":{"theme":"dark","people":false}}"#).prefs;
+        assert!(prefs.guest_blacklists.is_empty());
+        assert_eq!(prefs.theme, Theme::Dark);
+        // None is written while there's none.
+        let json = to_json(&parse(r#"{"prefs":{"theme":"dark"}}"#)).unwrap();
+        assert!(!json.contains("guest_blacklists"), "{json}");
+        // An odd value costs only itself.
+        for odd in [r#""cat""#, "7", "null", r#"{"owner":"x"}"#] {
+            let prefs = parse(&format!(
+                r#"{{"prefs":{{"guest_blacklists":{odd},"theme":"light"}}}}"#
+            ))
+            .prefs;
+            assert!(prefs.guest_blacklists.is_empty(), "{odd}");
+            assert_eq!(prefs.theme, Theme::Light);
+        }
+        let prefs = parse(
+            r#"{"prefs":{"guest_blacklists":[{"owner":"s|guest","entries":["cat"],"new":1}]}}"#,
+        )
+        .prefs;
+        assert_eq!(
+            blacklist::guest_list(&prefs.guest_blacklists, "s|guest"),
+            Some(&["cat".to_owned()][..])
+        );
+    }
+
+    #[test]
+    fn a_guests_blacklist_is_kept_per_server() {
+        assert_eq!(guest_blacklist("https://g.example"), None);
+        set_guest_blacklist("https://g.example", Some(vec!["cat".into()]));
+        assert_eq!(
+            guest_blacklist("https://g.example"),
+            Some(vec!["cat".to_owned()])
+        );
+        assert_eq!(guest_blacklist("https://h.example"), None);
+        set_guest_blacklist("https://g.example", None);
+        assert_eq!(guest_blacklist("https://g.example"), None);
     }
 
     #[test]

@@ -3,6 +3,7 @@
 pub mod avatar;
 pub mod back;
 pub mod banner;
+pub mod blacklist;
 pub mod brand;
 #[rustfmt::skip]
 mod brand_paths;

@@ -3,7 +3,8 @@
 //! and each group as a page of its own at `/settings/<group>`, with a Back.
 //! The groups (`logic::settings::Group`): the account, its ways in, its
 //! password and devices (`account.rs`, `sessions.rs`); how the app looks
-//! (`appearance.rs`); thumbnails, the viewer and gestures (`viewing.rs`);
+//! (`appearance.rs`); the blacklist, thumbnails, the viewer and gestures
+//! (`viewing.rs`, `blacklist.rs`);
 //! the battery saver and effects (`battery.rs`); the library's tools; the
 //! shared links and the API keys (`keys.rs`); help and what this app is.
 //! Administrators have a way to the administration at the foot of the list.
@@ -11,6 +12,7 @@
 mod account;
 mod appearance;
 mod battery;
+mod blacklist;
 mod controls;
 mod keys;
 mod sessions;
@@ -84,6 +86,7 @@ fn group_note(group: Group) -> String {
         // The account's row shows the username, and the group's name under it.
         Group::Account => t!("settings-group-account"),
         Group::Appearance => t!("settings-group-appearance-note"),
+        Group::Viewing if instance::guest() => t!("blacklist-title"),
         Group::Viewing => t!("settings-group-viewing-note"),
         Group::Battery => t!("settings-group-battery-note"),
         Group::Library => t!("settings-group-library-note"),
