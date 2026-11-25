@@ -17,6 +17,7 @@ pub mod legal;
 pub mod markdown;
 pub mod mention;
 pub mod menu;
+pub mod person;
 pub mod player;
 pub mod preview;
 pub mod rating;

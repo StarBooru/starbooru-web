@@ -34,6 +34,8 @@ pub enum Icon {
     Download,
     Edit,
     Explore,
+    /// Marking where a face is: a head between a frame's corners.
+    Face,
     /// Seeing: how posts are shown.
     Eye,
     /// Hidden by the blacklist: the eye, struck through.
@@ -298,6 +300,12 @@ impl Icon {
             Icon::Pin => Shape::Fill(
                 "M8 3h8a1 1 0 0 1 0 2h-1v4.6l2.8 3.73A1 1 0 0 1 17 15h-4v5.5a1 1 0 0 1-2 0V15H7a1 1 0 0 1-.8-1.67L9 9.6V5H8a1 1 0 0 1 0-2",
             ),
+            // Drawn for StarBooru in the pack's 2-unit line: a frame's four
+            // corners around a head and shoulders.
+            Icon::Face => Shape::Stroke(
+                "2",
+                "M4 8V6a2 2 0 0 1 2-2h2m8 0h2a2 2 0 0 1 2 2v2m0 8v2a2 2 0 0 1-2 2h-2m-8 0H6a2 2 0 0 1-2-2v-2M12 7.5a2.5 2.5 0 1 0 0 5a2.5 2.5 0 1 0 0-5M8 17.5c.8-1.6 2.3-2.5 4-2.5s3.2.9 4 2.5",
+            ),
             // MingCute group_2_fill.
             Icon::People => Shape::Fill(
                 "M10.238 13.028a9.7 9.7 0 0 1 3.315.848c1.518.694 3.441 2.12 3.447 3.981a2.27 2.27 0 0 1-.411 1.305c-.753 1.077-2.228 1.417-3.444 1.608c-1.456.227-2.948.254-4.417.222c-1.766-.037-4.816-.167-6.107-1.57c-1.112-1.209-.568-2.793.428-3.872c1.75-1.896 4.678-2.71 7.189-2.522m8.612 5.954c.415-1.832-.171-3.418-1.422-4.779c-.421-.458-.599-.578-1.076-.974c.47-.111.592-.157 1.078-.202c1.506-.141 3.097.29 4.275 1.254c1.78 1.457 1.83 3.658-.587 4.376c-.74.22-1.502.278-2.268.325m-.443-12.955a3 3 0 0 1 1.714.852c2.018 2.017.295 5.475-2.528 5.094a3 3 0 0 1-1.714-.852c-2.018-2.017-.295-5.475 2.528-5.094M9.99 3.026a4.5 4.5 0 0 1 2.525 1.133c3.227 2.914.814 8.281-3.505 7.815a4.5 4.5 0 0 1-2.525-1.133C3.258 7.927 5.671 2.56 9.99 3.026",
@@ -441,7 +449,7 @@ pub fn Ico(icon: Icon, #[prop(default = 24)] size: u32) -> impl IntoView {
 mod tests {
     use super::*;
 
-    const ALL: [Icon; 81] = [
+    const ALL: [Icon; 82] = [
         Icon::Add,
         Icon::ArrowBack,
         Icon::Article,
@@ -465,6 +473,7 @@ mod tests {
         Icon::Download,
         Icon::Edit,
         Icon::Explore,
+        Icon::Face,
         Icon::Eye,
         Icon::EyeOff,
         Icon::Flip,

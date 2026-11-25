@@ -3,11 +3,12 @@
 //! Previous and next walk the gallery's results for the same search. Each
 //! post that loads goes first in the history Explore lists. The tags card
 //! turns into the tag editor in place, and the people card (shown while
-//! People are on in Settings) into theirs; the media editor opens over the
-//! whole window.
+//! People are on in Settings) into theirs, which marks faces on the stage;
+//! the media editor opens over the whole window.
 
 mod edit;
 mod editor;
+mod faces;
 pub(crate) mod glow;
 mod people;
 mod related;
@@ -22,15 +23,16 @@ use std::sync::Arc;
 use leptos::prelude::*;
 use leptos::task::spawn_local;
 use leptos_router::NavigateOptions;
-use leptos_router::hooks::{use_navigate, use_params_map, use_query_map};
+use leptos_router::hooks::{use_location, use_navigate, use_params_map, use_query_map};
 use send_wrapper::SendWrapper;
 use starbooru_core::{EditKind, MediaKind, Neighbors, Post};
 use wasm_bindgen::JsCast;
 
 use self::edit::EditCard;
 use self::editor::{EditorSheet, Saved, pause_stage_video};
+use self::faces::{FaceLayer, Faces};
 use self::glow::PostGlow;
-use self::people::PeopleCard;
+use self::people::{PeopleCard, Picture};
 use self::related::Related;
 use self::side::{DetailsCard, TagsCard};
 use self::stage::{Shown, Stage};
@@ -48,7 +50,7 @@ use crate::components::stars::StarVote;
 use crate::components::tag_menu::TagPress;
 use crate::logic::blacklist::still_hidden;
 use crate::logic::editor::offer;
-use crate::logic::people::{PeopleShown, closes_when_off, people_shown};
+use crate::logic::people::{PeopleShown, closes_when_off, faces_pending, people_shown};
 use crate::logic::reverse::offered;
 use crate::logic::settings::{Group, anchored};
 use crate::logic::stars::next_stars;
@@ -58,7 +60,7 @@ use crate::logic::viewer::{
 };
 use crate::logic::votes::{Ballot, Tally, next_vote};
 use crate::logic::zoom::Zoom;
-use crate::{blacklist, instance, power, route, store};
+use crate::{blacklist, dom, instance, power, route, store};
 
 /// Posts kept for the viewer to show at once: the tile just clicked and the
 /// neighbours fetched ahead.
@@ -225,6 +227,8 @@ pub fn PostView() -> impl IntoView {
     // an edit in progress stays until it's saved or cancelled.
     let people_on = Memo::new(|_| store::prefs().people);
     let people = Memo::new(move |_| people_shown(people_on.get(), people_editing.get()));
+    // Whom the card points at, and the editor's boxes, for the stage.
+    let faces = Faces::new();
     Effect::watch(
         move || people_on.get(),
         move |on, _, _| {
@@ -383,6 +387,7 @@ pub fn PostView() -> impl IntoView {
         action_error.set(None);
         editing.set(false);
         people_editing.set(false);
+        faces.reset();
         media_editing.set(false);
         sharing.set(None);
         reversing.set(None);
@@ -727,9 +732,43 @@ pub fn PostView() -> impl IntoView {
             editing.set(false);
         }
     });
+    // The server cuts new faces out a moment after saving: the post is
+    // asked for again a few times until it has them all.
+    let wait_for_faces = move |id: i64| {
+        let at = generation.get_value();
+        spawn_local(async move {
+            for ms in [1200, 2500, 5000] {
+                dom::sleep(ms).await;
+                if generation.try_get_value() != Some(at) {
+                    return;
+                }
+                let Ok(p) = api::call(move |c| async move { c.post(id).await }).await else {
+                    return;
+                };
+                if generation.try_get_value() != Some(at) {
+                    return;
+                }
+                let done = !faces_pending(&p);
+                let p = Arc::new(p);
+                keep(Arc::clone(&p));
+                post.try_update(|shown| {
+                    if let Some(shown) = shown.as_mut().filter(|s| s.id == id) {
+                        *shown = p;
+                    }
+                });
+                if done {
+                    return;
+                }
+            }
+        });
+    };
     let people_saved = Callback::new(move |p: Post| {
+        let (id, waiting) = (p.id, faces_pending(&p));
         if take(p) {
             people_editing.set(false);
+            if waiting {
+                wait_for_faces(id);
+            }
         }
     });
     // A vote on one of its tags: the lists show the post's tags too.
@@ -838,6 +877,36 @@ pub fn PostView() -> impl IntoView {
     };
 
     let shown = Memo::new(move |_| post.with(|p| p.as_deref().map(Shown::of)));
+    // Faces show on a still picture the blacklist doesn't cover. The
+    // server cuts an animation's or a video's from a frame the stage may not
+    // be showing.
+    let on_picture = Memo::new(move |_| {
+        !covered.get() && post.with(|p| p.as_ref().is_some_and(|p| p.kind == MediaKind::Image))
+    });
+    let picture = Picture {
+        src: Signal::derive(move || on_picture.get().then(|| src.get())),
+        size: Signal::derive(move || shown.with(|s| s.as_ref().and_then(|s| s.size))),
+        boxes: on_picture.into(),
+        covered: covered.into(),
+    };
+    let saved_faces = Memo::new(move |_| {
+        Arc::new(post.with(|p| {
+            p.as_ref()
+                .map(|p| p.figures.iter().map(|f| f.face).collect::<Vec<_>>())
+                .unwrap_or_default()
+        }))
+    });
+    // A link to the post's people (`#people`) shows the card once it's there.
+    let hash = use_location().hash;
+    Effect::watch(
+        move || (mode.get() == Mode::Ready, hash.get()),
+        move |(ready, hash), _, _| {
+            if *ready && hash == "#people" {
+                request_animation_frame(show_people);
+            }
+        },
+        true,
+    );
     let ready = move || {
         let post = Signal::derive(move || post.get());
         view! {
@@ -865,6 +934,21 @@ pub fn PostView() -> impl IntoView {
                         on_edit=start_edit
                         on_retry=refetch
                         covered=covered
+                        over=ViewFn::from(move || {
+                            on_picture
+                                .get()
+                                .then(|| {
+                                    view! {
+                                        <FaceLayer
+                                            faces=faces
+                                            saved=saved_faces
+                                            editing=people_editing
+                                            zoom=zoom
+                                            size=picture.size
+                                        />
+                                    }
+                                })
+                        })
                         cover=ViewFn::from(move || {
                             view! {
                                 <Cover
@@ -965,6 +1049,8 @@ pub fn PostView() -> impl IntoView {
                             editing=people_editing
                             unsaved=people_unsaved
                             kept=Signal::derive(move || people.get() == PeopleShown::Kept)
+                            faces=faces
+                            picture=picture
                             on_edit=start_people
                             on_cancel=Callback::new(move |()| people_editing.set(false))
                             on_saved=people_saved
@@ -1077,6 +1163,31 @@ fn Cover(entries: Memo<Vec<String>>, on_show: Callback<()>) -> impl IntoView {
                 </a>
             </div>
         </div>
+    }
+}
+
+/// Brings the People card into sight, with the focus on its button, for a
+/// link that leads to marking the people.
+fn show_people() {
+    let Some(doc) = web_sys::window().and_then(|w| w.document()) else {
+        return;
+    };
+    let Some(card) = doc.get_element_by_id("people") else {
+        return;
+    };
+    let options = web_sys::ScrollIntoViewOptions::new();
+    options.set_block(web_sys::ScrollLogicalPosition::Center);
+    if !dom::reduced_motion() {
+        options.set_behavior(web_sys::ScrollBehavior::Smooth);
+    }
+    card.scroll_into_view_with_scroll_into_view_options(&options);
+    if let Some(button) = card
+        .query_selector(".card-head .btn")
+        .ok()
+        .flatten()
+        .and_then(|b| b.dyn_into::<web_sys::HtmlElement>().ok())
+    {
+        let _ = button.focus();
     }
 }
 

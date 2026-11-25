@@ -1,8 +1,12 @@
-//! The viewer's People card: who is in the picture, each with their clothes
-//! and looks by slot, and in its place the editor for them. Saving goes
-//! through `PUT /posts/{id}/figures`, and the server keeps the post's tags
-//! in step.
+//! The viewer's People card: who is in the picture, each with their face,
+//! the character, their franchise and whom they dress as, then their clothes
+//! and looks by slot; and in its place the editor for them, where each
+//! person's face is marked on the picture (`faces.rs`). Saving goes through
+//! `PUT /posts/{id}/figures`: the server keeps the post's tags in step,
+//! fills in the franchise of a character it knows, and cuts each face out a
+//! moment later.
 
+use std::cell::RefCell;
 use std::collections::BTreeMap;
 use std::sync::Arc;
 
@@ -10,22 +14,42 @@ use leptos::ev::{MouseEvent, SubmitEvent};
 use leptos::prelude::*;
 use leptos::task::spawn_local;
 use starbooru_core::{
-    Figure, FigureKind, MAX_FIGURE_TAGS, MAX_FIGURES, Post, Slot, TagSuggestions, cosplay_tag,
+    FaceBox, Figure, FigureKind, MAX_FIGURE_TAGS, MAX_FIGURES, Post, Slot, TagSuggestions,
+    cosplay_tag,
 };
 use wasm_bindgen::JsCast;
 
+use super::faces::{Faces, Mark, reveal_stage};
 use super::side::chip;
 use crate::api;
 use crate::components::banner::ErrorBanner;
 use crate::components::icons::{Ico, Icon};
 use crate::components::select::{Choice, Select};
 use crate::components::tag_box::TagBox;
+use crate::logic::faces::crop_view;
 use crate::logic::people::{
-    Draft, Field, PeopleError, SlotGroup, figures_update, numbers, people_changed, people_known,
-    slot_groups,
+    Draft, Field, PeopleError, SlotGroup, figures_update, filled_in, numbers, people_changed,
+    people_known, slot_groups,
 };
+use crate::logic::viewer::css_url;
 use crate::pages::{bad_tag_text, figure_kind_label};
 use crate::route;
+
+thread_local! {
+    /// The franchises the server filled in when post `.0`'s people were
+    /// last saved here, person by person.
+    static FILLED: RefCell<Option<(i64, Vec<Option<String>>)>> = const { RefCell::new(None) };
+}
+
+/// The franchise the server filled in for person `i` of post `id`, if it
+/// is still `franchise`.
+fn filled(id: i64, i: usize, franchise: Option<&str>) -> Option<String> {
+    FILLED.with_borrow(|f| {
+        let (of, list) = f.as_ref()?;
+        let was = list.get(i)?.as_deref()?;
+        (*of == id && Some(was) == franchise).then(|| was.to_owned())
+    })
+}
 
 fn slot_label(slot: Slot) -> String {
     match slot {
@@ -91,6 +115,7 @@ fn box_id(key: u64, field: Field) -> String {
     match field {
         Field::Character => format!("person-{key}-character"),
         Field::Cosplay => format!("person-{key}-cosplay"),
+        Field::Franchise => format!("person-{key}-franchise"),
         Field::Slot(slot) => format!("person-{key}-{}", slot.as_str()),
     }
 }
@@ -108,10 +133,80 @@ fn focus_box(id: String) {
     });
 }
 
+/// What the card needs of the picture for its faces.
+#[derive(Clone, Copy)]
+pub(super) struct Picture {
+    /// The address the stage shows, for faces the server hasn't cut yet;
+    /// `None` while the blacklist covers the post.
+    pub src: Signal<Option<String>>,
+    /// The picture's width and height.
+    pub size: Signal<Option<(i32, i32)>>,
+    /// Boxes can show on the stage: a still picture, not covered.
+    pub boxes: Signal<bool>,
+    /// The blacklist covers the post: no faces of it either.
+    pub covered: Signal<bool>,
+}
+
+/// A person's face on a disc, numbered as their box on the picture is: the
+/// server's crop, or before it has one the picture cut the same way, or
+/// the person icon without a box. `marking` rings it while the picture
+/// waits for the box to be drawn.
+#[component]
+fn FaceDisc(
+    #[prop(into)] face: Signal<Option<FaceBox>>,
+    #[prop(into)] crop: Signal<Option<String>>,
+    picture: Picture,
+    #[prop(into)] number: Signal<usize>,
+    #[prop(optional, into)] marking: Signal<bool>,
+) -> impl IntoView {
+    let broken = RwSignal::new(None::<String>);
+    let inner = move || {
+        let crop = crop
+            .get()
+            .filter(|u| !picture.covered.get() && broken.with(|b| b.as_deref() != Some(u)));
+        if let Some(url) = crop {
+            let failed = url.clone();
+            return view! {
+                <img
+                    src=api::media(&url)
+                    alt=""
+                    decoding="async"
+                    draggable="false"
+                    on:error=move |_| broken.set(Some(failed.clone()))
+                />
+            }
+            .into_any();
+        }
+        let cut = face
+            .get()
+            .and_then(|f| crop_view(f, picture.size.get()))
+            .zip(picture.src.get());
+        match cut {
+            Some((view, src)) => {
+                let style = format!("background-image: {}; {}", css_url(&src), view.style());
+                view! { <span class="face-crop" style=style></span> }.into_any()
+            }
+            None => view! { <Ico icon=Icon::User size=22 /> }.into_any(),
+        }
+    };
+    view! {
+        <span
+            class="face-disc"
+            class:empty=move || face.with(Option::is_none)
+            class:marking=move || marking.get()
+            aria-hidden="true"
+        >
+            {inner}
+            <span class="face-num">{move || number.get()}</span>
+        </span>
+    }
+}
+
 /// The people of the post on the page, and the way to change them for
 /// whoever `editable` says may. `editing` says the editor is open, which
 /// `on_edit` asks for; `unsaved`, whether closing it would lose changes;
-/// `kept`, that People went off with the editor holding changes.
+/// `kept`, that People went off with the editor holding changes. `faces`
+/// is shared with the stage, which outlines whom the card points at.
 #[component]
 pub fn PeopleCard(
     #[prop(into)] post: Signal<Option<Arc<Post>>>,
@@ -119,6 +214,8 @@ pub fn PeopleCard(
     #[prop(into)] editing: Signal<bool>,
     unsaved: RwSignal<bool>,
     #[prop(into)] kept: Signal<bool>,
+    faces: Faces,
+    picture: Picture,
     on_edit: Callback<()>,
     on_cancel: Callback<()>,
     on_saved: Callback<Post>,
@@ -127,19 +224,24 @@ pub fn PeopleCard(
     // whole of it comes.
     let known = Memo::new(move |_| post.with(|p| p.as_deref().is_some_and(people_known)));
     let figures = Memo::new(move |_| {
-        post.with(|p| p.as_ref().map(|p| p.figures.clone()).unwrap_or_default())
+        post.with(|p| {
+            p.as_ref()
+                .map(|p| (p.id, p.figures.clone()))
+                .unwrap_or_default()
+        })
     });
     let start = move |_| {
         if editable.get_untracked() && known.get_untracked() {
             on_edit.run(());
         }
     };
+    let none = move || figures.with(|(_, f)| f.is_empty());
 
     let body = move || {
         if !known.get() {
             return None;
         }
-        let figures = figures.get();
+        let (id, figures) = figures.get();
         if figures.is_empty() {
             return Some(
                 view! { <p class="muted hint">{move || t!("people-none")}</p> }.into_any(),
@@ -150,26 +252,27 @@ pub fn PeopleCard(
         let list = figures
             .into_iter()
             .enumerate()
-            .map(|(i, figure)| person(figure, numbers.get(i).copied().unwrap_or(0)))
+            .map(|(i, figure)| {
+                let number = numbers.get(i).copied().unwrap_or(0);
+                person(figure, id, i, number, faces, picture)
+            })
             .collect_view();
         Some(view! { <div class="figures" data-press="tag">{list}</div> }.into_any())
     };
     let shown = move || {
         view! {
-            <section class="card people">
+            <section class="card people" id="people">
                 <div class="card-head">
                     <h2 class="card-title">{move || t!("people-title")}</h2>
                     <Show when=move || editable.get() && known.get()>
                         <button
                             type="button"
                             class="btn text small"
-                            aria-label=move || {
-                                (!figures.with(Vec::is_empty)).then(|| t!("people-edit-label"))
-                            }
+                            aria-label=move || (!none()).then(|| t!("people-edit-label"))
                             on:click=start
                         >
                             {move || {
-                                if figures.with(Vec::is_empty) {
+                                if none() {
                                     view! {
                                         <Ico icon=Icon::Add size=18 />
                                         {t!("people-add")}
@@ -201,6 +304,8 @@ pub fn PeopleCard(
                         figures=figures
                         unsaved=unsaved
                         kept=kept
+                        faces=faces
+                        picture=picture
                         on_cancel=on_cancel
                         on_saved=on_saved
                     />
@@ -213,18 +318,84 @@ pub fn PeopleCard(
     }
 }
 
-/// One person on the card: their kind, who they are and whom they dress as,
-/// then their tags slot by slot.
-fn person(figure: Figure, number: usize) -> impl IntoView {
+/// One person on the card: their face, kind, who they are, their franchise
+/// and whom they dress as, then their tags slot by slot. Pointing at them
+/// outlines their face on the picture, and their face's disc brings the
+/// picture into sight.
+fn person(
+    figure: Figure,
+    id: i64,
+    index: usize,
+    number: usize,
+    faces: Faces,
+    picture: Picture,
+) -> impl IntoView {
     let kind = figure.kind;
+    let key = u64::try_from(index).unwrap_or(u64::MAX);
     let summary = {
         let figure = figure.clone();
         move || person_summary(&figure, number)
+    };
+    let light = move || faces.lit.set(Some(key));
+    let dim = move || {
+        if faces.lit.get_untracked() == Some(key) {
+            faces.lit.set(None);
+        }
+    };
+    let face = figure.face;
+    let crop = figure.face_url.clone();
+    let disc = move || {
+        let crop = crop.clone();
+        let disc = view! {
+            <FaceDisc
+                face=Signal::derive(move || face)
+                crop=Signal::derive(move || crop.clone())
+                picture=picture
+                number=Signal::derive(move || index + 1)
+            />
+        };
+        if face.is_some() && picture.boxes.get() {
+            let label = t!("people-face-show", person = person_label(kind, number));
+            view! {
+                <button
+                    type="button"
+                    class="face-press"
+                    aria-label=label
+                    aria-pressed=move || {
+                        if faces.pinned.get() == Some(key) { "true" } else { "false" }
+                    }
+                    on:click=move |_| {
+                        if faces.pinned.get_untracked() == Some(key) {
+                            faces.pinned.set(None);
+                        } else {
+                            faces.pinned.set(Some(key));
+                            reveal_stage();
+                        }
+                    }
+                >
+                    {disc}
+                </button>
+            }
+            .into_any()
+        } else {
+            disc.into_any()
+        }
     };
     let character = figure
         .character
         .clone()
         .map(|name| chip(name, "chip cat-character"));
+    let franchise = figure.franchise.clone().map(|name| {
+        // Not typed: the server knew the character's.
+        let auto = filled(id, index, Some(&name)).is_some();
+        let title = auto.then(|| t!("people-filled-title"));
+        let (href, tag) = (route::gallery(&name), name.clone());
+        view! {
+            <a class="chip cat-copyright" class:filled=auto href=href data-tag=tag title=title>
+                {name}
+            </a>
+        }
+    });
     let cosplay = figure.cosplay.clone().map(|name| {
         let tag = cosplay_tag(&name);
         view! {
@@ -249,35 +420,60 @@ fn person(figure: Figure, number: usize) -> impl IntoView {
         view! { <dl class="figure-slots">{rows}</dl> }
     });
     view! {
-        <section class="figure" role="group" aria-label=summary>
+        <section
+            class="figure"
+            class:lit=move || faces.lit.get().or(faces.pinned.get()) == Some(key)
+            role="group"
+            aria-label=summary
+            on:mouseenter=move |_| light()
+            on:mouseleave=move |_| dim()
+            on:focusin=move |_| light()
+            on:focusout=move |_| dim()
+        >
             <div class="figure-head">
-                <span class="figure-kind">{move || person_label(kind, number)}</span>
-                {character}
-                {cosplay}
+                {disc}
+                <div class="figure-who">
+                    <span class="figure-kind">{move || person_label(kind, number)}</span>
+                    <div class="figure-names">{character} {franchise} {cosplay}</div>
+                </div>
             </div>
             {slots}
         </section>
     }
 }
 
-/// A person in the editor: each box its own signal, for its tag box.
+/// A person in the editor: each box its own signal, for its tag box, and
+/// their face's box, which the stage moves.
 #[derive(Clone)]
 struct Row {
     key: u64,
     kind: ArcRwSignal<FigureKind>,
     character: ArcRwSignal<String>,
     cosplay: ArcRwSignal<String>,
+    franchise: ArcRwSignal<String>,
     slots: BTreeMap<Slot, ArcRwSignal<String>>,
+    face: ArcRwSignal<Option<FaceBox>>,
+    /// The box the server has for them and its crop, which shows while
+    /// the box stays where it was.
+    saved: Option<(FaceBox, String)>,
+    /// The franchise the server filled in at the last save.
+    filled: Option<String>,
 }
 
 impl Row {
-    fn new(key: u64, draft: Draft) -> Self {
+    fn new(
+        key: u64,
+        draft: Draft,
+        saved: Option<(FaceBox, String)>,
+        filled: Option<String>,
+    ) -> Self {
         let mut typed = draft.slots;
         Self {
             key,
             kind: ArcRwSignal::new(draft.kind),
             character: ArcRwSignal::new(draft.character),
             cosplay: ArcRwSignal::new(draft.cosplay),
+            franchise: ArcRwSignal::new(draft.franchise),
             slots: Slot::ALL
                 .into_iter()
                 .map(|slot| {
@@ -285,6 +481,9 @@ impl Row {
                     (slot, ArcRwSignal::new(text))
                 })
                 .collect(),
+            face: ArcRwSignal::new(draft.face),
+            saved,
+            filled,
         }
     }
 
@@ -293,11 +492,13 @@ impl Row {
             kind: self.kind.get_untracked(),
             character: self.character.get_untracked(),
             cosplay: self.cosplay.get_untracked(),
+            franchise: self.franchise.get_untracked(),
             slots: self
                 .slots
                 .iter()
                 .map(|(slot, text)| (*slot, text.get_untracked()))
                 .collect(),
+            face: self.face.get_untracked(),
         }
     }
 
@@ -306,6 +507,8 @@ impl Row {
         self.kind.track();
         self.character.track();
         self.cosplay.track();
+        self.franchise.track();
+        self.face.track();
         for text in self.slots.values() {
             text.track();
         }
@@ -321,21 +524,30 @@ fn PeopleEditor(
     figures: Vec<Figure>,
     unsaved: RwSignal<bool>,
     kept: Signal<bool>,
+    faces: Faces,
+    picture: Picture,
     on_cancel: Callback<()>,
     on_saved: Callback<Post>,
 ) -> impl IntoView {
     let next_key = StoredValue::new(0_u64);
     // `None` once the editor has gone, as it may have by an answer.
-    let make = move |draft: Draft| {
+    let make = move |draft: Draft, saved: Option<(FaceBox, String)>, filled: Option<String>| {
         let key = next_key.try_get_value()?;
         next_key.try_set_value(key.wrapping_add(1));
-        Some(Row::new(key, draft))
+        Some(Row::new(key, draft, saved, filled))
     };
     // Someone to fill in at once when there's no one yet.
     let first: Vec<Row> = if figures.is_empty() {
-        make(Draft::default()).into_iter().collect()
+        make(Draft::default(), None, None).into_iter().collect()
     } else {
-        figures.iter().map(Draft::of).filter_map(make).collect()
+        figures
+            .iter()
+            .enumerate()
+            .filter_map(|(i, f)| {
+                let saved = f.face.zip(f.face_url.clone());
+                make(Draft::of(f), saved, filled(id, i, f.franchise.as_deref()))
+            })
+            .collect()
     };
     let rows = RwSignal::new(first);
     let saved = StoredValue::new(figures);
@@ -352,7 +564,23 @@ fn PeopleEditor(
             unsaved.set(now);
         }
     });
-    on_cleanup(move || unsaved.set(false));
+    // The stage draws the boxes the rows hold.
+    Effect::new(move |_| {
+        let marks: Vec<Mark> = rows.with(|r| {
+            r.iter()
+                .map(|row| Mark {
+                    key: row.key,
+                    face: row.face.clone(),
+                })
+                .collect()
+        });
+        faces.marks.set(marks);
+    });
+    on_cleanup(move || {
+        unsaved.try_set(false);
+        faces.marks.try_set(Vec::new());
+        faces.reset();
+    });
     let busy = RwSignal::new(false);
     let error = RwSignal::new(None::<String>);
     // What can't be saved as typed, and the box it's in.
@@ -377,6 +605,9 @@ fn PeopleEditor(
         })
         .unwrap_or_default()
     };
+    // Their place in the list, as the stage numbers their box.
+    let place_of =
+        move |key: u64| rows.with(|r| r.iter().position(|row| row.key == key).map_or(0, |i| i + 1));
     let key_at = move |person: usize| rows.with_untracked(|r| r.get(person).map(|row| row.key));
 
     let save = move |e: SubmitEvent| {
@@ -384,22 +615,27 @@ fn PeopleEditor(
         if busy.get_untracked() {
             return;
         }
+        faces.drawing.set(None);
         let drafts: Vec<Draft> = rows.with_untracked(|r| r.iter().map(Row::draft).collect());
         let update = match figures_update(&drafts) {
             Ok(update) => update,
             Err(refused) => {
+                let whose =
+                    |person: usize| untrack(|| key_at(person).map(label_of)).unwrap_or_default();
                 let (mark, text) = match &refused {
                     PeopleError::Tag { person, field, bad } => {
                         (key_at(*person).map(|k| (k, *field)), bad_tag_text(bad))
                     }
                     PeopleError::TooManyTags { person } => {
-                        let who = untrack(|| key_at(*person).map(label_of)).unwrap_or_default();
                         let text = t!(
                             "people-error-many-tags",
-                            person = who,
+                            person = whose(*person),
                             max = MAX_FIGURE_TAGS
                         );
                         (None, text)
+                    }
+                    PeopleError::BadFace { person } => {
+                        (None, t!("people-error-face", person = whose(*person)))
                     }
                     PeopleError::TooMany => (None, t!("people-error-many", max = MAX_FIGURES)),
                 };
@@ -413,12 +649,15 @@ fn PeopleEditor(
         };
         busy.set(true);
         error.set(None);
+        let sent = update.figures.clone();
         spawn_local(async move {
             let result =
                 api::call(move |c| async move { c.set_figures(id, update.figures).await }).await;
             busy.try_set(false);
             match result {
                 Ok(saved) => {
+                    let filled = filled_in(&sent, &saved.figures);
+                    FILLED.with_borrow_mut(|f| *f = Some((id, filled)));
                     // Gone with its card if the page moved on meanwhile.
                     on_saved.try_run(saved);
                 }
@@ -437,7 +676,7 @@ fn PeopleEditor(
     };
 
     let add = move |_| {
-        let Some(row) = make(Draft::default()) else {
+        let Some(row) = make(Draft::default(), None, None) else {
             return;
         };
         let key = row.key;
@@ -454,6 +693,12 @@ fn PeopleEditor(
     };
     let remove = Callback::new(move |key: u64| {
         rows.update(|r| r.retain(|row| row.key != key));
+        if faces.drawing.get_untracked() == Some(key) {
+            faces.drawing.set(None);
+        }
+        if faces.lit.get_untracked() == Some(key) {
+            faces.lit.set(None);
+        }
         if invalid.with_untracked(|i| i.is_some_and(|(k, _)| k == key)) {
             invalid.set(None);
             problem.set(None);
@@ -491,14 +736,14 @@ fn PeopleEditor(
                     // Cancelled while it asked: no editor to fill.
                     let Some(found) = figures
                         .iter()
-                        .map(Draft::of)
-                        .map(make)
+                        .map(|f| make(Draft::of(f), None, None))
                         .collect::<Option<Vec<Row>>>()
                     else {
                         return;
                     };
                     invalid.try_set(None);
                     problem.try_set(None);
+                    faces.reset();
                     rows.try_set(found);
                 }
                 Err(message) => {
@@ -509,7 +754,7 @@ fn PeopleEditor(
     };
 
     view! {
-        <form class="card edit people-edit" on:submit=save on:input=typed>
+        <form class="card edit people-edit" id="people" on:submit=save on:input=typed>
             <h2 class="card-title">{move || t!("people-title")}</h2>
             <p class="muted hint">{move || t!("people-hint")}</p>
             <For
@@ -521,14 +766,19 @@ fn PeopleEditor(
                         <PersonFields
                             row=row
                             label=Signal::derive(move || label_of(key))
+                            number=Signal::derive(move || place_of(key))
                             invalid=Signal::derive(move || {
                                 invalid.get().filter(|(k, _)| *k == key).map(|(_, f)| f)
                             })
+                            faces=faces
+                            picture=picture
                             on_remove=remove
                         />
                     }
                 }
             />
+            // Room here for finding the people in the picture, once the
+            // server can.
             <div class="people-tools">
                 <button
                     type="button"
@@ -583,31 +833,73 @@ fn PeopleEditor(
     }
 }
 
-/// One person's boxes: who they are, whom they dress as, and a tag box for
-/// each slot, clothing first.
+/// One person's boxes: their face, who they are and their franchise, their
+/// kind and whom they dress as, and a tag box for each slot, clothing first.
+/// The face is marked on the picture: its disc and button start a drag
+/// there, and show the box once it's made.
 #[component]
 fn PersonFields(
     row: Row,
     #[prop(into)] label: Signal<String>,
+    /// Their place in the list, the number on their box.
+    #[prop(into)]
+    number: Signal<usize>,
     /// The box that holds what can't be saved, if it's one of theirs.
     #[prop(into)]
     invalid: Signal<Option<Field>>,
+    faces: Faces,
+    picture: Picture,
     on_remove: Callback<u64>,
 ) -> impl IntoView {
     let key = row.key;
     let kind = RwSignal::from(row.kind.clone());
+    let face = RwSignal::from(row.face.clone());
     let marked = move |field: Field| Signal::derive(move || invalid.get() == Some(field));
-    let named = |field: Field, text: &ArcRwSignal<String>, title: fn() -> String| {
+    let named = |field: Field,
+                 text: &ArcRwSignal<String>,
+                 class: &'static str,
+                 title: fn() -> String| {
         let id = box_id(key, field);
         view! {
-            <div class="field">
+            <div class=format!("field {class}")>
                 <label for=id.clone()>{title}</label>
                 <TagBox id=id text=RwSignal::from(text.clone()) one_line=true invalid=marked(field) />
             </div>
         }
     };
-    let character = named(Field::Character, &row.character, || t!("people-character"));
-    let cosplay = named(Field::Cosplay, &row.cosplay, || t!("people-cosplay"));
+    let character = named(
+        Field::Character,
+        &row.character,
+        "named cat-character",
+        || t!("people-character"),
+    );
+    let cosplay = named(Field::Cosplay, &row.cosplay, "named cat-character", || {
+        t!("people-cosplay")
+    });
+    // The franchise, marked while it's still the one the server filled in.
+    let franchise = {
+        let id = box_id(key, Field::Franchise);
+        let text = RwSignal::from(row.franchise.clone());
+        let filled = row.filled.clone();
+        let auto = Signal::derive(move || {
+            filled
+                .as_deref()
+                .is_some_and(|f| text.with(|t| t.trim() == f))
+        });
+        view! {
+            <div class="field named cat-copyright" class:filled=auto>
+                <label for=id.clone()>
+                    {move || t!("people-franchise")}
+                    <Show when=move || auto.get()>
+                        <span class="filled-note" title=move || t!("people-filled-title")>
+                            {move || t!("people-filled")}
+                        </span>
+                    </Show>
+                </label>
+                <TagBox id=id text=text one_line=true invalid=marked(Field::Franchise) />
+            </div>
+        }
+    };
     let groups = slot_groups()
         .into_iter()
         .map(|(group, slots)| {
@@ -635,10 +927,117 @@ fn PersonFields(
             }
         })
         .collect_view();
+
+    // The face: drawn on the picture, then shown there and on the disc.
+    let saved = row.saved.clone();
+    let crop = Signal::derive(move || {
+        let (was, url) = saved.clone()?;
+        (face.get() == Some(was)).then_some(url)
+    });
+    let marking = Signal::derive(move || faces.drawing.get() == Some(key));
+    let start_marking = move || {
+        faces.lit.set(Some(key));
+        faces.drawing.set(Some(key));
+        reveal_stage();
+    };
+    let press_disc = move |_| {
+        if !picture.boxes.get_untracked() {
+            return;
+        }
+        if marking.get_untracked() {
+            faces.drawing.set(None);
+        } else if face.with_untracked(Option::is_some) {
+            faces.lit.set(Some(key));
+            reveal_stage();
+        } else {
+            start_marking();
+        }
+    };
+    let face_tool = move || {
+        if !picture.boxes.get() {
+            return None;
+        }
+        Some(if marking.get() {
+            view! {
+                <button type="button" class="btn text small face-tool" on:click=move |_| faces.drawing.set(None)>
+                    {move || t!("cancel")}
+                </button>
+            }
+            .into_any()
+        } else if face.with(Option::is_some) {
+            view! {
+                <button
+                    type="button"
+                    class="btn text small face-tool"
+                    aria-label=move || t!("people-face-remove-named", person = label.get())
+                    on:click=move |_| face.set(None)
+                >
+                    <Ico icon=Icon::Close size=18 />
+                    {move || t!("people-face-remove")}
+                </button>
+            }
+            .into_any()
+        } else {
+            view! {
+                <button
+                    type="button"
+                    class="btn tonal small face-tool"
+                    aria-label=move || t!("people-face-mark-named", person = label.get())
+                    on:click=move |_| start_marking()
+                >
+                    <Ico icon=Icon::Face size=18 />
+                    {move || t!("people-face-mark")}
+                </button>
+            }
+            .into_any()
+        })
+    };
+    let disc_label = move || {
+        if marking.get() {
+            t!("cancel")
+        } else if face.with(Option::is_some) {
+            t!("people-face-show", person = label.get())
+        } else {
+            t!("people-face-mark-named", person = label.get())
+        }
+    };
     view! {
-        <fieldset class="figure-edit">
+        <fieldset
+            class="figure-edit"
+            class:lit=move || faces.lit.get() == Some(key)
+            on:focusin=move |_| faces.lit.set(Some(key))
+        >
             <legend>{move || label.get()}</legend>
             <div class="figure-row">
+                <div class="figure-face">
+                    <button
+                        type="button"
+                        class="face-press"
+                        disabled=move || !picture.boxes.get()
+                        aria-label=disc_label
+                        on:click=press_disc
+                    >
+                        <FaceDisc
+                            face=face
+                            crop=crop
+                            picture=picture
+                            number=number
+                            marking=marking
+                        />
+                    </button>
+                    {face_tool}
+                    <button
+                        type="button"
+                        class="icon-btn danger"
+                        title=move || t!("people-remove")
+                        aria-label=move || t!("people-remove-named", person = label.get())
+                        on:click=move |_| on_remove.run(key)
+                    >
+                        <Ico icon=Icon::Delete />
+                    </button>
+                </div>
+                {character}
+                {franchise}
                 <div class="field">
                     <span>{move || t!("people-kind")}</span>
                     <Select
@@ -658,17 +1057,7 @@ fn PersonFields(
                         label=Signal::derive(|| t!("people-kind"))
                     />
                 </div>
-                {character}
                 {cosplay}
-                <button
-                    type="button"
-                    class="icon-btn danger"
-                    title=move || t!("people-remove")
-                    aria-label=move || t!("people-remove-named", person = label.get())
-                    on:click=move |_| on_remove.run(key)
-                >
-                    <Ico icon=Icon::Delete />
-                </button>
             </div>
             {groups}
         </fieldset>
@@ -684,7 +1073,7 @@ mod tests {
             kind,
             character: character.map(str::to_owned),
             cosplay: cosplay.map(str::to_owned),
-            tags: BTreeMap::new(),
+            ..Figure::default()
         }
     }
 
@@ -716,5 +1105,31 @@ mod tests {
         }
         assert_eq!(box_id(3, Field::Slot(Slot::Hair)), "person-3-hair");
         assert_eq!(box_id(3, Field::Cosplay), "person-3-cosplay");
+        assert_eq!(box_id(3, Field::Franchise), "person-3-franchise");
+    }
+
+    #[test]
+    fn a_franchise_the_server_filled_in_is_told_while_it_stays() {
+        FILLED.with_borrow_mut(|f| *f = Some((7, vec![None, Some("fate".into())])));
+        assert_eq!(filled(7, 1, Some("fate")).as_deref(), Some("fate"));
+        // Changed since, another person or another post.
+        assert_eq!(filled(7, 1, Some("fate_zero")), None);
+        assert_eq!(filled(7, 0, Some("fate")), None);
+        assert_eq!(filled(8, 1, Some("fate")), None);
+        assert_eq!(filled(7, 1, None), None);
+    }
+
+    #[test]
+    fn the_card_and_its_editor_send_the_franchise_and_face_and_light_the_stage() {
+        let source = include_str!("people.rs");
+        let (page, _) = source.split_once("#[cfg(test)]").unwrap_or_default();
+        // Each row tracks both, so they count as changes and go with the rest.
+        assert!(page.contains("self.franchise.track();"));
+        assert!(page.contains("self.face.track();"));
+        assert!(page.contains("face: self.face.get_untracked(),"));
+        // Pointing at someone outlines their face.
+        assert!(page.contains("on:mouseenter=move |_| light()"));
+        assert!(page.contains("on:focusin=move |_| faces.lit.set(Some(key))"));
+        assert!(page.contains("faces.marks.set(marks);"));
     }
 }

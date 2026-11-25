@@ -1,11 +1,13 @@
-//! Explore at `/explore?q=…`: the posts opened lately, posts added on this
-//! day in earlier years and random picks. The last two are narrowed by `q`,
-//! which the top bar's search box sets while Explore is open (`shell.rs`);
-//! the server can't narrow a list of posts by id, so the history steps aside
-//! while a search is on, and leaves out the posts the blacklist hides. A
-//! public server also has Trending, the posts most liked over the window in
-//! `days`, and the tags most used on posts added in it; a private one has
-//! neither, and its address's `days` is ignored.
+//! Explore at `/explore?q=…`: the posts opened lately, the people on the
+//! most posts, posts added on this day in earlier years and random picks.
+//! All but the first are narrowed by `q`, which the top bar's search box
+//! sets while Explore is open (`shell.rs`); the server can't narrow a list
+//! of posts by id, so the history steps aside while a search is on, and
+//! leaves out the posts the blacklist hides. A public server also has
+//! Trending, the posts most liked over the window in `days`, the tags most
+//! used on posts added in it and the characters of the posts most liked in
+//! it; a private one has none of them, and its address's `days` is ignored.
+//! People, and the characters, show while People are on in Settings.
 
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
@@ -16,13 +18,15 @@ use futures_util::future::join_all;
 use leptos::prelude::*;
 use leptos::task::spawn_local;
 use leptos_router::hooks::use_query_map;
-use starbooru_core::{Explore as Found, Post, TagCorrection, TagTrend};
+use starbooru_core::{Explore as Found, Person, Post, TagCorrection, TagTrend};
 
 use super::post_menu::PostPress;
 use super::{boorus, post};
 use crate::components::banner::{CorrectionBanner, ErrorBanner, Spinner};
 use crate::components::icons::{Ico, Icon};
+use crate::components::person::PersonFace;
 use crate::components::snackbar::notify_undo;
+use crate::components::tag_menu::TagPress;
 use crate::components::thumb::Thumb;
 use crate::logic::explore::{
     RANDOM_COUNT, Span, WINDOWS, days_asked, random_query, span, tag_search, tidy, year_added,
@@ -114,6 +118,8 @@ struct Sections {
     tags: Vec<TagTrend>,
     on_this_day: Vec<Arc<Post>>,
     random: Vec<Arc<Post>>,
+    people: Vec<Person>,
+    popular_characters: Vec<Person>,
     corrected: Vec<TagCorrection>,
 }
 
@@ -125,6 +131,8 @@ impl From<Found> for Sections {
             tags: f.tags,
             on_this_day: arcs(f.on_this_day),
             random: arcs(f.random),
+            people: f.people,
+            popular_characters: f.popular_characters,
             corrected: f.corrected,
         }
     }
@@ -157,6 +165,21 @@ impl Spot {
     }
 }
 
+/// People as a row of faces, each leading to the gallery for Explore's
+/// search narrowed to them. Popular characters bring their votes.
+fn people_row(people: Vec<Person>, search: &str, votes: bool) -> impl IntoView {
+    let faces = people
+        .into_iter()
+        .enumerate()
+        .map(|(index, person)| {
+            let href = route::gallery(&tag_search(search, &person.name));
+            let votes = person.votes.filter(|_| votes);
+            view! { <PersonFace person=person href=href votes=votes index=index /> }
+        })
+        .collect_view();
+    view! { <div class="people-row" data-press="tag">{faces}</div> }
+}
+
 /// Posts as the gallery's tiles, in a grid. Each opens its post with no
 /// search to step through, and Back comes here.
 fn tiles(posts: Vec<Arc<Post>>, open: Callback<Arc<Post>>) -> impl IntoView {
@@ -177,6 +200,8 @@ pub fn Explore() -> impl IntoView {
     let q = Memo::new(move |_| query.with(|m| tidy(&m.get("q").unwrap_or_default())));
     // Trending and Popular tags, on a public server, over the address's window.
     let public = Memo::new(|_| instance::public());
+    // People and characters, unless People are off in Settings.
+    let people_on = Memo::new(|_| store::prefs().people);
     let days = Memo::new(move |_| {
         let asked = query.with(|m| m.get("days"));
         days_asked(public.get(), asked.as_deref())
@@ -616,13 +641,37 @@ pub fn Explore() -> impl IntoView {
             .into_any()
         };
         // What's popular lately leads on a public server.
-        let popular = public
-            .get_untracked()
-            .then(|| popular(sections.trending, sections.tags, &search, window, open));
+        let on = people_on.get();
+        let characters = on.then_some(sections.popular_characters);
+        let popular = public.get_untracked().then(|| {
+            popular(
+                sections.trending,
+                sections.tags,
+                characters,
+                &search,
+                window,
+                open,
+            )
+        });
+        let people = (on && !sections.people.is_empty()).then(|| {
+            view! {
+                <section class="explore-section" aria-labelledby="people">
+                    <div class="section-head">
+                        <Ico icon=Icon::People />
+                        <h2 id="people">{move || t!("explore-people")}</h2>
+                        <a class="btn text small" href=route::PEOPLE>
+                            {move || t!("explore-people-all")}
+                        </a>
+                    </div>
+                    {people_row(sections.people, &search, false)}
+                </section>
+            }
+        });
         Some(
             view! {
                 {corrected}
                 {popular}
+                {people}
                 {content}
             }
             .into_any(),
@@ -693,16 +742,19 @@ pub fn Explore() -> impl IntoView {
             }}
             {body}
             <PostPress find=find on_open=open />
+            <TagPress q=q />
         </div>
     }
 }
 
-/// Trending and Popular tags, over `window`: the posts most liked, then the
-/// tags most used on the posts added, each leading to the gallery narrowed
-/// to it.
+/// Trending, Popular tags and Popular characters, over `window`: the posts
+/// most liked, the tags most used on the posts added, and the characters
+/// of the posts most liked, each leading to the gallery narrowed to it.
+/// `characters` is `None` while People are off.
 fn popular(
     trending: Vec<Arc<Post>>,
     tags: Vec<TagTrend>,
+    characters: Option<Vec<Person>>,
     search: &str,
     window: u32,
     open: Callback<Arc<Post>>,
@@ -740,6 +792,26 @@ fn popular(
             .collect_view();
         view! { <div class="chips" data-press="tag">{chips}</div> }.into_any()
     };
+    let characters = characters.map(|people| {
+        let row = if people.is_empty() {
+            let when = when.clone();
+            view! { <p class="muted">{move || t!("explore-no-characters", when = when.clone())}</p> }
+                .into_any()
+        } else {
+            people_row(people, search, true).into_any()
+        };
+        let note = t!("explore-characters-note", when = when.clone());
+        view! {
+            <section class="explore-section" aria-labelledby="popular-characters">
+                <div class="section-head">
+                    <Ico icon=Icon::ThumbUp />
+                    <h2 id="popular-characters">{move || t!("explore-popular-characters")}</h2>
+                    <span class="muted">{note}</span>
+                </div>
+                {row}
+            </section>
+        }
+    });
     let note = t!("explore-tags-note", when = when);
     view! {
         <section class="explore-section" aria-labelledby="trending">
@@ -757,6 +829,7 @@ fn popular(
             </div>
             {tags}
         </section>
+        {characters}
     }
 }
 
@@ -780,10 +853,23 @@ mod tests {
         let source = include_str!("explore.rs");
         let (page, _) = source.split_once("#[cfg(test)]").unwrap_or_default();
         assert!(page.contains("c.explore(window, &search)"));
-        assert!(page.contains(".then(|| popular("));
+        assert!(page.contains("let popular = public.get_untracked().then("));
         for id in ["explore-no-likes", "explore-no-tags"] {
             assert!(page.contains(&format!("t!(\"{id}\"")), "{id}");
         }
+    }
+
+    #[test]
+    fn people_follow_the_setting_and_the_search() {
+        let source = include_str!("explore.rs");
+        let (page, _) = source.split_once("#[cfg(test)]").unwrap_or_default();
+        assert!(page.contains("let people_on = Memo::new(|_| store::prefs().people);"));
+        assert!(page.contains("let characters = on.then_some(sections.popular_characters);"));
+        assert!(page.contains("(on && !sections.people.is_empty())"));
+        // A face narrows Explore's search to them, as a popular tag does.
+        assert!(page.contains("route::gallery(&tag_search(search, &person.name))"));
+        assert!(page.contains("href=route::PEOPLE"));
+        assert!(page.contains("t!(\"explore-no-characters\""));
     }
 
     #[test]

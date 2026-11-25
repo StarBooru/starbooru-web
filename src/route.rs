@@ -63,8 +63,9 @@ pub fn tab_of(path: &str) -> Option<Tab> {
     let segments: Vec<&str> = path.split('/').filter(|s| !s.is_empty()).collect();
     match segments.as_slice() {
         [] | ["post", _] => Some(Tab::Gallery),
-        // The booru browser is the other side of Explore.
-        ["explore"] | ["boorus"] | ["boorus", "post"] => Some(Tab::Explore),
+        // The booru browser is the other side of Explore, and everyone in
+        // the collection one of its sections.
+        ["explore"] | ["boorus"] | ["boorus", "post"] | ["people"] => Some(Tab::Explore),
         ["tags"] | ["tag"] => Some(Tab::Tags),
         ["forum"] | ["forum", "c" | "t", _] => Some(Tab::Forum),
         ["upload"] => Some(Tab::Upload),
@@ -253,6 +254,24 @@ pub fn is_tags(path: &str) -> bool {
     segments.as_slice() == ["tags"]
 }
 
+/// The people page, narrowed to names holding `q`, as the search box
+/// narrows it there.
+pub fn people(q: &str) -> String {
+    let q = q.trim();
+    if q.is_empty() {
+        PEOPLE.to_owned()
+    } else {
+        format!("{PEOPLE}?q={}", query_value(q))
+    }
+}
+
+/// Whether `path` is the people page, where the search box filters the
+/// people by name.
+pub fn is_people(path: &str) -> bool {
+    let segments: Vec<&str> = path.split('/').filter(|s| !s.is_empty()).collect();
+    segments.as_slice() == ["people"]
+}
+
 /// Post `id`, opened from the gallery for search `q`, so the viewer can step
 /// through the same results. `seed` is the shuffle of an `order:random` search.
 pub fn post(id: i64, q: &str, seed: Option<i64>) -> String {
@@ -339,6 +358,8 @@ pub const BOORUS: &str = "/boorus";
 
 /// The list of tags.
 pub const TAGS: &str = "/tags";
+/// Everyone in the collection, by franchise.
+pub const PEOPLE: &str = "/people";
 /// The Upload page.
 pub const UPLOAD: &str = "/upload";
 /// The search cheat sheet.
@@ -413,6 +434,21 @@ mod tests {
         for path in ["/tag", "/", "/tagsx", "/tags/x", "/explore"] {
             assert!(!is_tags(path), "{path}");
         }
+    }
+
+    #[test]
+    fn the_people_page_carries_its_filter_under_explore() {
+        assert_eq!(people(""), "/people");
+        assert_eq!(people(" hatsune miku "), "/people?q=hatsune+miku");
+        assert_eq!(people("a&b"), "/people?q=a%26b");
+        for path in ["/people", "/people/", "people"] {
+            assert!(is_people(path), "{path}");
+            assert_eq!(tab_of(path), Some(Tab::Explore), "{path}");
+        }
+        for path in ["/peoples", "/people/x", "/", "/explore"] {
+            assert!(!is_people(path), "{path}");
+        }
+        assert!(!has_search("/people"));
     }
 
     #[test]

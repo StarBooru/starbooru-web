@@ -326,7 +326,7 @@ settings-library = Raccolta
 settings-trash-note = Ripristina o elimina definitivamente i post
 settings-dup-note = Trova i post simili e tieni la copia migliore
 settings-people = Persone
-settings-people-hint = La scheda Persone nel visualizzatore. Spenta si nasconde, senza cancellare nulla
+settings-people-hint = Le persone nel visualizzatore, in Esplora e nella loro pagina. Spente si nascondono, senza cancellare nulla
 settings-appearance = Aspetto
 settings-theme = Tema
 theme-system = Sistema
@@ -653,6 +653,11 @@ explore-popular-tags = Tag popolari
 explore-tags-note = sui post aggiunti { $when }
 explore-no-tags = Nessun post con tag aggiunto { $when }.
 explore-added = Post aggiunti { $when }
+explore-people = Persone
+explore-people-all = Vedi tutte
+explore-popular-characters = Personaggi popolari
+explore-characters-note = nei post piaciuti { $when }
+explore-no-characters = Nessun post con personaggi è piaciuto { $when }.
 nothing-matches = Nessun risultato per “{ $query }”.
 explore-recent = Visti di recente
 explore-recent-clear = Svuota
@@ -991,6 +996,41 @@ people-looks = Aspetto
 people-error-many = Un post può avere al massimo { $max } persone.
 people-error-many-tags = { $person } ha troppi tag. Una persona può averne al massimo { $max }.
 people-turned-off = Le persone sono state disattivate nelle Impostazioni. Questa scheda sparisce quando salvi o annulli.
+people-franchise = Franchise
+people-filled = automatico
+people-filled-title = Ricavato dal personaggio quando hai salvato
+people-face-mark = Segna il viso
+people-face-mark-named = Segna il viso di { $person }
+people-face-remove = Togli il viso
+people-face-remove-named = Togli il viso di { $person }
+people-face-show = Mostra dov'è { $person }
+people-draw-hint = Trascina sul viso
+people-error-face = Il viso di { $person } esce dall'immagine. Prova a segnarlo di nuovo.
+people-posts =
+    { $count ->
+        [one] 1 post
+       *[other] { $count } post
+    }
+people-person = { $name }, { $posts }
+people-person-of = { $name }, { $franchise }, { $posts }
+people-person-voted = { $person }, { $votes } voti
+people-order = Ordina le persone
+people-by-franchise = Per franchise
+people-most-posts = Più post
+people-a-z = A–Z
+people-count =
+    { $count ->
+        [one] 1 persona
+       *[other] { $count } persone
+    }
+people-franchise-search = Mostra i post di { $franchise }
+people-no-franchise = Senza franchise
+people-none-yet = Ancora nessuno è segnato.
+people-mark-first = Segna le persone in un post e compariranno qui
+people-none-match = Nessuno corrisponde a “{ $query }”.
+people-everyone = Mostra tutti
+people-off = Le persone sono disattivate
+people-turn-on = Riattivale nelle Impostazioni
 slot-head = Testa
 slot-body = Busto
 slot-bottom = Sotto e gambe
@@ -1042,7 +1082,10 @@ tags-most-used = Più usati
 tags-a-z = A–Z
 tags-filter-label = Filtra i tag per nome o alias
 tags-filter-placeholder = Filtra i tag
+people-filter-label = Filtra le persone per nome
+people-filter-placeholder = Filtra le persone
 tags-show-all = Mostra tutti i tag
+tags-people = Persone
 tags-posts =
     { $count ->
         [one] 1 post

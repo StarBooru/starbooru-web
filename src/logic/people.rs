@@ -1,24 +1,27 @@
 //! The people in a post without a browser: each person as the editor holds
-//! them, what saving sends, how the slots are grouped, and how people of the
-//! same kind are numbered.
+//! them, what saving sends, the franchises the server filled in, how the
+//! slots are grouped, and how people of the same kind are numbered.
 
 use std::collections::BTreeMap;
 
 use starbooru_core::tag::TagError;
 use starbooru_core::{
-    Figure, FigureError, FigureKind, FiguresUpdate, MAX_FIGURES, Post, Slot, clean_figures,
-    normalize_tag,
+    FaceBox, Figure, FigureError, FigureKind, FiguresUpdate, MAX_FIGURES, Post, Slot,
+    clean_figures, normalize_tag,
 };
 
 use super::tags::BadTag;
 
-/// A person as the editor holds them: each box as typed.
+/// A person as the editor holds them: each box as typed, and where their
+/// face is.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct Draft {
     pub kind: FigureKind,
     pub character: String,
     pub cosplay: String,
+    pub franchise: String,
     pub slots: BTreeMap<Slot, String>,
+    pub face: Option<FaceBox>,
 }
 
 impl Draft {
@@ -27,6 +30,8 @@ impl Draft {
             kind: figure.kind,
             character: figure.character.clone().unwrap_or_default(),
             cosplay: figure.cosplay.clone().unwrap_or_default(),
+            franchise: figure.franchise.clone().unwrap_or_default(),
+            face: figure.face,
             slots: figure
                 .tags
                 .iter()
@@ -42,6 +47,8 @@ impl Draft {
             kind: self.kind,
             character: self.character.trim().to_owned(),
             cosplay: self.cosplay.trim().to_owned(),
+            franchise: self.franchise.trim().to_owned(),
+            face: self.face,
             slots: self
                 .slots
                 .iter()
@@ -68,6 +75,7 @@ pub fn people_changed(drafts: &[Draft], saved: &[Figure]) -> bool {
 pub enum Field {
     Character,
     Cosplay,
+    Franchise,
     Slot(Slot),
 }
 
@@ -82,6 +90,8 @@ pub enum PeopleError {
     },
     /// Person `person` has more tags than one person may.
     TooManyTags { person: usize },
+    /// Person `person`'s face box isn't inside the picture.
+    BadFace { person: usize },
     /// More people than a post may have.
     TooMany,
 }
@@ -134,6 +144,7 @@ pub fn figures_update(drafts: &[Draft]) -> Result<FiguresUpdate, PeopleError> {
         };
         let character = name(&draft.character, Field::Character)?;
         let cosplay = name(&draft.cosplay, Field::Cosplay)?;
+        let franchise = name(&draft.franchise, Field::Franchise)?;
         let mut tags = BTreeMap::new();
         for (slot, text) in &draft.slots {
             let found = slot_tags(text).map_err(|bad| PeopleError::Tag {
@@ -149,12 +160,16 @@ pub fn figures_update(drafts: &[Draft]) -> Result<FiguresUpdate, PeopleError> {
             kind: draft.kind,
             character,
             cosplay,
+            franchise,
             tags,
+            face: draft.face,
+            face_url: None,
         };
         // One at a time, so a refusal can say whose.
         match clean_figures(vec![figure]) {
             Ok(clean) => figures.extend(clean),
             Err(FigureError::TooManyTags) => return Err(PeopleError::TooManyTags { person }),
+            Err(FigureError::BadFace) => return Err(PeopleError::BadFace { person }),
             Err(FigureError::TooMany) => return Err(PeopleError::TooMany),
             // It only runs `normalize_tag` again, which every word passed above.
             Err(FigureError::Tag(error)) => {
@@ -170,6 +185,33 @@ pub fn figures_update(drafts: &[Draft]) -> Result<FiguresUpdate, PeopleError> {
         }
     }
     Ok(FiguresUpdate { figures })
+}
+
+/// The franchises the server filled in on saving, person by person: theirs
+/// where `sent` gave the same person none and `saved` has one. The server
+/// keeps the people in the order they were sent.
+pub fn filled_in(sent: &[Figure], saved: &[Figure]) -> Vec<Option<String>> {
+    saved
+        .iter()
+        .enumerate()
+        .map(|(i, after)| {
+            let before = sent.get(i)?;
+            let same = before.kind == after.kind
+                && before.character == after.character
+                && before.cosplay == after.cosplay;
+            (same && before.franchise.is_none())
+                .then(|| after.franchise.clone())
+                .flatten()
+        })
+        .collect()
+}
+
+/// Whether the server has yet to cut out a face of `post`'s people: it does
+/// a moment after saving, so the post is asked for again until then.
+pub fn faces_pending(post: &Post) -> bool {
+    post.figures
+        .iter()
+        .any(|f| f.face.is_some() && f.face_url.is_none())
 }
 
 /// The two groups of slots in the editor: what a person wears, then how
@@ -250,13 +292,19 @@ mod tests {
         }
     }
 
+    fn face(x: u16, y: u16, w: u16, h: u16) -> FaceBox {
+        FaceBox { x, y, w, h }
+    }
+
     #[test]
     fn a_figure_becomes_a_draft_and_back() {
         let figure = Figure {
             kind: FigureKind::Boy,
             character: Some("link".into()),
-            cosplay: None,
+            franchise: Some("the_legend_of_zelda".into()),
             tags: BTreeMap::from([(Slot::Hair, vec!["blonde_hair".into(), "ponytail".into()])]),
+            face: Some(face(412, 96, 130, 180)),
+            ..Figure::default()
         };
         let d = Draft::of(&figure);
         assert_eq!(
@@ -264,12 +312,127 @@ mod tests {
             Some("blonde_hair ponytail")
         );
         assert_eq!(d.character, "link");
+        assert_eq!(d.franchise, "the_legend_of_zelda");
+        // What the server sent comes back as it was.
         assert_eq!(
             figures_update(&[d]),
             Ok(FiguresUpdate {
-                figures: vec![figure]
+                figures: vec![figure.clone()]
             })
         );
+        // The crop's address is the server's: it never goes back.
+        let shown = Figure {
+            face_url: Some("/media/face/x.jpg".into()),
+            ..figure.clone()
+        };
+        assert_eq!(
+            figures_update(&[Draft::of(&shown)]).map(|u| u.figures),
+            Ok(vec![figure])
+        );
+    }
+
+    #[test]
+    fn the_franchise_and_face_always_go_and_empty_means_none() {
+        let mut d = draft(FigureKind::Girl, &[]);
+        d.character = "saber".into();
+        d.franchise = "  Fate (series) ".into();
+        let sent = figures_update(std::slice::from_ref(&d)).map(|u| u.figures);
+        let franchise = sent
+            .as_ref()
+            .ok()
+            .and_then(|f| f.first())
+            .and_then(|f| f.franchise.clone());
+        assert_eq!(franchise.as_deref(), Some("fate_(series)"));
+        // Cleared, it's null: the server takes that as "none", not "as before".
+        d.franchise = " ".into();
+        let json = figures_update(&[d]).map(|u| serde_json::to_value(u).unwrap_or_default());
+        let first = json.ok().and_then(|j| j["figures"].get(0).cloned());
+        let first = first.unwrap_or_default();
+        assert!(
+            first
+                .get("franchise")
+                .is_some_and(serde_json::Value::is_null)
+        );
+        assert!(first.get("face").is_some_and(serde_json::Value::is_null));
+        assert!(first.get("face_url").is_none());
+        // A franchise that can't be a tag says where it is.
+        let mut bad = draft(FigureKind::Boy, &[]);
+        bad.franchise = "-fate".into();
+        assert!(matches!(
+            figures_update(&[bad]),
+            Err(PeopleError::Tag {
+                person: 0,
+                field: Field::Franchise,
+                ..
+            })
+        ));
+        // A box out of the picture is turned down before it's sent.
+        let mut out = draft(FigureKind::Girl, &[]);
+        out.face = Some(face(900, 0, 200, 10));
+        assert_eq!(
+            figures_update(&[out]),
+            Err(PeopleError::BadFace { person: 0 })
+        );
+    }
+
+    #[test]
+    fn a_face_without_its_crop_is_still_being_cut() {
+        let with = |face: Option<FaceBox>, url: Option<&str>| Figure {
+            face,
+            face_url: url.map(str::to_owned),
+            ..Figure::default()
+        };
+        let post = |figures: Vec<Figure>| -> Post {
+            let mut post: Post = serde_json::from_value(serde_json::json!({
+                "id": 1, "kind": "image", "mime": "image/png", "file_size": 1,
+                "width": 1, "height": 1, "sha256": "x", "rating": "safe", "score": 0,
+                "my_vote": 0, "source": null, "tags": [],
+                "created_at": "2026-01-01T00:00:00Z", "deleted": false,
+                "file_url": "/media/x", "thumb_url": null,
+            }))
+            .unwrap();
+            post.figures = figures;
+            post
+        };
+        assert!(!faces_pending(&post(Vec::new())));
+        assert!(!faces_pending(&post(vec![with(None, None)])));
+        let done = with(Some(face(1, 1, 10, 10)), Some("/media/face/a.jpg"));
+        assert!(!faces_pending(&post(vec![done.clone()])));
+        assert!(faces_pending(&post(vec![
+            done,
+            with(Some(face(1, 1, 10, 10)), None)
+        ])));
+    }
+
+    #[test]
+    fn the_server_filling_in_a_franchise_is_told_apart() {
+        let person = |character: &str, franchise: Option<&str>| Figure {
+            kind: FigureKind::Girl,
+            character: Some(character.into()),
+            franchise: franchise.map(str::to_owned),
+            ..Figure::default()
+        };
+        let sent = [
+            person("saber", None),
+            person("rin", Some("fate")),
+            person("miku", None),
+        ];
+        let saved = [
+            person("saber", Some("fate")),
+            person("rin", Some("fate")),
+            person("miku", None),
+            person("extra", Some("x")),
+        ];
+        assert_eq!(
+            filled_in(&sent, &saved),
+            [Some("fate".into()), None, None, None]
+        );
+        // Someone else in that place isn't the same person.
+        assert_eq!(
+            filled_in(&[person("rin", None)], &[person("saber", Some("fate"))]),
+            [None]
+        );
+        assert!(filled_in(&sent, &[]).is_empty());
     }
 
     #[test]
@@ -291,11 +454,11 @@ mod tests {
             Ok(vec![Figure {
                 kind: FigureKind::Girl,
                 character: Some("hatsune_miku".into()),
-                cosplay: None,
                 tags: BTreeMap::from([
                     (Slot::Shoes, vec!["boots".into(), "sandals".into()]),
                     (Slot::Hair, vec!["blue".into(), "hair".into()]),
                 ]),
+                ..Figure::default()
             }])
         );
         // No one at all clears the people.
@@ -314,13 +477,13 @@ mod tests {
             sent,
             Ok(vec![Figure {
                 kind: FigureKind::Other,
-                character: None,
                 cosplay: Some("saber".into()),
                 // The count tag goes, the prefix goes, and `hat` stays in its first slot.
                 tags: BTreeMap::from([
                     (Slot::Head, vec!["hat".into()]),
                     (Slot::Body, vec!["dress".into()]),
                 ]),
+                ..Figure::default()
             }])
         );
     }
@@ -365,8 +528,10 @@ mod tests {
         let link = Figure {
             kind: FigureKind::Boy,
             character: Some("link".into()),
-            cosplay: None,
+            franchise: Some("zelda".into()),
             tags: BTreeMap::from([(Slot::Hair, vec!["blonde_hair".into(), "ponytail".into()])]),
+            face: Some(face(10, 10, 100, 100)),
+            ..Figure::default()
         };
         let saved = [link.clone()];
         // As the editor holds them: every slot, most of them empty.
@@ -391,6 +556,18 @@ mod tests {
         let mut girl = typed.clone();
         girl.kind = FigureKind::Girl;
         assert!(people_changed(&[girl], &saved));
+        // A franchise or a face box, moved, cleared or not.
+        let mut series = typed.clone();
+        series.franchise = " zelda ".into();
+        assert!(!people_changed(std::slice::from_ref(&series), &saved));
+        series.franchise.clear();
+        assert!(people_changed(&[series], &saved));
+        let mut moved = typed.clone();
+        moved.face = Some(face(11, 10, 100, 100));
+        assert!(people_changed(&[moved], &saved));
+        let mut faceless = typed.clone();
+        faceless.face = None;
+        assert!(people_changed(&[faceless], &saved));
         assert!(people_changed(&[typed.clone(), Draft::default()], &saved));
         assert!(people_changed(&[], &saved));
         // No one yet: the empty person the editor starts with is no change.

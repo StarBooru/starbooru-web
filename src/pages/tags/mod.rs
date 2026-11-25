@@ -1,7 +1,8 @@
 //! The Tags page at `/tags`: the collection's vocabulary as cards, each with
 //! a picture of a post that has the tag, its name in its category's colour,
 //! how many posts have it, and the ways to search it and change its
-//! category. The search box filters it (`?q=`). Each tag's own page is in
+//! category. The search box filters it (`?q=`). The characters lead on to
+//! the people page, grouped by franchise. Each tag's own page is in
 //! `tag.rs`.
 
 mod tag;
@@ -226,6 +227,7 @@ pub fn Tags() -> impl IntoView {
     let user = Memo::new(|_| store::session().map(|s| s.user));
     let editable = Signal::derive(move || user.with(|u| may_edit_tag(u.as_ref())));
     let menu = RwSignal::new(None::<(Tag, MenuAt)>);
+    let people = Memo::new(|_| store::prefs().people);
 
     Effect::new(move |_| {
         let now = Shown {
@@ -449,6 +451,14 @@ pub fn Tags() -> impl IntoView {
                     {move || t!("tags-any-category")}
                 </button>
                 {kinds}
+                // Everyone, by franchise: the characters as faces.
+                <Show when=move || people.get()>
+                    <a class="cat-tab people-link" href=route::PEOPLE>
+                        <Ico icon=Icon::People size=18 />
+                        {move || t!("tags-people")}
+                        <Ico icon=Icon::ChevronRight size=18 />
+                    </a>
+                </Show>
             </div>
             {move || error.get().map(|message| view! { <ErrorBanner message=message on_retry=retry /> })}
             <Show when=empty>

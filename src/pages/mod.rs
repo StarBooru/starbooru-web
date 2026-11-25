@@ -14,6 +14,7 @@ pub mod home;
 pub mod legal;
 mod library;
 pub mod login;
+pub mod people;
 pub mod post;
 mod post_menu;
 pub mod profile;

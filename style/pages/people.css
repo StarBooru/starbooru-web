@@ -1,0 +1,114 @@
+/* The collection's people (components/person.rs): each a round face over
+   their name, in Explore's rows and on the people page (pages/people.rs),
+   grouped there under their franchise. */
+
+.person {
+  --face: 88px;
+  display: grid; justify-items: center; align-content: start; gap: 2px; min-width: 0; padding: 8px 4px 10px;
+  border-radius: var(--radius-m); color: var(--on-surface); text-decoration: none; text-align: center;
+  animation: fade-up var(--med) var(--ease) both; animation-delay: calc(var(--i, 0) * 18ms);
+  transition: background-color var(--fast) var(--ease);
+}
+.person:focus-visible { outline-offset: -2px; }
+.person-face {
+  position: relative; display: grid; place-items: center; width: var(--face); aspect-ratio: 1; margin-bottom: 6px;
+  border-radius: 50%; background: var(--surface-3); color: var(--on-surface-2);
+  box-shadow: 0 0 0 2px var(--surface), 0 0 0 3px color-mix(in srgb, var(--cat-character) 35%, var(--outline));
+  transition: transform var(--med) var(--ease-spring), box-shadow var(--fast) var(--ease);
+}
+.person-face img {
+  width: 100%; height: 100%; border-radius: 50%; object-fit: cover; opacity: 0;
+  transition: opacity var(--med) var(--ease);
+}
+.person-face.loaded img { opacity: 1; }
+/* A post's thumbnail stands in for a face: a little closer, about where a face is. */
+.person-face.cut img { object-position: 50% 30%; }
+.person-count {
+  position: absolute; right: -4px; bottom: -2px; display: grid; place-items: center;
+  min-width: 24px; height: 22px; padding: 0 6px; border-radius: 999px;
+  background: var(--surface); color: var(--on-surface-2); border: 1px solid var(--outline);
+  font-size: 11px; font-weight: 700; font-variant-numeric: tabular-nums;
+}
+.person-name {
+  max-width: 100%; font-size: 14px; font-weight: 600; line-height: 1.25; overflow-wrap: anywhere;
+  display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2; overflow: hidden;
+}
+.person-franchise {
+  max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  font-size: 12px; color: var(--cat-copyright);
+}
+.person-votes {
+  display: inline-flex; align-items: center; gap: 3px; margin-top: 2px; padding: 1px 8px 1px 6px; border-radius: 999px;
+  background: var(--primary-container); color: var(--on-primary-container);
+  font-size: 12px; font-weight: 700; font-variant-numeric: tabular-nums;
+}
+@media (hover: hover) {
+  .person:hover { background: var(--surface-2); }
+  .person:hover .person-face {
+    transform: scale(1.05);
+    box-shadow: 0 0 0 2px var(--surface), 0 0 0 4px var(--cat-character);
+  }
+}
+.person:active .person-face { transform: scale(0.96); }
+
+/* Explore: a row to run along, which goes on past the window's edge. */
+.people-row {
+  display: flex; gap: 4px; overflow-x: auto; overscroll-behavior-x: contain; scroll-snap-type: x proximity;
+  scrollbar-width: thin; margin: 0 -4px; padding: 4px 4px 6px; scroll-padding-inline: 4px;
+}
+.people-row .person { flex: 0 0 112px; scroll-snap-align: start; }
+
+/* ---------- the people page ---------- */
+
+.people-page { max-width: 1200px; }
+.people-page .page-head { margin-bottom: 12px; }
+.people-page .page-head .page-title { margin: 0; }
+.people-page .seg { text-transform: none; }
+.franchises { display: grid; gap: 20px; }
+.franchise { min-width: 0; }
+.franchise-head { display: flex; align-items: center; gap: 8px; margin: 0 0 4px; font-size: 18px; font-weight: 600; }
+.franchise-link {
+  display: inline-flex; align-items: center; gap: 2px; min-width: 0; min-height: 36px; margin-left: -10px; padding: 0 6px 0 10px;
+  border-radius: 999px; color: var(--cat-copyright); text-decoration: none;
+  transition: background-color var(--fast) var(--ease);
+}
+.franchise-link .icon { transition: transform var(--med) var(--ease-spring); }
+@media (hover: hover) {
+  .franchise-link:hover { background: color-mix(in srgb, var(--cat-copyright) 12%, transparent); }
+  .franchise-link:hover .icon { transform: translateX(2px); }
+}
+.franchise-name { overflow-wrap: anywhere; }
+.franchise-name.none { color: var(--on-surface-2); }
+.franchise-count {
+  flex: none; padding: 2px 10px; border-radius: 999px; background: var(--surface-3); color: var(--on-surface-2);
+  font-size: 13px; font-weight: 700; font-variant-numeric: tabular-nums;
+}
+.people-grid { display: grid; gap: 2px 8px; grid-template-columns: repeat(auto-fill, minmax(116px, 1fr)); }
+.people-page .sentinel { margin-top: 16px; }
+/* Nobody yet: their picture, and the one way to the first. */
+.people-art {
+  display: grid; place-items: center; width: 88px; height: 88px; border-radius: 50%;
+  background: color-mix(in srgb, var(--cat-character) 16%, var(--surface-2)); color: var(--cat-character);
+}
+.people-start {
+  display: inline-flex; align-items: center; gap: 4px; min-height: 40px; padding: 0 8px 0 14px; border-radius: 999px;
+  font-weight: 600; color: var(--primary); text-decoration: none;
+  transition: background-color var(--fast) var(--ease);
+}
+.people-start:hover { background: var(--surface-2); }
+/* The Tags page's way here, after the categories, in the characters' colour. */
+.cat-tab.people-link { --cat: var(--cat-character); margin-left: auto; gap: 6px; color: var(--cat); text-decoration: none; font-weight: 600; }
+
+@media (max-width: 760px) {
+  .person { --face: 72px; }
+  .people-row { margin-inline: calc(var(--pad-x) * -1); padding-inline: var(--pad-x); scroll-padding-inline: var(--pad-x); }
+  .people-row .person { flex-basis: 92px; }
+  .people-grid { grid-template-columns: repeat(auto-fill, minmax(92px, 1fr)); }
+  .cat-tab.people-link { margin-left: 0; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .person:hover .person-face { transform: none; }
+}
+.app[data-saver="on"] .person:hover .person-face { transform: none; }
+.app[data-effects="lite"] .person { animation: none; }

@@ -24,6 +24,7 @@ use starbooru_core::{Post, TagCorrection, parse_query};
 
 use super::bulk::BulkBar;
 use super::drag_select::DragSelect;
+use super::people;
 use super::post_menu::PostPress;
 use super::query_error_text;
 use super::saved::{self, SaveToggle, SavedRow};
@@ -127,6 +128,8 @@ thread_local! {
 pub fn forget_lists() {
     LISTS.with_borrow_mut(Lists::clear);
     forget_previews();
+    // Who is on how many posts changes with the same edits.
+    people::forget();
     CHANGED.with(|c| c.update(|n| *n = n.wrapping_add(1)));
 }
 
@@ -136,6 +139,7 @@ pub fn forget_lists() {
 pub fn posts_arrived() {
     LISTS.with_borrow_mut(Lists::clear);
     forget_previews();
+    people::forget();
     ARRIVED.with(|a| a.update(|n| *n = n.wrapping_add(1)));
 }
 

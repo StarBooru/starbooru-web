@@ -326,7 +326,7 @@ settings-library = Library
 settings-trash-note = Restore or permanently delete posts
 settings-dup-note = Find posts that look alike and keep the best copy
 settings-people = People
-settings-people-hint = The People card in the viewer. Off hides it; nothing is deleted
+settings-people-hint = People in the viewer, in Explore and on their own page. Off hides them; nothing is deleted
 settings-appearance = Appearance
 settings-theme = Theme
 theme-system = System
@@ -653,6 +653,11 @@ explore-popular-tags = Popular tags
 explore-tags-note = on posts added { $when }
 explore-no-tags = No tagged posts were added { $when }.
 explore-added = Posts added { $when }
+explore-people = People
+explore-people-all = See all
+explore-popular-characters = Popular characters
+explore-characters-note = in posts liked { $when }
+explore-no-characters = No liked posts with characters { $when }.
 nothing-matches = Nothing matches “{ $query }”.
 explore-recent = Recently viewed
 explore-recent-clear = Clear
@@ -994,6 +999,41 @@ people-looks = Looks
 people-error-many = A post can have at most { $max } people.
 people-error-many-tags = { $person } has too many tags. One person can have at most { $max }.
 people-turned-off = People were turned off in Settings. This card goes away once you save or cancel.
+people-franchise = Franchise
+people-filled = filled in
+people-filled-title = Filled in from the character when saving
+people-face-mark = Mark the face
+people-face-mark-named = Mark the face of { $person }
+people-face-remove = Remove the face
+people-face-remove-named = Remove the face of { $person }
+people-face-show = Show where { $person } is
+people-draw-hint = Drag over the face
+people-error-face = The face of { $person } isn't inside the picture. Mark it again.
+people-posts =
+    { $count ->
+        [one] 1 post
+       *[other] { $count } posts
+    }
+people-person = { $name }, { $posts }
+people-person-of = { $name }, { $franchise }, { $posts }
+people-person-voted = { $person }, { $votes } votes
+people-order = Order people
+people-by-franchise = By franchise
+people-most-posts = Most posts
+people-a-z = A–Z
+people-count =
+    { $count ->
+        [one] 1 person
+       *[other] { $count } people
+    }
+people-franchise-search = Show posts of { $franchise }
+people-no-franchise = No franchise
+people-none-yet = No one is marked yet.
+people-mark-first = Mark the people in a post and they show up here
+people-none-match = No one matches “{ $query }”.
+people-everyone = Show everyone
+people-off = People are turned off
+people-turn-on = Turn them on in Settings
 slot-head = Head
 slot-body = Body
 slot-bottom = Bottom and legs
@@ -1045,7 +1085,10 @@ tags-most-used = Most used
 tags-a-z = A–Z
 tags-filter-label = Filter tags by name or alias
 tags-filter-placeholder = Filter tags
+people-filter-label = Filter people by name
+people-filter-placeholder = Filter people
 tags-show-all = Show all tags
+tags-people = People
 tags-posts =
     { $count ->
         [one] 1 post

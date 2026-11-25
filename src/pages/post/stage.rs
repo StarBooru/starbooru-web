@@ -28,9 +28,9 @@ const REST_MS: u64 = 2800;
 /// A touch that lifts within this long, without moving, is a tap.
 const TAP_MS: f64 = 300.0;
 /// What on the stage keeps its own presses, which aren't fingers on the
-/// picture.
+/// picture: the controls, and the face boxes being edited (`faces.rs`).
 const CONTROLS: &str =
-    ".stage-btn, .stage-tools, .stage-error, .player-bar, .player-big, .player-error";
+    ".stage-btn, .stage-tools, .stage-error, .player-bar, .player-big, .player-error, .face-edit";
 
 /// What the fingers on the stage are doing. Kept out of signals: nothing on
 /// the page needs to follow each move.
@@ -157,6 +157,9 @@ pub fn Stage(
     #[prop(optional, into)]
     covered: Signal<bool>,
     #[prop(optional)] cover: Option<ViewFn>,
+    /// What lies over the picture, in its own box: the people's faces.
+    #[prop(optional)]
+    over: Option<ViewFn>,
 ) -> impl IntoView {
     let stage: NodeRef<html::Section> = NodeRef::new();
     let kind = Memo::new(move |_| shown.with(|s| s.as_ref().map(|s| s.kind)));
@@ -294,7 +297,7 @@ pub fn Stage(
             if !zoomable() {
                 return;
             }
-            let on_picture = within(e.target(), "#stage-img");
+            let on_picture = within(e.target(), "#stage-img, .face-layer");
             let (y, _) = dom::scroll();
             let zoomed = zoom.with_untracked(Zoom::is_zoomed);
             let decide = || {
@@ -690,6 +693,7 @@ pub fn Stage(
         >
             <canvas class="stage-glow" aria-hidden="true"></canvas>
             {media}
+            {move || over.clone().filter(|_| !covered.get()).map(|over| over.run())}
             <Show when=move || failed.get()>
                 <div class="stage-error">
                     <ErrorBanner message=Signal::derive(|| t!("post-media-failed")) on_retry=retry />

@@ -99,6 +99,7 @@
 }
 .stage.full:not(.zoomed) { touch-action: none; }
 .stage.full :is(img, .player) { max-width: 100vw; box-shadow: none; border-radius: 0; }
+.stage.full > .face-layer { max-width: 100vw; }
 /* No known size: the box fills the display and the media fits inside it. */
 .stage.full :is(img, .player):not([style*="aspect-ratio"]) { width: 100%; height: 100%; }
 /* A video's bar stays on the video, no wider than reads well, and clear of
@@ -172,6 +173,58 @@ html:has(.stage) { overscroll-behavior-x: none; }
 .cover-entries .chip:hover { transform: none; background: var(--surface); color: var(--on-surface); }
 .cover-actions { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; }
 .cover-actions .btn.text { background: var(--surface); }
+
+/* ---------- faces on the picture (post/faces.rs) ---------- */
+
+/* A layer as big as the picture, moved by the same zoom and pan, so a box
+   in percent of it stays on its face. Lines and labels keep their size on
+   screen however far it's zoomed (`--z`). */
+.stage > .face-layer {
+  grid-area: 1 / 1; position: relative; z-index: 1; max-width: 100%; max-height: var(--fit-h);
+  pointer-events: none; transform-origin: center;
+  transition: transform var(--fast) var(--ease), opacity var(--fast) var(--ease);
+}
+.stage.dragging > .face-layer { transition: none; }
+.stage.swiping > .face-layer { opacity: 0; }
+/* Marking a face: the next drag on the picture draws it. */
+.face-layer.drawing { pointer-events: auto; cursor: crosshair; touch-action: none; }
+.face-box {
+  position: absolute; box-sizing: border-box;
+  border: calc(2.5px / var(--z, 1)) solid var(--primary); border-radius: calc(12px / var(--z, 1));
+  box-shadow: 0 0 0 calc(1.5px / var(--z, 1)) var(--scrim), inset 0 0 0 calc(1px / var(--z, 1)) var(--scrim);
+  animation: face-in var(--med) var(--ease-spring) both;
+}
+/* In the editor: every box, each to pick and move; the one picked solid,
+   with corners to resize it. */
+.face-box.edit { pointer-events: auto; cursor: pointer; touch-action: none; border-style: dashed; animation: none; }
+.face-box.edit.lit { cursor: move; border-style: solid; background: oklch(from var(--primary) l c h / 0.14); }
+.face-box.band { border-style: dashed; background: oklch(from var(--primary) l c h / 0.12); animation: none; }
+.face-number {
+  position: absolute; left: 0; bottom: 100%; margin-bottom: calc(4px / var(--z, 1));
+  display: grid; place-items: center; min-width: 22px; height: 22px; padding: 0 6px; border-radius: 999px;
+  background: var(--primary); color: var(--on-primary); font-size: 12px; font-weight: 700; line-height: 1;
+  font-variant-numeric: tabular-nums; box-shadow: 0 0 0 1.5px var(--scrim);
+  transform-origin: bottom left; scale: calc(1 / var(--z, 1));
+}
+.face-handle {
+  position: absolute; width: 16px; height: 16px; border: 2.5px solid var(--primary); border-radius: 50%;
+  background: var(--surface); box-shadow: 0 0 0 1px var(--scrim); pointer-events: auto; touch-action: none;
+  translate: -50% -50%; scale: calc(1 / var(--z, 1));
+}
+/* A finger's worth to catch it by. */
+.face-handle::before { content: ""; position: absolute; inset: -14px; border-radius: 50%; }
+.face-handle[data-corner="tl"] { left: 0; top: 0; cursor: nwse-resize; }
+.face-handle[data-corner="tr"] { left: 100%; top: 0; cursor: nesw-resize; }
+.face-handle[data-corner="bl"] { left: 0; top: 100%; cursor: nesw-resize; }
+.face-handle[data-corner="br"] { left: 100%; top: 100%; cursor: nwse-resize; }
+.face-hint {
+  position: absolute; left: 50%; bottom: 12px; translate: -50% 0; transform-origin: bottom center; scale: calc(1 / var(--z, 1));
+  padding: 8px 16px; border-radius: 999px; background: var(--scrim); color: var(--on-scrim);
+  font-size: 14px; font-weight: 600; white-space: nowrap; pointer-events: none;
+  animation: fade-in var(--med) var(--ease);
+}
+@keyframes face-in { from { opacity: 0; scale: 1.3; } }
+.app[data-effects="lite"] .face-box { animation: none; }
 
 /* The file didn't load: why, and Retry, over the foot of the stage. */
 .stage-error {
@@ -373,7 +426,7 @@ html:has(.stage) { overscroll-behavior-x: none; }
   content: ""; width: 8px; height: 8px; border-radius: 999px; background: var(--primary);
   animation: pulse 1.6s var(--ease) infinite;
 }
-.app[data-effects="lite"] :is(.edit-chip.added, .diff, .suggested, .suggested-chip) { animation: none; }
+.app[data-effects="lite"] :is(.edit-chip.added, .diff, .suggested, .suggested-chip, .face-disc.marking) { animation: none; }
 .app[data-effects="lite"] :is(.tag-edit.dirty .edit-note::before, .suggest-btn.busy .icon, .suggested.asking .icon) { animation: none; }
 /* In one column the notices would cover Save: they go above it. */
 @media (max-width: 900px) {
@@ -389,9 +442,42 @@ html:has(.stage) { overscroll-behavior-x: none; }
    their editor in the card's place: a fieldset per person. */
 .people > .hint { margin: 0; }
 .figures { display: grid; gap: 10px; }
-.figure { display: grid; gap: 10px; padding: 12px; border-radius: var(--radius-s); background: var(--surface-2); }
-.figure-head { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; }
+.figure {
+  display: grid; gap: 10px; padding: 12px; border-radius: var(--radius-s); background: var(--surface-2);
+  transition: box-shadow var(--fast) var(--ease);
+}
+/* Its face is outlined on the picture. */
+.figure.lit { box-shadow: inset 0 0 0 2px oklch(from var(--primary) l c h / 0.5); }
+.figure-head { display: flex; align-items: center; gap: 12px; }
+.figure-who { display: grid; gap: 6px; min-width: 0; }
+.figure-names { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; }
 .figure-kind { font-weight: 600; }
+/* Not typed: filled in from the character when saving. */
+.chip.filled { border-style: dashed; }
+/* A person's face on a disc, numbered as their box is: the server's crop,
+   the picture cut the same way until then, or the person icon. */
+.face-press { flex: none; display: inline-grid; padding: 0; border: 0; border-radius: 50%; background: none; color: inherit; cursor: pointer; }
+.face-press:disabled { cursor: default; }
+.face-disc {
+  position: relative; display: grid; place-items: center; width: 52px; height: 52px; border-radius: 50%;
+  background: var(--surface-3); color: var(--on-surface-2);
+  transition: box-shadow var(--fast) var(--ease), transform var(--med) var(--ease-spring);
+}
+.face-disc > img, .face-crop {
+  display: block; width: 100%; height: 100%; border-radius: 50%; object-fit: cover;
+  background-repeat: no-repeat; animation: fade-in var(--med) var(--ease);
+}
+.face-disc.empty { background: transparent; border: 2px dashed var(--outline); }
+.face-num {
+  position: absolute; top: -4px; right: -6px; display: grid; place-items: center; min-width: 20px; height: 20px; padding: 0 5px;
+  border-radius: 999px; background: var(--primary); color: var(--on-primary); box-shadow: 0 0 0 2px var(--surface);
+  font-size: 11px; font-weight: 700; font-variant-numeric: tabular-nums;
+}
+:is(.figure, .figure-edit).lit .face-disc { box-shadow: 0 0 0 3px var(--primary); }
+.face-disc.marking { border-color: var(--primary); box-shadow: 0 0 0 3px oklch(from var(--primary) l c h / 0.35); animation: pulse 1.2s var(--ease) infinite; }
+@media (hover: hover) {
+  .face-press:hover:not(:disabled) .face-disc { transform: scale(1.06); }
+}
 .figure-slots { display: grid; grid-template-columns: auto 1fr; gap: 8px 12px; margin: 0; align-items: center; }
 .figure-slots dt { font-size: 13px; color: var(--on-surface-2); }
 .figure-slots dd { margin: 0; }
@@ -399,17 +485,35 @@ html:has(.stage) { overscroll-behavior-x: none; }
   display: grid; gap: 4px; min-width: 0; margin: 0 0 12px; padding: 4px 14px 14px;
   border: 1px solid var(--outline); border-radius: var(--radius-m);
   animation: fade-in var(--med) var(--ease);
+  transition: border-color var(--fast) var(--ease), box-shadow var(--fast) var(--ease);
 }
+.figure-edit.lit { border-color: var(--primary); box-shadow: 0 0 0 1px var(--primary); }
 .figure-edit legend { padding: 0 6px; font-weight: 600; }
 .figure-edit .field, .figure-edit .field:last-of-type { margin-bottom: 0; min-width: 0; }
+/* Their face and its button, then who they are beside their franchise, then
+   their kind beside whom they dress as. */
 .figure-row {
-  display: grid; grid-template-columns: 1fr 1fr auto; gap: 10px; align-items: start;
-  grid-template-areas: "who who remove" "character cosplay cosplay";
+  display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 10px; align-items: start;
+  grid-template-areas: "face face" "character franchise" "who cosplay";
 }
-.figure-row > .field:nth-child(1) { grid-area: who; }
+.figure-row > .figure-face { grid-area: face; display: flex; align-items: center; gap: 10px; min-width: 0; padding-top: 4px; }
+.figure-face > .icon-btn { margin-left: auto; }
+.figure-face .face-tool { min-width: 0; }
 .figure-row > .field:nth-child(2) { grid-area: character; }
-.figure-row > .field:nth-child(3) { grid-area: cosplay; }
-.figure-row > .icon-btn { grid-area: remove; margin-top: 29px; }
+.figure-row > .field:nth-child(3) { grid-area: franchise; }
+.figure-row > .field:nth-child(4) { grid-area: who; }
+.figure-row > .field:nth-child(5) { grid-area: cosplay; }
+/* A name's box in its category's colour. */
+.figure-row > .field.cat-character { --cat: var(--cat-character); }
+.figure-row > .field.cat-copyright { --cat: var(--cat-copyright); }
+.figure-row > .field.named > label { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 6px; }
+.figure-row > .field.named .text-box.one-line > textarea { border-color: color-mix(in srgb, var(--cat) 45%, var(--outline)); }
+.figure-row > .field.named textarea:focus { border-color: var(--cat); box-shadow: 0 0 0 3px color-mix(in srgb, var(--cat) 25%, transparent); }
+.figure-row > .field.named.filled .text-box.one-line > textarea { border-style: dashed; }
+.filled-note {
+  padding: 1px 8px; border-radius: 999px; font-size: 11px; font-weight: 600;
+  background: color-mix(in srgb, var(--cat) 14%, var(--surface)); color: var(--cat);
+}
 /* A name stays on its line, as in a field. */
 .figure-row .text-box.one-line > textarea { field-sizing: fixed; white-space: pre; overflow-wrap: normal; }
 .slot-group { margin: 12px 0 4px; font-size: 12px; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; color: var(--on-surface-2); }

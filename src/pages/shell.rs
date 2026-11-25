@@ -15,6 +15,7 @@ use leptos_router::NavigateOptions;
 use leptos_router::components::Outlet;
 use leptos_router::hooks::{use_location, use_navigate, use_query_map};
 use send_wrapper::SendWrapper;
+use starbooru_core::TagCategory;
 
 use super::explore;
 use super::login::Login;
@@ -31,8 +32,8 @@ use crate::logic::home::{Start, start};
 use crate::logic::modes::{Screen, screen};
 use crate::logic::saved::Kind;
 use crate::logic::search::{
-    Hint, Latest, ListKey, REMOTE_PAUSE_MS, TYPING_PAUSE_MS, complete, list_key, short_count,
-    still_fitting, utf16_index, word_at,
+    Hint, Latest, ListKey, REMOTE_PAUSE_MS, TYPING_PAUSE_MS, category_class, complete, list_key,
+    short_count, still_fitting, utf16_index, word_at,
 };
 use crate::pages::account::AccountButton;
 use crate::route::{self, ForumPage, Place, Tab};
@@ -215,6 +216,9 @@ enum Scope {
     Boorus(String),
     /// The Tags page, which the box filters as it's typed in.
     Tags,
+    /// The people page, which the box filters by name as it's typed in,
+    /// completing the collection's characters.
+    People,
     /// The forum's threads, in one category or in all of them.
     Forum(Option<i64>),
 }
@@ -225,7 +229,7 @@ impl Scope {
         match self {
             Scope::Collection | Scope::Explore(_) => Some(Kind::Gallery),
             Scope::Boorus(_) => Some(Kind::Boorus),
-            Scope::Tags | Scope::Forum(_) => None,
+            Scope::Tags | Scope::People | Scope::Forum(_) => None,
         }
     }
 }
@@ -244,6 +248,8 @@ fn scope_of(path: &str, s: Option<String>, days: Option<String>) -> Scope {
         Scope::Explore(days.map(|d| window(Some(&d))))
     } else if route::is_tags(path) {
         Scope::Tags
+    } else if route::is_people(path) {
+        Scope::People
     } else {
         Scope::Collection
     }
@@ -258,6 +264,7 @@ fn search_href(scope: &Scope, q: &str, last_sites: &[String]) -> String {
         Scope::Explore(None) => route::explore(&tidy(q)),
         Scope::Explore(Some(days)) => route::explore_over(&tidy(q), *days),
         Scope::Tags => route::tags(q),
+        Scope::People => route::people(q),
         Scope::Boorus(s) => {
             let sites = boorus::sites_param(&boorus::chosen_sites(s, last_sites));
             route::boorus(&boorus::tidy_query(q), &sites)
@@ -276,7 +283,7 @@ fn shown_search(path: &str, q: Option<String>, last: &str) -> String {
     }
     match scope_of(path, None, None) {
         Scope::Boorus(_) => boorus::from_address(&q.unwrap_or_default()),
-        Scope::Explore(_) | Scope::Tags | Scope::Forum(_) => q.unwrap_or_default(),
+        Scope::Explore(_) | Scope::Tags | Scope::People | Scope::Forum(_) => q.unwrap_or_default(),
         Scope::Collection if route::has_search(path) => q.unwrap_or_default(),
         Scope::Collection => last.to_owned(),
     }
@@ -289,6 +296,7 @@ fn placeholder(scope: &Scope) -> String {
         Scope::Explore(_) => t!("explore-search"),
         Scope::Boorus(_) => t!("boorus-search"),
         Scope::Tags => t!("tags-filter-placeholder"),
+        Scope::People => t!("people-filter-placeholder"),
         Scope::Forum(None) => t!("forum-search"),
         Scope::Forum(Some(_)) => t!("forum-search-category"),
     }
@@ -301,15 +309,23 @@ fn label(scope: &Scope) -> String {
         Scope::Explore(_) => t!("explore-search"),
         Scope::Boorus(_) => t!("boorus-search"),
         Scope::Tags => t!("tags-filter-label"),
+        Scope::People => t!("people-filter-label"),
         Scope::Forum(None) => t!("forum-search"),
         Scope::Forum(Some(_)) => t!("forum-search-category"),
     }
+}
+
+/// The characters among tags offered, for the people page.
+fn characters(hints: Vec<Hint>) -> Vec<Hint> {
+    let character = category_class(TagCategory::Character);
+    hints.into_iter().filter(|h| h.class == character).collect()
 }
 
 /// Suggestions kept from a moment ago for `typed` in `scope`.
 fn kept(scope: &Scope, typed: &str) -> Option<Vec<Hint>> {
     match scope {
         Scope::Collection | Scope::Explore(_) => api::kept_tags(typed),
+        Scope::People => api::kept_tags(typed).map(characters),
         // The list below is the answer.
         Scope::Tags => Some(Vec::new()),
         Scope::Boorus(s) => {
@@ -324,7 +340,9 @@ fn kept(scope: &Scope, typed: &str) -> Option<Vec<Hint>> {
 /// How long the typing pauses before `scope` is asked.
 fn pause(scope: &Scope) -> i32 {
     match scope {
-        Scope::Collection | Scope::Explore(_) | Scope::Tags | Scope::Forum(_) => TYPING_PAUSE_MS,
+        Scope::Collection | Scope::Explore(_) | Scope::Tags | Scope::People | Scope::Forum(_) => {
+            TYPING_PAUSE_MS
+        }
         Scope::Boorus(_) => REMOTE_PAUSE_MS,
     }
 }
@@ -334,6 +352,7 @@ fn pause(scope: &Scope) -> i32 {
 async fn suggest(scope: Scope, typed: String) -> Vec<Hint> {
     match scope {
         Scope::Collection | Scope::Explore(_) => api::tag_hints(typed).await,
+        Scope::People => characters(api::tag_hints(typed).await),
         Scope::Tags => Vec::new(),
         Scope::Boorus(s) => {
             match boorus::completing_site(&s, &store::prefs_untracked().booru_sites) {
@@ -417,8 +436,10 @@ pub(crate) fn SearchBox(#[prop(optional)] hero: bool) -> impl IntoView {
         }
     });
     let offering = Memo::new(move |_| saved.with(|(s, _)| !s.is_empty()));
-    // On the Tags page the box filters the list as it's typed in.
-    let filtering = Memo::new(move |_| scope.with(|s| *s == Scope::Tags));
+    // On the Tags page and the people page the box filters the list as
+    // it's typed in. The Tags page's list is the answer: nothing to complete.
+    let filtering = Memo::new(move |_| scope.with(|s| matches!(s, Scope::Tags | Scope::People)));
+    let listing = Memo::new(move |_| scope.with(|s| *s == Scope::Tags));
     let filter_turn = StoredValue::new(Latest::default());
     let expanded = Memo::new(move |_| {
         focused.get() && (offering.get() || open.get() && hints.with(|h| !h.is_empty()))
@@ -501,6 +522,21 @@ pub(crate) fn SearchBox(#[prop(optional)] hero: bool) -> impl IntoView {
         look_up(typed);
     };
 
+    // The page's filter, once the typing pauses: in place, so Back leaves
+    // the page rather than going through every letter.
+    let go_filter = SendWrapper::new(use_navigate());
+    let set_filter = Callback::new(move |value: String| {
+        let to = match scope.get_untracked() {
+            Scope::People => route::people(&value),
+            _ => route::tags(&value),
+        };
+        let replace = NavigateOptions {
+            replace: true,
+            scroll: false,
+            ..NavigateOptions::default()
+        };
+        (*go_filter)(&to, replace);
+    });
     // Puts suggestion `i` in place of the word at the caret.
     let accept = move |i: usize| {
         let Some(name) = hints.with_untracked(|h| h.get(i).map(|h| h.name.clone())) else {
@@ -520,8 +556,15 @@ pub(crate) fn SearchBox(#[prop(optional)] hero: bool) -> impl IntoView {
         let caret = u32::try_from(utf16_index(&next, at)).unwrap_or(u32::MAX);
         let _ = el.set_selection_range(caret, caret);
         let now = word_at(&next, at).map(|w| w.typed.to_lowercase());
-        text.set(next);
+        text.set(next.clone());
         forget(now);
+        // The people page shows whom was picked at once.
+        if filtering.get_untracked() {
+            filter_turn.update_value(|t| {
+                t.next();
+            });
+            set_filter.run(next);
+        }
     };
 
     // A saved search opens where it was left; the last option opens them all.
@@ -542,18 +585,6 @@ pub(crate) fn SearchBox(#[prop(optional)] hero: bool) -> impl IntoView {
             }
             None => saved::open_sheet(kind),
         }
-    });
-    // The Tags page's filter, once the typing pauses: in place, so Back
-    // leaves the page rather than going through every letter.
-    let go_filter = SendWrapper::new(use_navigate());
-    let set_filter = Callback::new(move |value: String| {
-        let to = route::tags(&value);
-        let replace = NavigateOptions {
-            replace: true,
-            scroll: false,
-            ..NavigateOptions::default()
-        };
-        (*go_filter)(&to, replace);
     });
     let filter_later = move |value: String| {
         let Some(n) = filter_turn.try_update_value(Latest::next) else {
@@ -770,6 +801,8 @@ pub(crate) fn SearchBox(#[prop(optional)] hero: bool) -> impl IntoView {
                         text.set(value.clone());
                         if filtering.get_untracked() {
                             filter_later(value);
+                        }
+                        if listing.get_untracked() {
                             return;
                         }
                         open.set(true);
@@ -779,13 +812,13 @@ pub(crate) fn SearchBox(#[prop(optional)] hero: bool) -> impl IntoView {
                     // The caret moved to another word.
                     on:keyup=move |e: KeyboardEvent| {
                         if matches!(e.key().as_str(), "ArrowLeft" | "ArrowRight" | "Home" | "End")
-                            && !filtering.get_untracked()
+                            && !listing.get_untracked()
                         {
                             follow();
                         }
                     }
                     on:click=move |_| {
-                        if !filtering.get_untracked() {
+                        if !listing.get_untracked() {
                             follow();
                         }
                     }
@@ -794,7 +827,7 @@ pub(crate) fn SearchBox(#[prop(optional)] hero: bool) -> impl IntoView {
                         saved_open.set(true);
                         // Coming back to the same word opens its list again.
                         asked.set_value(None);
-                        if !filtering.get_untracked() {
+                        if !listing.get_untracked() {
                             follow();
                         }
                     }
@@ -1099,12 +1132,43 @@ mod tests {
     }
 
     #[test]
+    fn on_the_people_page_the_box_filters_them_and_completes_characters() {
+        for path in ["/people", "/people/"] {
+            assert_eq!(scope_of(path, None, None), Scope::People);
+        }
+        assert_eq!(
+            search_href(&Scope::People, " hatsune miku ", &[]),
+            "/people?q=hatsune+miku"
+        );
+        assert_eq!(search_href(&Scope::People, "  ", &[]), "/people");
+        assert_eq!(shown_search("/people", Some("miku".into()), "sea"), "miku");
+        assert_eq!(shown_search("/people", None, "sea"), "");
+        assert_eq!(Scope::People.saved(), None);
+        let hint = |name: &str, class: &'static str| Hint {
+            name: name.into(),
+            class,
+            count: None,
+        };
+        let offered = characters(vec![
+            hint("miku", "cat-character"),
+            hint("mikan", ""),
+            hint("vocaloid", "cat-copyright"),
+        ]);
+        assert_eq!(offered, [hint("miku", "cat-character")]);
+        // It filters as typed, as the Tags page does, but offers names too.
+        let source = include_str!("shell.rs");
+        assert!(source.contains("matches!(s, Scope::Tags | Scope::People)"));
+        assert!(source.contains("Scope::People => route::people(&value),"));
+    }
+
+    #[test]
     fn the_empty_box_says_what_it_searches() {
         let scopes = [
             Scope::Collection,
             Scope::Explore(None),
             Scope::Boorus(String::new()),
             Scope::Tags,
+            Scope::People,
             Scope::Forum(None),
             Scope::Forum(Some(1)),
         ];
