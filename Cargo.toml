@@ -110,6 +110,11 @@ unimplemented = "deny"
 unreachable = "deny"
 indexing_slicing = "warn"
 
+# With full debug info the wasm grew past what rust-lld can write, and the
+# debug build crashed while linking. Panic messages keep their file and line.
+[profile.dev]
+debug = false
+
 [profile.release]
 opt-level = "z"
 lto = true
