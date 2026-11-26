@@ -19,11 +19,12 @@ use super::{LinkField, ListField};
 use crate::components::banner::ErrorBanner;
 use crate::components::focus::hold_focus;
 use crate::components::icons::{Ico, Icon};
+use crate::components::link_card::LinkCardPicture;
 use crate::components::select::{Choice, Select};
 use crate::dom;
 use crate::logic::share::{
     DEFAULT_LIFETIME, LIFETIMES, PICK_DAY, PickError, day_value, ends_after, ends_text, first_day,
-    first_pick, last_day, lifetime_days, lifetime_label, lifetime_value, new_share,
+    first_pick, last_day, lifetime_days, lifetime_label, lifetime_value, new_share, own_preview,
     pick_error_text, picked_days, post_url, post_urls, share_error_text, share_url,
 };
 use crate::{api, instance};
@@ -53,6 +54,19 @@ pub fn ShareSheet(post_ids: Vec<i64>, on_close: Callback<()>) -> impl IntoView {
     let day_field: NodeRef<html::Input> = NodeRef::new();
     let busy = RwSignal::new(false);
     let error = RwSignal::new(None::<String>);
+    // Previews in chats, where the server allows them: the account's choice
+    // once read, and the link's own once the switch is pressed.
+    let previews = addresses.is_none() && untrack(instance::link_previews);
+    let account = RwSignal::new(None::<bool>);
+    let wanted = RwSignal::new(None::<bool>);
+    if previews {
+        spawn_local(async move {
+            if let Ok(s) = api::call(|c| async move { c.sharing().await }).await {
+                account.try_set(Some(s.previews));
+            }
+        });
+    }
+    let preview = Memo::new(move |_| wanted.get().or_else(|| account.get()).unwrap_or(false));
     // The link, and when the server says it ends.
     let made = RwSignal::new(None::<(String, Option<DateTime<Utc>>)>);
     let first: NodeRef<html::Input> = NodeRef::new();
@@ -117,7 +131,10 @@ pub fn ShareSheet(post_ids: Vec<i64>, on_close: Callback<()>) -> impl IntoView {
         } else {
             lifetime.get_untracked()
         };
-        let request = match new_share(ids.get_value(), &title.get_untracked(), days) {
+        let own = previews
+            .then(|| own_preview(account.get_untracked(), wanted.get_untracked()))
+            .flatten();
+        let request = match new_share(ids.get_value(), &title.get_untracked(), days, own) {
             Ok(request) => request,
             Err(problem) => {
                 // Read in a submit, where the language isn't followed.
@@ -300,6 +317,30 @@ pub fn ShareSheet(post_ids: Vec<i64>, on_close: Callback<()>) -> impl IntoView {
                         {move || ends.with(|(text, _)| text.clone())}
                     </small>
                 </div>
+                {previews
+                    .then(|| {
+                        view! {
+                            // The picture shows what a chat will show.
+                            <button
+                                type="button"
+                                class="list-link switch-row share-preview"
+                                role="switch"
+                                aria-checked=move || if preview.get() { "true" } else { "false" }
+                                on:click=move |_| wanted.set(Some(!preview.get_untracked()))
+                            >
+                                <LinkCardPicture on=preview small=true />
+                                <span>{move || t!("share-preview")}</span>
+                                <span class="switch" class:on=move || preview.get() aria-hidden="true">
+                                    <span class="switch-knob">
+                                        {move || {
+                                            let icon = if preview.get() { Icon::Check } else { Icon::Close };
+                                            view! { <Ico icon=icon size=16 /> }
+                                        }}
+                                    </span>
+                                </span>
+                            </button>
+                        }
+                    })}
                 <div class="row-end">
                     <button class="btn text" type="button" on:click=move |_| on_close.run(())>
                         {move || t!("cancel")}

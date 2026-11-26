@@ -176,6 +176,26 @@ pub fn settled_home(on: bool) {
     refresh();
 }
 
+/// Link previews an administrator just turned on or off, so the switches
+/// that depend on them follow before the server has been asked again.
+pub fn settled_previews(on: bool) {
+    INFO.with(|i| {
+        i.update(|i| {
+            if let Some((_, info)) = i {
+                info.link_previews = on;
+            }
+        });
+    });
+    refresh();
+}
+
+/// Whether the server shows previews of links: on a public server posts'
+/// addresses, on a private one share links whose account or own choice
+/// says yes. Off until the server says.
+pub fn link_previews() -> bool {
+    info().is_some_and(|i| i.link_previews)
+}
+
 /// Forgets what the server said, at sign-out.
 pub fn forget() {
     INFO.with(|i| i.set(None));

@@ -377,6 +377,42 @@ pub fn is_settings(path: &str) -> bool {
     path.strip_prefix(SETTINGS)
         .is_some_and(|rest| rest.is_empty() || rest.starts_with('/'))
 }
+
+/// Settings at `path`, its list or a group, searched for `q`, as the
+/// search box searches it there.
+pub fn settings_search(path: &str, q: &str) -> String {
+    let path = if is_settings(path) { path } else { SETTINGS };
+    let q = q.trim();
+    if q.is_empty() {
+        path.to_owned()
+    } else {
+        format!("{path}?q={}", query_value(q))
+    }
+}
+
+/// The Upload page narrowed to the files and addresses holding `q`.
+pub fn upload(q: &str) -> String {
+    let q = q.trim();
+    if q.is_empty() {
+        UPLOAD.to_owned()
+    } else {
+        format!("{UPLOAD}?q={}", query_value(q))
+    }
+}
+
+/// Whether `path` is the Upload page, where the search box narrows the
+/// tiles.
+pub fn is_upload(path: &str) -> bool {
+    let segments: Vec<&str> = path.split('/').filter(|s| !s.is_empty()).collect();
+    segments.as_slice() == ["upload"]
+}
+
+/// Whether `path` is the Settings page proper, where the search box finds
+/// settings: not the pages it leads to.
+pub fn is_settings_page(path: &str) -> bool {
+    let segments: Vec<&str> = path.split('/').filter(|s| !s.is_empty()).collect();
+    matches!(segments.as_slice(), ["settings"] | ["settings", _])
+}
 /// The administration.
 pub const ADMIN: &str = "/admin";
 /// The forum of a public server.
@@ -388,6 +424,29 @@ pub const TERMS: &str = "/terms";
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn upload_and_settings_carry_their_filter() {
+        assert_eq!(upload(""), "/upload");
+        assert_eq!(upload(" IMG 2024 "), "/upload?q=IMG+2024");
+        assert_eq!(settings_search("/settings", "dark"), "/settings?q=dark");
+        assert_eq!(
+            settings_search("/settings/viewing", " "),
+            "/settings/viewing"
+        );
+        assert_eq!(
+            settings_search("/settings/viewing", "a&b"),
+            "/settings/viewing?q=a%26b"
+        );
+        assert_eq!(settings_search("/trash", "x"), "/settings?q=x");
+        assert!(is_upload("/upload") && is_upload("/upload/") && !is_upload("/uploads"));
+        for path in ["/settings", "/settings/", "/settings/viewing"] {
+            assert!(is_settings_page(path), "{path}");
+        }
+        for path in ["/trash", "/admin", "/settings/a/b", "/settingsx"] {
+            assert!(!is_settings_page(path), "{path}");
+        }
+    }
 
     #[test]
     fn a_post_carries_the_search_it_was_opened_from() {

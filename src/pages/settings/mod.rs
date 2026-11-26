@@ -21,7 +21,7 @@ mod viewing;
 use leptos::prelude::*;
 use leptos::task::spawn_local;
 use leptos_router::NavigateOptions;
-use leptos_router::hooks::{use_location, use_navigate, use_params_map};
+use leptos_router::hooks::{use_location, use_navigate, use_params_map, use_query_map};
 use starbooru_core::{ServerInfo, SignInMethods};
 use wasm_bindgen::JsCast;
 
@@ -33,17 +33,19 @@ use self::sessions::SessionsCard;
 use self::viewing::ViewingGroup;
 use super::library::LibraryImportCard;
 use super::profile::edit::ProfileSettings;
-use super::share::SharesCard;
+use super::share::{PreviewsCard, SharesCard};
 use crate::components::avatar::Avatar;
 use crate::components::back::BackButton;
 use crate::components::icons::{Ico, Icon};
 use crate::components::invite::SignInCard as SignInInvite;
 use crate::components::legal::note_opener;
+use crate::logic::filter;
 use crate::logic::profile::shown_name;
 use crate::logic::settings::{
-    FIRST, FocusTo, Group, Sections, anchored, focus_after, group_for_anchor, sections, version,
+    FIRST, FocusTo, Found, Group, Sections, anchored, card_shown, find, focus_after,
+    group_for_anchor, only_these, sections, version,
 };
-use crate::{api, dom, install, instance, me, route, store};
+use crate::{api, dom, i18n, install, instance, me, route, store};
 
 /// Where this app's code lives, and the list of everyone whose work it uses.
 const REPOSITORY: &str = env!("CARGO_PKG_REPOSITORY");
@@ -226,12 +228,45 @@ pub fn Settings() -> impl IntoView {
         shown,
     };
 
+    // The top bar's search finds settings: the cards that hold its words,
+    // under their groups, in place of the group open.
+    let query = use_query_map();
+    let words = Memo::new(move |_| query.with(|q| filter::words(&q.get("q").unwrap_or_default())));
+    let searching = Memo::new(move |_| words.with(|w| !w.is_empty()));
+    let found = Memo::new(move |_| {
+        let public = instance::public();
+        let sections = shown.get();
+        words.with(|w| {
+            find(
+                w,
+                &Group::shown(guest),
+                |g| vec![group_name(g), group_note(g)],
+                |id| i18n::tr(id, None),
+                |c| card_shown(c, guest, public, sections),
+            )
+        })
+    });
+    // The list keeps the groups with something found.
+    let left_out = move |g: Group| {
+        searching.get() && found.with(|f| !f.is_empty() && f.iter().all(|f| f.group != g))
+    };
+
     let rows = Group::shown(guest)
         .into_iter()
-        .map(|g| view! { <GroupLink group=g current=group open=open /> })
+        .map(|g| {
+            view! {
+                <GroupLink
+                    group=g
+                    current=group
+                    open=open
+                    searching=searching
+                    left_out=Signal::derive(move || left_out(g))
+                />
+            }
+        })
         .collect_view();
     let admin = move || {
-        ctx.shows(|s| s.admin).then(|| {
+        (ctx.shows(|s| s.admin) && !searching.get()).then(|| {
             view! {
                 <li class="admin-row">
                     <a class="settings-link" href=route::ADMIN>
@@ -250,7 +285,11 @@ pub fn Settings() -> impl IntoView {
     };
 
     view! {
-        <div class="page settings" class:open=move || group.get().is_some()>
+        <div
+            class="page settings"
+            class:open=move || group.get().is_some()
+            class:searching=move || searching.get()
+        >
             <nav class="settings-nav" aria-labelledby="settings-title">
                 <h1 id="settings-title" class="page-title break">{move || t!("nav-settings")}</h1>
                 <ul class="settings-list">
@@ -259,6 +298,9 @@ pub fn Settings() -> impl IntoView {
                 </ul>
             </nav>
             {move || {
+                if searching.get() {
+                    return view! { <Results found=found ctx=ctx /> }.into_any();
+                }
                 let group = open.get();
                 if guest && !group.for_guests() {
                     view! { <GuestGroup /> }.into_any()
@@ -270,10 +312,75 @@ pub fn Settings() -> impl IntoView {
     }
 }
 
+/// What the search found: each group with something in it, under its name,
+/// showing only the cards found, or all of them when its name was. The
+/// cards are the real ones, so a setting found can be changed right there.
+#[component]
+fn Results(found: Memo<Vec<Found>>, ctx: Ctx) -> impl IntoView {
+    // A group stays as it is while the words change, and only what it
+    // shows follows them.
+    let groups = Memo::new(move |_| found.with(|f| f.iter().map(|f| f.group).collect::<Vec<_>>()));
+    view! {
+        <div class="settings-results" aria-live="polite">
+            <Show when=move || groups.with(Vec::is_empty)>
+                <p class="muted settings-none" role="status">
+                    <Ico icon=Icon::Search />
+                    {move || t!("settings-search-none")}
+                </p>
+            </Show>
+            <For
+                each=move || groups.get()
+                key=|g| g.slug()
+                children=move |group| {
+                    let only = move || {
+                        found
+                            .with(|f| {
+                                f.iter()
+                                    .find(|f| f.group == group)
+                                    .and_then(|f| f.cards.as_ref())
+                                    .map(|cards| only_these(group, cards))
+                            })
+                            .unwrap_or_default()
+                    };
+                    let heading = format!("found-{}", group.slug());
+                    let labelled = heading.clone();
+                    view! {
+                        <section
+                            class="settings-found"
+                            data-group=group.slug()
+                            aria-labelledby=labelled
+                        >
+                            <style>{only}</style>
+                            <a class="found-head" href=group.href()>
+                                <span class="group-icon" aria-hidden="true">
+                                    <Ico icon=group_icon(group) />
+                                </span>
+                                <h2 id=heading class="card-title">
+                                    {move || group_name(group)}
+                                </h2>
+                                <Ico icon=Icon::ChevronRight />
+                            </a>
+                            <div class="group-cards">{group_body(group, ctx)}</div>
+                        </section>
+                    }
+                }
+            />
+        </div>
+    }
+}
+
 /// A group's row in the list: its icon, its name and what's in it. The
 /// account's shows who is signed in, with their initial.
 #[component]
-fn GroupLink(group: Group, current: Memo<Option<Group>>, open: Memo<Group>) -> impl IntoView {
+fn GroupLink(
+    group: Group,
+    current: Memo<Option<Group>>,
+    open: Memo<Group>,
+    /// While the search finds settings, no group is the one open, and those
+    /// with nothing found leave the list.
+    searching: Memo<bool>,
+    left_out: Signal<bool>,
+) -> impl IntoView {
     let account = move || store::session().map(|s| s.user.username);
     // A public server's profile has a picture and a name to show.
     let display = Signal::derive(|| me::profile().and_then(|p| p.display_name));
@@ -299,10 +406,10 @@ fn GroupLink(group: Group, current: Memo<Option<Group>>, open: Memo<Group>) -> i
         _ => group_note(group),
     };
     view! {
-        <li>
+        <li class:left-out=move || left_out.get()>
             <a
                 class="settings-link"
-                class:shown=move || open.get() == group
+                class:shown=move || open.get() == group && !searching.get()
                 href=group.href()
                 data-group=group.slug()
                 aria-current=move || (current.get() == Some(group)).then_some("page")
@@ -318,11 +425,9 @@ fn GroupLink(group: Group, current: Memo<Option<Group>>, open: Memo<Group>) -> i
     }
 }
 
-/// The group open, under its title, with the way back to the list where
-/// the list isn't beside it.
-#[component]
-fn GroupPage(group: Group, ctx: Ctx) -> impl IntoView {
-    let body = match group {
+/// A group's cards.
+fn group_body(group: Group, ctx: Ctx) -> AnyView {
+    match group {
         Group::Account => view! { <AccountGroup ctx=ctx /> }.into_any(),
         Group::Appearance => view! { <AppearanceGroup /> }.into_any(),
         Group::Viewing => view! { <ViewingGroup /> }.into_any(),
@@ -330,7 +435,14 @@ fn GroupPage(group: Group, ctx: Ctx) -> impl IntoView {
         Group::Library => view! { <LibraryGroup ctx=ctx /> }.into_any(),
         Group::Sharing => view! { <SharingGroup ctx=ctx /> }.into_any(),
         Group::About => view! { <AboutGroup /> }.into_any(),
-    };
+    }
+}
+
+/// The group open, under its title, with the way back to the list where
+/// the list isn't beside it.
+#[component]
+fn GroupPage(group: Group, ctx: Ctx) -> impl IntoView {
+    let body = group_body(group, ctx);
     view! {
         <section class="settings-group" data-group=group.slug() aria-labelledby=TITLE_ID>
             <div class="titled group-head">
@@ -423,11 +535,22 @@ fn LibraryGroup(ctx: Ctx) -> impl IntoView {
     }
 }
 
-/// The links shared, then the API keys. A public server shares a post by
-/// its address, and has no links to list.
+/// Whether the links show a link preview, the links shared, then the
+/// API keys. A public server shares a post by its address, and has no links
+/// to list.
 #[component]
 fn SharingGroup(ctx: Ctx) -> impl IntoView {
-    let shares = move || ctx.shows(|s| s.shares).then(|| view! { <SharesCard /> });
+    // The account's choice of previews, which each link follows unless it
+    // says otherwise.
+    let account = RwSignal::new(None::<bool>);
+    let shares = move || {
+        ctx.shows(|s| s.shares).then(|| {
+            view! {
+                <PreviewsCard account=account />
+                <SharesCard account=account />
+            }
+        })
+    };
     move || {
         store::signed_in().then(|| {
             view! {
@@ -554,7 +677,8 @@ mod tests {
             "href=route::DUPLICATES",
             "{library_import}",
             "fn SharingGroup",
-            "<SharesCard />",
+            "<PreviewsCard account=account />",
+            "<SharesCard account=account />",
             "<ApiKeysCard />",
             "fn AboutGroup",
             "href=route::HELP",

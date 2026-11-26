@@ -9,8 +9,8 @@ repository = "https://github.com/StarBooru/starbooru-web"
 publish = false
 
 [dependencies]
-starbooru-core = { git = "https://github.com/StarBooru/starbooru-server", tag = "v0.6.0" }
-starbooru-client = { git = "https://github.com/StarBooru/starbooru-server", tag = "v0.6.0" }
+starbooru-core = { git = "https://github.com/StarBooru/starbooru-server", rev = "6309a27e9fe9fa4be56739dd2186bc5c7fb33e0a" }
+starbooru-client = { git = "https://github.com/StarBooru/starbooru-server", rev = "6309a27e9fe9fa4be56739dd2186bc5c7fb33e0a" }
 leptos = { version = "0.8", features = ["csr"] }
 leptos_router = "0.8"
 chrono = { version = "0.4", default-features = false, features = ["serde", "std", "clock", "wasmbind"] }

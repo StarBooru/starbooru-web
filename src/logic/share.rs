@@ -6,7 +6,7 @@
 use chrono::{DateTime, Local, NaiveDate, TimeDelta, TimeZone, Utc};
 use starbooru_client::Client;
 use starbooru_core::share::{MAX_SHARE_DAYS, MAX_SHARE_POSTS, MAX_SHARE_TITLE_CHARS, share_path};
-use starbooru_core::{MediaKind, NewShare, Share, ShareError, SharedView};
+use starbooru_core::{MediaKind, NewShare, Share, ShareError, ShareUpdate, SharedView, preview_on};
 
 use super::library::ago;
 use super::viewer::when;
@@ -180,18 +180,50 @@ pub fn pick_error_text<Tz: TimeZone>(error: PickError, now: DateTime<Utc>, zone:
 }
 
 /// The request for a link to `post_ids`, in that order, with the title as
-/// typed and the lifetime chosen. Checked as the server would check it.
+/// typed, the lifetime chosen and the link's own choice of preview. Checked
+/// as the server would check it.
 pub fn new_share(
     post_ids: Vec<i64>,
     title: &str,
     days: Option<u32>,
+    preview: Option<bool>,
 ) -> Result<NewShare, ShareError> {
     NewShare {
         post_ids,
         title: Some(title.to_owned()),
         days,
+        preview,
     }
     .clean()
+}
+
+// ---------- previews in chats ----------
+
+/// What a link asks of its preview: nothing while it wants what the
+/// account does, so it follows the account's setting later on too. The
+/// account's unknown, a choice made stays.
+pub fn own_preview(account: Option<bool>, wanted: Option<bool>) -> Option<bool> {
+    match (account, wanted) {
+        (Some(account), Some(wanted)) if account == wanted => None,
+        (_, wanted) => wanted,
+    }
+}
+
+/// The change that flips a link's preview from `shown`.
+pub fn flip_preview(account: bool, shown: bool) -> ShareUpdate {
+    ShareUpdate {
+        preview: Some(own_preview(Some(account), Some(!shown))),
+    }
+}
+
+/// Whether a link shows its picture in chats now: the server's switch,
+/// then the link's `own` choice or the account's. Until the account's
+/// setting is known, what the server `told` of the link.
+pub fn previewed(server: bool, account: Option<bool>, own: Option<bool>, told: bool) -> bool {
+    match account {
+        Some(account) => preview_on(server, account, own),
+        None => server && told,
+    }
 }
 
 /// Why a link can't be made, in words.
@@ -365,7 +397,46 @@ mod tests {
             expires_at: None,
             views: 0,
             last_viewed_at: None,
+            preview: None,
+            preview_on: false,
         }
+    }
+
+    #[test]
+    fn a_link_asks_for_a_preview_only_when_it_differs_from_the_account() {
+        // Untouched, or the same as the account: it follows the account.
+        assert_eq!(own_preview(Some(true), None), None);
+        assert_eq!(own_preview(Some(false), Some(false)), None);
+        assert_eq!(own_preview(Some(true), Some(true)), None);
+        assert_eq!(own_preview(Some(false), Some(true)), Some(true));
+        assert_eq!(own_preview(Some(true), Some(false)), Some(false));
+        // The account's not known: the choice is kept as made.
+        assert_eq!(own_preview(None, Some(false)), Some(false));
+        assert_eq!(own_preview(None, None), None);
+        let made = new_share(vec![1], "", None, Some(true)).unwrap();
+        assert_eq!(made.preview, Some(true));
+    }
+
+    #[test]
+    fn flipping_a_links_preview_back_to_the_accounts_follows_it_again() {
+        assert_eq!(flip_preview(false, false).preview, Some(Some(true)));
+        assert_eq!(flip_preview(false, true).preview, Some(None));
+        assert_eq!(flip_preview(true, true).preview, Some(Some(false)));
+        assert_eq!(flip_preview(true, false).preview, Some(None));
+    }
+
+    #[test]
+    fn a_link_shows_a_preview_with_the_server_and_its_own_or_the_accounts_say() {
+        assert!(previewed(true, Some(true), None, false));
+        assert!(!previewed(true, Some(false), None, true));
+        assert!(previewed(true, Some(false), Some(true), false));
+        assert!(!previewed(true, Some(true), Some(false), true));
+        // The server's switch is off: none, whatever the rest say.
+        assert!(!previewed(false, Some(true), Some(true), true));
+        // The account's not known yet: what the server said of the link.
+        assert!(previewed(true, None, None, true));
+        assert!(!previewed(false, None, Some(true), true));
+        assert!(!previewed(true, None, Some(true), false));
     }
 
     #[test]
@@ -622,23 +693,25 @@ mod tests {
 
     #[test]
     fn the_request_keeps_the_order_and_the_choice() {
-        let week = new_share(vec![5, 3, 5, 9], "  Trip  ", lifetime_days("7")).unwrap();
+        let week = new_share(vec![5, 3, 5, 9], "  Trip  ", lifetime_days("7"), None).unwrap();
         assert_eq!(week.post_ids, [5, 3, 9]);
         assert_eq!(week.title.as_deref(), Some("Trip"));
         let json = serde_json::to_value(&week).unwrap();
         assert_eq!(json["days"], 7);
         assert_eq!(json["post_ids"], serde_json::json!([5, 3, 9]));
+        // A link that follows the account says nothing of previews.
+        assert!(json.get("preview").is_none());
         // Until removed is no lifetime at all, and an empty title none.
-        let kept = new_share(vec![5], " ", lifetime_days("")).unwrap();
+        let kept = new_share(vec![5], " ", lifetime_days(""), None).unwrap();
         assert_eq!(kept.days, None);
         assert_eq!(kept.title, None);
         assert!(serde_json::to_value(&kept).unwrap()["days"].is_null());
         // What the server would refuse, in words.
-        let none = new_share(Vec::new(), "", None).unwrap_err();
+        let none = new_share(Vec::new(), "", None, None).unwrap_err();
         assert_eq!(share_error_text(&none), "Pick at least one post to share.");
-        let long = new_share(vec![1], &"x".repeat(101), None).unwrap_err();
+        let long = new_share(vec![1], &"x".repeat(101), None, None).unwrap_err();
         assert!(share_error_text(&long).contains("100"));
-        let many = new_share((0..=500).collect(), "", None).unwrap_err();
+        let many = new_share((0..=500).collect(), "", None, None).unwrap_err();
         assert!(share_error_text(&many).contains("500"));
     }
 

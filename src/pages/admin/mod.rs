@@ -2,7 +2,8 @@
 //! (`overview.rs`), the accounts (`accounts.rs`), on a public server the
 //! tags its people voted off (`moderation.rs`), the database backups
 //! (`backups.rs`), the server's mode and score kind (`modes.rs`) with its
-//! settings (`server.rs`), home page (`home.rs`), default blacklist
+//! settings (`server.rs`), home page (`home.rs`), link previews
+//! (`previews.rs`), default blacklist
 //! (`blacklist.rs`) and AI tools (`ai.rs`), and new versions
 //! (`updates.rs`). The tab is in the address, so
 //! a reload keeps it. Everyone else gets a short note and none of the
@@ -16,6 +17,7 @@ mod home;
 mod moderation;
 mod modes;
 mod overview;
+mod previews;
 mod server;
 mod updates;
 

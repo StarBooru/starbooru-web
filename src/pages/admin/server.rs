@@ -2,7 +2,8 @@
 //! settings that override the server's environment (its name, sign-ups, how
 //! long the recycle bin keeps posts, automatic meta tags, and on a public
 //! server the score at which votes take a tag off), the home page
-//! (`home.rs`), the default blacklist (`blacklist.rs`), emptying the bin at
+//! (`home.rs`), link previews (`previews.rs`), the default blacklist
+//! (`blacklist.rs`), emptying the bin at
 //! once, and the AI tools (`ai.rs`). The settings are read once for the
 //! cards that show them; each card saves its own part.
 
@@ -18,6 +19,7 @@ use super::ai::AiCard;
 use super::blacklist::DefaultBlacklistCard;
 use super::home::HomeCard;
 use super::modes::{ModeCard, ScoreCard};
+use super::previews::PreviewsCard;
 use crate::api;
 use crate::components::banner::ErrorBanner;
 use crate::components::confirm::ConfirmButton;
@@ -41,6 +43,7 @@ pub(super) async fn save_part(
     request.changes.clear();
     request.default_blacklist = None;
     request.home = None;
+    request.link_previews = None;
     change(&mut request);
     let saved = api::call(move |c| async move { c.set_admin_settings(&request).await }).await?;
     settings.try_set(Some(saved.clone()));
@@ -75,6 +78,7 @@ pub(super) fn ServerTab() -> impl IntoView {
             <ScoreCard settings=settings />
             <ServerCard settings=settings />
             <HomeCard settings=settings />
+            <PreviewsCard settings=settings />
             <DefaultBlacklistCard settings=settings />
         </Show>
         <BinCard />

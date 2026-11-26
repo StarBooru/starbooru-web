@@ -13,6 +13,7 @@ use std::time::Duration;
 use leptos::ev::{Event, KeyboardEvent, SubmitEvent};
 use leptos::prelude::*;
 use leptos::task::spawn_local;
+use leptos_router::hooks::use_query_map;
 use send_wrapper::SendWrapper;
 use starbooru_core::Rating;
 use wasm_bindgen::JsCast;
@@ -31,7 +32,8 @@ use crate::components::tag_box::TagBox;
 use crate::components::transfer::TransferBar;
 use crate::dom;
 use crate::files::{self, Dropped, Picked};
-use crate::logic::queue::{Batch, Queue, Status};
+use crate::logic::filter;
+use crate::logic::queue::{Batch, Queue, Status, job_matches};
 use crate::logic::upload::{self, AiSwitch, folder_tag, parse_urls, skipped_names, tag_problem};
 use crate::pages::bad_tag_text;
 
@@ -262,18 +264,50 @@ pub fn Upload() -> impl IntoView {
         url_text.set(String::new());
     };
 
-    let keys = Memo::new(|_| {
-        activity::with_queue(|q| q.items().iter().map(|i| i.key).collect::<Vec<_>>())
+    // The top bar's search narrows the tiles to those holding its words, and
+    // what the bar and Clear do to the tiles shown.
+    let query = use_query_map();
+    let words = Memo::new(move |_| query.with(|q| filter::words(&q.get("q").unwrap_or_default())));
+    let filtering = Memo::new(move |_| words.with(|w| !w.is_empty()));
+    let keys = Memo::new(move |_| words.with(|w| activity::with_queue(|q| q.matching(w))));
+    let job_ids = Memo::new(move |_| {
+        words.with(|w| {
+            activity::with_jobs(|j| {
+                j.iter()
+                    .filter(|j| job_matches(j, w))
+                    .map(|j| j.id)
+                    .collect::<Vec<_>>()
+            })
+        })
     });
-    let job_ids =
-        Memo::new(|_| activity::with_jobs(|j| j.iter().map(|j| j.id).collect::<Vec<_>>()));
-    let drafts = Memo::new(|_| activity::with_queue(Queue::drafts));
+    let all =
+        Memo::new(|_| activity::with_queue(|q| q.items().len()) + activity::with_jobs(<[_]>::len));
+    let shown = Memo::new(move |_| filtering.get().then(|| keys.get()));
+    let drafts = Memo::new(move |_| {
+        activity::with_queue(|q| match shown.get() {
+            Some(keys) => q.drafts_in(&keys),
+            None => q.drafts(),
+        })
+    });
     let going = Memo::new(|_| activity::with_queue(|q| q.overall().is_some()));
-    let clearable = Memo::new(|_| {
-        activity::with_queue(|q| q.items().iter().any(|i| i.status != Status::Sending))
-            || activity::with_jobs(|j| j.iter().any(|j| !j.state.is_active()))
+    let clearable = Memo::new(move |_| {
+        keys.with(|keys| {
+            activity::with_queue(|q| {
+                q.items()
+                    .iter()
+                    .any(|i| i.status != Status::Sending && keys.contains(&i.key))
+            })
+        }) || job_ids.with(|ids| {
+            activity::with_jobs(|j| {
+                j.iter()
+                    .any(|j| !j.state.is_active() && ids.contains(&j.id))
+            })
+        })
     });
-    let empty = move || keys.with(Vec::is_empty) && job_ids.with(Vec::is_empty);
+    let empty = move || all.get() == 0;
+    let none_match = move || {
+        filtering.get() && all.get() != 0 && keys.with(Vec::is_empty) && job_ids.with(Vec::is_empty)
+    };
     let placed = move || keys.get().into_iter().enumerate().collect::<Vec<_>>();
     let open_item = Callback::new(move |key: u64| {
         let from = dom::offset_from_middle(&format!("[data-up-key=\"{key}\"]")).unwrap_or_default();
@@ -352,7 +386,11 @@ pub fn Upload() -> impl IntoView {
                         aria-label=move || t!("upload-clear")
                         on:click=move |_| {
                             notice.set(None);
-                            activity::clear();
+                            if filtering.get_untracked() {
+                                activity::clear_shown(&keys.get_untracked(), &job_ids.get_untracked());
+                            } else {
+                                activity::clear();
+                            }
                         }
                     >
                         <Ico icon=Icon::Delete />
@@ -420,8 +458,14 @@ pub fn Upload() -> impl IntoView {
                     children=move |id| view! { <JobTile id=id /> }
                 />
             </div>
+            <Show when=none_match>
+                <p class="muted up-none" role="status">
+                    <Ico icon=Icon::Search />
+                    {move || t!("upload-filter-none")}
+                </p>
+            </Show>
             <Show when=move || { drafts.get() != 0 || going.get() }>
-                <UpBar drafts=drafts />
+                <UpBar drafts=drafts shown=shown />
             </Show>
             {move || {
                 opened
@@ -444,8 +488,9 @@ pub fn Upload() -> impl IntoView {
 
 /// The floating bar at the foot of the page: how far the files on their way
 /// have got, and the tags, source and rating everything waiting goes with.
+/// While the search narrows the tiles, it sends the drafts `shown`.
 #[component]
-fn UpBar(drafts: Memo<usize>) -> impl IntoView {
+fn UpBar(drafts: Memo<usize>, shown: Memo<Option<Vec<u64>>>) -> impl IntoView {
     let tags = shared(&SHARED_TAGS);
     let rating = shared(&RATING);
     let source = shared(&SOURCE);
@@ -462,12 +507,13 @@ fn UpBar(drafts: Memo<usize>) -> impl IntoView {
         false,
     );
     let send = move || {
-        if let Some(problem) = batch_problem(None) {
+        let only = shown.get_untracked();
+        if let Some(problem) = batch_problem(only.as_deref()) {
             error.set(Some(problem));
             return;
         }
         error.set(None);
-        activity::start(&batch(), None);
+        activity::start(&batch(), only.as_deref());
     };
     let progress = Signal::derive(move || overall.get().map(|o| o.transfer));
     let count = move || {

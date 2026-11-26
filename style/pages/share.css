@@ -35,6 +35,73 @@
 .field .share-day input { min-width: 0; min-height: 48px; padding: 0 10px 0 14px; accent-color: var(--primary); }
 .share-ends { min-height: 1lh; }
 .app[data-effects="lite"] .share-lifetime { transition: none; }
+/* Link preview: a row like Settings' switches, its picture in the icon's
+   place. */
+.share-preview { width: calc(100% + 24px); margin: -4px -12px 12px; }
+.share-preview.switch-row > span.link-card { grid-area: 1 / 1; }
+
+/* ---------- a link in a chat ---------- */
+
+/* What a chat shows of a link (components/link_card.rs): the address in a
+   bubble, and with a preview the picture, the site and the title growing in
+   above it. Drawn in container units, so the small one is the same picture. */
+.link-card {
+  container-type: inline-size; box-sizing: border-box; display: grid; align-content: end; flex: none;
+  width: 152px; aspect-ratio: 1; overflow: hidden;
+  border-radius: var(--radius-m); background: var(--canvas);
+  box-shadow: inset 0 0 0 1px oklch(from var(--outline) l c h / 0.6);
+}
+.link-card.small { width: 52px; border-radius: var(--radius-s); }
+/* Spaced by its own margin: container units on the card itself would
+   measure the page. */
+.link-card-bubble {
+  display: grid; gap: 4cqw; margin: 8cqw; padding: 5cqw; border-radius: 7cqw 7cqw 7cqw 2cqw;
+  background: var(--surface-3);
+}
+.link-card-preview {
+  display: grid; grid-template-rows: 0fr; opacity: 0;
+  transition: grid-template-rows var(--med) var(--ease), opacity var(--med) var(--ease);
+}
+.link-card-preview > span { display: grid; gap: 3cqw; min-height: 0; overflow: hidden; }
+.link-card.on .link-card-preview { grid-template-rows: 1fr; opacity: 1; }
+/* A sun over a hill, as on the swipe pictures. */
+.link-card-image {
+  display: block; aspect-ratio: 1.91; border-radius: 4cqw;
+  background: radial-gradient(circle 6cqw at 26% 38%, var(--primary) 95%, transparent),
+    linear-gradient(165deg, var(--surface) 58%, var(--outline) 58.5%);
+}
+.link-card-site, .link-card-title, .link-card-url { display: block; height: 4cqw; border-radius: 2cqw; }
+.link-card-site { width: 38%; background: var(--outline); }
+.link-card-title { width: 78%; height: 5cqw; background: var(--on-surface-2); }
+.link-card-url { width: 64%; background: var(--primary); }
+
+/* Settings › Sharing and Administration › Server: the picture beside the
+   switch, above it on a phone. */
+.previews-body { display: flex; align-items: center; gap: 8px 20px; }
+.previews-side { flex: 1; min-width: 0; }
+/* No icon: the picture beside it says what it's about. */
+.previews-side .switch-row { grid-template-columns: 1fr auto; margin: 0 -12px; }
+.previews-side .switch-row > span:not(.muted, .switch) { grid-area: 1 / 1; }
+.previews-side .switch-row > .muted { grid-area: 2 / 1; }
+.previews-side .switch-row > .switch { grid-area: 1 / 2 / span 2; }
+.previews-side .fine { margin: 4px 0 0; }
+.previews-side .saved-note { display: inline-flex; align-items: center; gap: 6px; margin-top: 8px; }
+.previews-off { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 12px; margin-top: 16px; }
+.switch-row:disabled { opacity: 0.5; cursor: not-allowed; }
+.switch-row:disabled:hover { background: none; }
+.switch-row:disabled .switch-knob { scale: 1; }
+@media (max-width: 600px) {
+  .previews-body { flex-direction: column; align-items: stretch; }
+  .previews-body > .link-card { align-self: center; }
+}
+
+/* A link's own preview, in the list. */
+.preview-chip { gap: 6px; }
+
+@media (prefers-reduced-motion: reduce) {
+  .link-card-preview { transition: none; }
+}
+.app[data-effects="lite"] .link-card-preview { transition: none; }
 
 /* ---------- the list in Settings ---------- */
 

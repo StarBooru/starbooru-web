@@ -14,6 +14,7 @@ pub mod focus;
 pub mod icons;
 pub mod invite;
 pub mod legal;
+pub mod link_card;
 pub mod markdown;
 pub mod mention;
 pub mod menu;

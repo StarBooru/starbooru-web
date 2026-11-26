@@ -48,10 +48,27 @@
 @keyframes group-in { from { opacity: 0; translate: 32px 0; } }
 @keyframes list-in { from { opacity: 0; translate: -32px 0; } }
 
+/* What the top bar's search found: each group's name, which opens it, over
+   the cards found in it. The list keeps the groups with something found. */
+.settings-results { display: grid; gap: 28px; min-width: 0; animation: group-in var(--med) var(--ease); }
+.settings-found { display: grid; gap: 12px; min-width: 0; }
+.found-head {
+  display: flex; align-items: center; gap: 12px; justify-self: start; padding: 4px 12px 4px 4px;
+  border-radius: 999px; color: var(--on-surface); text-decoration: none;
+  transition: background-color var(--fast) var(--ease);
+}
+.found-head:hover { background: var(--surface-2); }
+.found-head .card-title { margin: 0; }
+.found-head > .icon:last-child { color: var(--on-surface-2); }
+.settings-none { display: flex; align-items: center; gap: 10px; margin: 8px 0; }
+.settings-list > li.left-out { display: none; }
+
 /* Phones and tablets: the list, or one group with its Back. */
 @media (max-width: 999px) {
   .settings.open .settings-nav { display: none; }
   .settings:not(.open) .settings-group { display: none; }
+  /* Searching: what was found, wherever the page was. */
+  .settings.searching .settings-nav { display: none; }
 }
 
 /* Wide windows: the list stays beside the group open, marked, and a group
@@ -204,7 +221,7 @@
 
 /* Reduced effects: the pictures stand still. Reduced motion and the
    battery saver cut every animation short (base.css). */
-.app[data-effects="lite"] :is(.settings-group, .settings-nav, .swipe-demo-tile, .swipe-demo-hint .icon, .does li .icon, .demo-hand .icon) {
+.app[data-effects="lite"] :is(.settings-group, .settings-nav, .settings-results, .swipe-demo-tile, .swipe-demo-hint .icon, .does li .icon, .demo-hand .icon) {
   animation: none;
 }
 

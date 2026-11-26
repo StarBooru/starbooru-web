@@ -7,9 +7,18 @@
 //! can go again. An address goes to the server's import queue instead, and
 //! leaves the list once the server has it.
 
-use starbooru_core::{ImportRequest, Rating, Transfer};
+use starbooru_core::{ImportJob, ImportRequest, Rating, Transfer};
 
+use super::filter::holds_all;
 use super::tags::{BadTag, parse_tags};
+
+/// Whether an import holds every one of `words`, in its address, its
+/// source or its tags.
+pub fn job_matches(job: &ImportJob, words: &[String]) -> bool {
+    let mut places = vec![job.url.as_str(), job.source.as_deref().unwrap_or("")];
+    places.extend(job.tags.iter().map(String::as_str));
+    holds_all(words, &places)
+}
 
 /// How many files are sent at once. A big one goes in chunks, several at a
 /// time already.
@@ -208,6 +217,36 @@ impl Queue {
     /// Empties the list, keeping what is on its way.
     pub fn clear(&mut self) {
         self.items.retain(|i| i.status == Status::Sending);
+    }
+
+    /// Takes the items in `keys` off the list, but for those on their way.
+    pub fn clear_only(&mut self, keys: &[u64]) {
+        self.items
+            .retain(|i| i.status == Status::Sending || !keys.contains(&i.key));
+    }
+
+    /// The items that hold every one of `words`, in their name, their
+    /// folder or their own tags. No words: all of them.
+    pub fn matching(&self, words: &[String]) -> Vec<u64> {
+        self.items
+            .iter()
+            .filter(|i| {
+                let folder = match &i.source {
+                    Source::File { path, .. } => path.as_str(),
+                    Source::Url(_) => "",
+                };
+                holds_all(words, &[i.name(), folder, i.tags.as_str()])
+            })
+            .map(|i| i.key)
+            .collect()
+    }
+
+    /// The drafts among `keys`.
+    pub fn drafts_in(&self, keys: &[u64]) -> usize {
+        self.items
+            .iter()
+            .filter(|i| i.status == Status::Draft && keys.contains(&i.key))
+            .count()
     }
 
     /// Sends the drafts `wanted` picks with what `batch` puts on them: files
@@ -417,6 +456,7 @@ impl Queue {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::logic::filter::words;
 
     fn file(name: &str, size: u64) -> Source {
         Source::File {
@@ -463,6 +503,49 @@ mod tests {
         assert!(q.finish(a, 1, Outcome::Posted(70)));
         assert_eq!(status(&q, a), Status::Done(70));
         assert_eq!(q.pending(), 0);
+    }
+
+    #[test]
+    fn a_filter_finds_items_by_name_folder_or_tags_and_clears_only_those() {
+        let mut q = Queue::default();
+        let beach = q.add(
+            Source::File {
+                name: "IMG_0001.jpg".into(),
+                size: 10,
+                mime: String::new(),
+                path: "Holidays/IMG_0001.jpg".into(),
+            },
+            "sea".into(),
+        );
+        let cat = q.add(file("cat.png", 10), String::new());
+        let link = q.add(
+            Source::Url("https://example.com/a.gif".into()),
+            String::new(),
+        );
+        let all = |q: &Queue, s: &str| q.matching(&words(s));
+        assert_eq!(all(&q, ""), [beach, cat, link]);
+        assert_eq!(all(&q, "holidays"), [beach]);
+        assert_eq!(all(&q, "SEA img"), [beach]);
+        assert_eq!(all(&q, "example gif"), [link]);
+        assert!(all(&q, "dog").is_empty());
+        assert_eq!(q.drafts_in(&[beach, link]), 2);
+        // One on its way stays, cleared or not.
+        start_all(&mut q, &batch(""));
+        q.next(1);
+        assert_eq!(status(&q, beach), Status::Sending);
+        q.clear_only(&[beach, cat]);
+        assert!(q.get(beach).is_some());
+        assert!(q.get(cat).is_none());
+        assert!(q.get(link).is_some());
+        let job: ImportJob = serde_json::from_value(serde_json::json!({
+            "id": 1, "url": "https://site.example/p/9", "source": null,
+            "tags": ["blue_sky"], "rating": "safe", "state": "queued",
+            "post_id": null, "error": null, "created_at": "2026-11-26T00:00:00Z",
+            "finished_at": null
+        }))
+        .unwrap();
+        assert!(job_matches(&job, &words("site blue")));
+        assert!(!job_matches(&job, &words("cat")));
     }
 
     #[test]

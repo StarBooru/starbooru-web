@@ -1,9 +1,11 @@
 //! Share links: the sheet that makes one for a post or a selection, or on a
 //! public server gives their own addresses (`sheet.rs`), the account's links
-//! for Settings (`links.rs`), and the public page a link opens without an
-//! account (`public.rs`).
+//! for Settings (`links.rs`) and whether they show a link preview
+//! (`previews.rs`), and the public page a link opens without an account
+//! (`public.rs`).
 
 mod links;
+mod previews;
 mod public;
 mod sheet;
 
@@ -12,6 +14,7 @@ use leptos::prelude::*;
 use leptos::task::spawn_local;
 
 pub use self::links::SharesCard;
+pub use self::previews::PreviewsCard;
 pub use self::public::SharedPage;
 pub use self::sheet::ShareSheet;
 use crate::components::icons::{Ico, Icon};
@@ -162,7 +165,7 @@ mod tests {
         // The list stands in Settings, after the devices signed in.
         let settings = include_str!("../settings/mod.rs");
         let devices = settings.find("<SessionsCard");
-        let links = settings.find("<SharesCard />");
+        let links = settings.find("<SharesCard account=account />");
         assert!(devices.zip(links).is_some_and(|(d, l)| d < l));
         // The public page is outside the shell and asks no session's client.
         let app = include_str!("../../app.rs");

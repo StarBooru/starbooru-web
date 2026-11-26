@@ -221,6 +221,11 @@ enum Scope {
     People,
     /// The forum's threads, in one category or in all of them.
     Forum(Option<i64>),
+    /// The Upload page's tiles, which the box narrows as it's typed in.
+    Upload,
+    /// Settings at the address given, list or group, whose settings the
+    /// box finds as it's typed in.
+    Settings(String),
 }
 
 impl Scope {
@@ -229,8 +234,24 @@ impl Scope {
         match self {
             Scope::Collection | Scope::Explore(_) => Some(Kind::Gallery),
             Scope::Boorus(_) => Some(Kind::Boorus),
-            Scope::Tags | Scope::People | Scope::Forum(_) => None,
+            Scope::Tags | Scope::People | Scope::Forum(_) | Scope::Upload | Scope::Settings(_) => {
+                None
+            }
         }
+    }
+
+    /// Whether the box filters the page as it's typed in, rather than
+    /// searching on Enter.
+    fn filters(&self) -> bool {
+        matches!(
+            self,
+            Scope::Tags | Scope::People | Scope::Upload | Scope::Settings(_)
+        )
+    }
+
+    /// Whether what's typed is plain words, with no tags to complete.
+    fn plain(&self) -> bool {
+        matches!(self, Scope::Tags | Scope::Upload | Scope::Settings(_))
     }
 }
 
@@ -250,6 +271,10 @@ fn scope_of(path: &str, s: Option<String>, days: Option<String>) -> Scope {
         Scope::Tags
     } else if route::is_people(path) {
         Scope::People
+    } else if route::is_upload(path) {
+        Scope::Upload
+    } else if route::is_settings_page(path) {
+        Scope::Settings(path.to_owned())
     } else {
         Scope::Collection
     }
@@ -271,6 +296,8 @@ fn search_href(scope: &Scope, q: &str, last_sites: &[String]) -> String {
         }
         Scope::Forum(None) => route::forum(q),
         Scope::Forum(Some(id)) => route::forum_category(*id, q),
+        Scope::Upload => route::upload(q),
+        Scope::Settings(path) => route::settings_search(path, q),
     }
 }
 
@@ -283,7 +310,12 @@ fn shown_search(path: &str, q: Option<String>, last: &str) -> String {
     }
     match scope_of(path, None, None) {
         Scope::Boorus(_) => boorus::from_address(&q.unwrap_or_default()),
-        Scope::Explore(_) | Scope::Tags | Scope::People | Scope::Forum(_) => q.unwrap_or_default(),
+        Scope::Explore(_)
+        | Scope::Tags
+        | Scope::People
+        | Scope::Forum(_)
+        | Scope::Upload
+        | Scope::Settings(_) => q.unwrap_or_default(),
         Scope::Collection if route::has_search(path) => q.unwrap_or_default(),
         Scope::Collection => last.to_owned(),
     }
@@ -299,6 +331,8 @@ fn placeholder(scope: &Scope) -> String {
         Scope::People => t!("people-filter-placeholder"),
         Scope::Forum(None) => t!("forum-search"),
         Scope::Forum(Some(_)) => t!("forum-search-category"),
+        Scope::Upload => t!("upload-filter"),
+        Scope::Settings(_) => t!("settings-search"),
     }
 }
 
@@ -312,6 +346,8 @@ fn label(scope: &Scope) -> String {
         Scope::People => t!("people-filter-label"),
         Scope::Forum(None) => t!("forum-search"),
         Scope::Forum(Some(_)) => t!("forum-search-category"),
+        Scope::Upload => t!("upload-filter"),
+        Scope::Settings(_) => t!("settings-search"),
     }
 }
 
@@ -327,7 +363,7 @@ fn kept(scope: &Scope, typed: &str) -> Option<Vec<Hint>> {
         Scope::Collection | Scope::Explore(_) => api::kept_tags(typed),
         Scope::People => api::kept_tags(typed).map(characters),
         // The list below is the answer.
-        Scope::Tags => Some(Vec::new()),
+        Scope::Tags | Scope::Upload | Scope::Settings(_) => Some(Vec::new()),
         Scope::Boorus(s) => {
             let site = boorus::completing_site(s, &store::prefs_untracked().booru_sites)?;
             api::kept_remote_tags(&site, typed)
@@ -340,10 +376,8 @@ fn kept(scope: &Scope, typed: &str) -> Option<Vec<Hint>> {
 /// How long the typing pauses before `scope` is asked.
 fn pause(scope: &Scope) -> i32 {
     match scope {
-        Scope::Collection | Scope::Explore(_) | Scope::Tags | Scope::People | Scope::Forum(_) => {
-            TYPING_PAUSE_MS
-        }
         Scope::Boorus(_) => REMOTE_PAUSE_MS,
+        _ => TYPING_PAUSE_MS,
     }
 }
 
@@ -353,7 +387,7 @@ async fn suggest(scope: Scope, typed: String) -> Vec<Hint> {
     match scope {
         Scope::Collection | Scope::Explore(_) => api::tag_hints(typed).await,
         Scope::People => characters(api::tag_hints(typed).await),
-        Scope::Tags => Vec::new(),
+        Scope::Tags | Scope::Upload | Scope::Settings(_) => Vec::new(),
         Scope::Boorus(s) => {
             match boorus::completing_site(&s, &store::prefs_untracked().booru_sites) {
                 Some(site) => api::remote_tag_hints(site, typed).await,
@@ -436,10 +470,10 @@ pub(crate) fn SearchBox(#[prop(optional)] hero: bool) -> impl IntoView {
         }
     });
     let offering = Memo::new(move |_| saved.with(|(s, _)| !s.is_empty()));
-    // On the Tags page and the people page the box filters the list as
-    // it's typed in. The Tags page's list is the answer: nothing to complete.
-    let filtering = Memo::new(move |_| scope.with(|s| matches!(s, Scope::Tags | Scope::People)));
-    let listing = Memo::new(move |_| scope.with(|s| *s == Scope::Tags));
+    // On the Tags, people, Upload and Settings pages the box filters the
+    // page as it's typed in. Only the people page has tags to complete.
+    let filtering = Memo::new(move |_| scope.with(Scope::filters));
+    let listing = Memo::new(move |_| scope.with(Scope::plain));
     let filter_turn = StoredValue::new(Latest::default());
     let expanded = Memo::new(move |_| {
         focused.get() && (offering.get() || open.get() && hints.with(|h| !h.is_empty()))
@@ -528,6 +562,8 @@ pub(crate) fn SearchBox(#[prop(optional)] hero: bool) -> impl IntoView {
     let set_filter = Callback::new(move |value: String| {
         let to = match scope.get_untracked() {
             Scope::People => route::people(&value),
+            Scope::Upload => route::upload(&value),
+            Scope::Settings(path) => route::settings_search(&path, &value),
             _ => route::tags(&value),
         };
         let replace = NavigateOptions {

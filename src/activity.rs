@@ -168,6 +168,24 @@ pub fn clear() {
     clear_jobs_now();
 }
 
+/// Empties what a filter shows: the items in `keys` but for what is on its
+/// way, and the finished imports when every one of them is in `jobs`. The
+/// server clears those only all at once.
+pub fn clear_shown(keys: &[u64], jobs: &[i64]) {
+    update(|q| q.clear_only(keys));
+    forget_files();
+    let every = JOBS.with(|j| {
+        j.with_untracked(|j| {
+            j.iter()
+                .filter(|j| !j.state.is_active())
+                .all(|j| jobs.contains(&j.id))
+        })
+    });
+    if every {
+        clear_jobs_now();
+    }
+}
+
 /// Sends the drafts, or only those in `keys`: files to the upload queue,
 /// addresses to the server's imports.
 pub fn start(batch: &Batch, keys: Option<&[u64]>) {

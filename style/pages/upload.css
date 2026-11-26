@@ -42,6 +42,8 @@
 .up-drop.lifted { opacity: 0; transition: opacity var(--fast) var(--ease); }
 /* With nothing chosen yet, the drop box is the page. */
 .up-grid.empty { display: block; }
+/* The search finds none of the tiles: the drop box stays, and says so. */
+.up-none { display: flex; align-items: center; gap: 10px; margin: 16px 0; }
 .up-grid.empty .up-drop { aspect-ratio: auto; min-height: min(52vh, 420px); border-radius: var(--radius-l); font-size: 16px; }
 
 /* Files dragged over the page: the gallery's veil, grown out of the drop box

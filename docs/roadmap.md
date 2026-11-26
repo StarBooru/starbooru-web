@@ -75,6 +75,8 @@ Both modes:
 - [x] Click and drag across tiles to select several
 - [x] A saved search reopens where it was left. Today the gallery remembers only the last 30 searches, so a saved one can drop out
 - [x] Share links: a custom expiry date besides 1, 7 and 30 days
+- [x] Link previews in WhatsApp, Discord, Telegram and other apps: an admin switch, an account default and a switch on each link (server)
+- [x] The top bar's search filters the Upload page's tiles on Upload and finds settings in Settings
 - [x] Reverse search an image from a post on google images, iqdb, saucenao, trace.moe 
 
 ## 7. Design

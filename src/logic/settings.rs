@@ -11,6 +11,7 @@ use starbooru_core::{
     ApiKey, Identity, Mode, NewApiKey, Role, ServerInfo, SessionInfo, SignInMethods, Usage, User,
 };
 
+use super::filter::holds_all;
 use super::library::ago;
 use super::upload::human_size;
 use crate::store::{Prefs, Theme};
@@ -152,6 +153,316 @@ pub fn anchored(group: Group, card: &str) -> String {
     } else {
         format!("{}#{card}", group.href())
     }
+}
+
+// ---------- finding a setting ----------
+
+/// When a card is there to find.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Shown {
+    Always,
+    /// Signed in, not a guest.
+    Account,
+    /// A public server's profile.
+    Profile,
+    SignIn,
+    Import,
+    Shares,
+}
+
+/// A card the search box finds: its group, its element's id and the
+/// messages it shows (its title, then the names of its controls).
+#[derive(Clone, Copy, Debug)]
+pub struct Card {
+    pub group: Group,
+    pub id: &'static str,
+    pub shown: Shown,
+    pub texts: &'static [&'static str],
+}
+
+const fn card(
+    group: Group,
+    id: &'static str,
+    shown: Shown,
+    texts: &'static [&'static str],
+) -> Card {
+    Card {
+        group,
+        id,
+        shown,
+        texts,
+    }
+}
+
+/// Every card, group by group, in the order they stand.
+pub const CARDS: [Card; 22] = [
+    card(
+        Group::Account,
+        "account",
+        Shown::Account,
+        &[
+            "settings-account",
+            "settings-signed-in-as",
+            "settings-storage",
+            "login-server",
+            "settings-server-version",
+            "settings-sign-out",
+        ],
+    ),
+    card(
+        Group::Account,
+        "profile",
+        Shown::Profile,
+        &[
+            "settings-profile",
+            "profile-display-name",
+            "profile-about",
+            "profile-picture-add",
+        ],
+    ),
+    card(
+        Group::Account,
+        "sign-in",
+        Shown::SignIn,
+        &["signin-title", "signin-link"],
+    ),
+    card(
+        Group::Account,
+        "password",
+        Shown::Account,
+        &["login-password", "password-new", "password-change"],
+    ),
+    card(
+        Group::Account,
+        "devices",
+        Shown::Account,
+        &[
+            "sessions-title",
+            "sessions-this-device",
+            "sessions-revoke-others",
+        ],
+    ),
+    card(
+        Group::Appearance,
+        "theme",
+        Shown::Always,
+        &[
+            "settings-theme",
+            "theme-system",
+            "theme-light",
+            "theme-dark",
+            "settings-oled",
+        ],
+    ),
+    card(
+        Group::Appearance,
+        "accent",
+        Shown::Always,
+        &[
+            "settings-accent",
+            "accent-violet",
+            "accent-pink",
+            "accent-coral",
+            "accent-amber",
+            "accent-green",
+            "accent-teal",
+            "accent-blue",
+            "accent-red",
+            "settings-accent-custom",
+        ],
+    ),
+    card(
+        Group::Appearance,
+        "language",
+        Shown::Always,
+        &["settings-language", "lang-english", "lang-italian"],
+    ),
+    card(
+        Group::Viewing,
+        "blacklist",
+        Shown::Always,
+        &["blacklist-title", "blacklist-ratings"],
+    ),
+    card(
+        Group::Viewing,
+        "thumbnails",
+        Shown::Account,
+        &[
+            "settings-tiles",
+            "settings-tiles-spaced",
+            "settings-tiles-flush",
+        ],
+    ),
+    card(
+        Group::Viewing,
+        "viewer",
+        Shown::Account,
+        &[
+            "settings-viewer",
+            "settings-originals",
+            "settings-keep-original",
+            "settings-people",
+        ],
+    ),
+    card(
+        Group::Viewing,
+        "gestures",
+        Shown::Account,
+        &[
+            "settings-gestures",
+            "settings-swipe-left",
+            "settings-swipe-right",
+        ],
+    ),
+    card(
+        Group::Viewing,
+        "hand",
+        Shown::Account,
+        &["settings-hand", "hand-either", "hand-left", "hand-right"],
+    ),
+    card(
+        Group::Battery,
+        "battery-saver",
+        Shown::Account,
+        &[
+            "settings-saver",
+            "saver-does-videos",
+            "saver-does-preload",
+            "saver-does-motion",
+        ],
+    ),
+    card(
+        Group::Battery,
+        "effects",
+        Shown::Account,
+        &[
+            "settings-effects",
+            "effects-does-glass",
+            "effects-does-thumbs",
+            "effects-does-glow",
+        ],
+    ),
+    card(
+        Group::Library,
+        "library",
+        Shown::Account,
+        &["trash-title", "dup-title"],
+    ),
+    card(
+        Group::Library,
+        "import",
+        Shown::Import,
+        &["library-title", "library-source"],
+    ),
+    card(
+        Group::Sharing,
+        "previews",
+        Shown::Shares,
+        &["previews-title", "previews-mine"],
+    ),
+    card(Group::Sharing, "links", Shown::Shares, &["shares-title"]),
+    card(
+        Group::Sharing,
+        "keys",
+        Shown::Account,
+        &["keys-title", "keys-name"],
+    ),
+    card(
+        Group::About,
+        "help",
+        Shown::Always,
+        &[
+            "settings-help-legal",
+            "help-title",
+            "privacy-title",
+            "terms-title",
+        ],
+    ),
+    card(
+        Group::About,
+        "about",
+        Shown::Always,
+        &[
+            "about-title",
+            "about-version",
+            "about-github",
+            "about-credits",
+            "install-app",
+        ],
+    ),
+];
+
+/// Whether a card is there for someone, given what Settings shows them.
+pub fn card_shown(card: &Card, guest: bool, public: bool, sections: Option<Sections>) -> bool {
+    let s = sections.unwrap_or_default();
+    match card.shown {
+        Shown::Always => true,
+        Shown::Account => !guest,
+        Shown::Profile => !guest && public,
+        Shown::SignIn => !guest && s.sign_in,
+        Shown::Import => !guest && s.library_import,
+        Shown::Shares => !guest && s.shares,
+    }
+}
+
+/// A group with something a search found: every card when its own name
+/// matched, else only the cards that did.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Found {
+    pub group: Group,
+    /// The ids of the cards found; `None` is all of them.
+    pub cards: Option<Vec<&'static str>>,
+}
+
+/// What a search for `words` finds among `groups`, in their order. A group
+/// whose name or note holds every word is found whole; otherwise its cards
+/// that `shown` lets through are found by their own words, their group's
+/// and their id. `text` puts a message id into words.
+pub fn find(
+    words: &[String],
+    groups: &[Group],
+    group_texts: impl Fn(Group) -> Vec<String>,
+    text: impl Fn(&str) -> String,
+    shown: impl Fn(&Card) -> bool,
+) -> Vec<Found> {
+    if words.is_empty() {
+        return Vec::new();
+    }
+    groups
+        .iter()
+        .filter_map(|&group| {
+            let named = group_texts(group);
+            if holds_all(words, &named) {
+                return Some(Found { group, cards: None });
+            }
+            let cards: Vec<&'static str> = CARDS
+                .iter()
+                .filter(|c| c.group == group && shown(c))
+                .filter(|c| {
+                    let mut places: Vec<String> = c.texts.iter().map(|id| text(id)).collect();
+                    places.push(c.id.replace('-', " "));
+                    places.extend(named.iter().cloned());
+                    holds_all(words, &places)
+                })
+                .map(|c| c.id)
+                .collect();
+            (!cards.is_empty()).then_some(Found {
+                group,
+                cards: Some(cards),
+            })
+        })
+        .collect()
+}
+
+/// The rule that leaves only `cards` of `group` in sight among the results,
+/// whenever the others come in. The ids are the index's own.
+pub fn only_these(group: Group, cards: &[&'static str]) -> String {
+    let kept: Vec<String> = cards.iter().map(|c| format!("#{c}")).collect();
+    format!(
+        ".settings-found[data-group=\"{}\"] > .group-cards > :not({}) {{ display: none; }}",
+        group.slug(),
+        kept.join(", ")
+    )
 }
 
 /// Where the focus goes when the group open changes on a phone, where the
@@ -484,6 +795,136 @@ mod tests {
     use chrono::TimeDelta;
 
     use super::*;
+    use crate::logic::filter::words;
+
+    /// What a search finds for an account, or a guest, on a private server
+    /// with every card.
+    fn found(q: &str, guest: bool) -> Vec<Found> {
+        let names = |g: Group| {
+            let (name, note) = match g {
+                Group::Appearance => ("Appearance", "Theme, accent and language"),
+                Group::Battery => ("Battery and effects", ""),
+                _ => (g.slug(), ""),
+            };
+            vec![name.to_owned(), note.to_owned()]
+        };
+        let every = Sections {
+            library_import: true,
+            shares: true,
+            admin: false,
+            sign_in: true,
+        };
+        find(
+            &words(q),
+            &Group::shown(guest),
+            names,
+            |id| crate::i18n::tr(id, None),
+            |c| card_shown(c, guest, false, Some(every)),
+        )
+    }
+
+    fn only(group: Group, cards: &[&'static str]) -> Found {
+        Found {
+            group,
+            cards: Some(cards.to_vec()),
+        }
+    }
+
+    #[test]
+    fn a_search_finds_cards_by_what_they_show() {
+        assert_eq!(found("dark", false), [only(Group::Appearance, &["theme"])]);
+        assert_eq!(found("BLUE", false), [only(Group::Appearance, &["accent"])]);
+        assert_eq!(found("swipe", false), [only(Group::Viewing, &["gestures"])]);
+        assert_eq!(found("api", false), [only(Group::Sharing, &["keys"])]);
+        // By its id too, and across its group's name.
+        assert_eq!(
+            found("battery saver", false),
+            [only(Group::Battery, &["battery-saver"])]
+        );
+        // Two words in two cards: neither holds both.
+        assert!(found("dark swipe", false).is_empty());
+        assert!(found("", false).is_empty());
+        assert!(found("zzzz", false).is_empty());
+    }
+
+    #[test]
+    fn the_cards_left_out_are_hidden_by_their_group() {
+        assert_eq!(
+            only_these(Group::Appearance, &["theme", "accent"]),
+            ".settings-found[data-group=\"appearance\"] > .group-cards > :not(#theme, #accent) { display: none; }"
+        );
+    }
+
+    #[test]
+    fn a_groups_own_name_finds_all_of_it() {
+        assert_eq!(
+            found("appearance", false),
+            [Found {
+                group: Group::Appearance,
+                cards: None
+            }]
+        );
+    }
+
+    #[test]
+    fn a_guest_finds_only_what_a_guest_has() {
+        assert!(found("swipe", true).is_empty());
+        assert!(found("effects", true).is_empty());
+        assert_eq!(
+            found("blacklist", true),
+            [only(Group::Viewing, &["blacklist"])]
+        );
+        // A card that needs something the server hasn't got isn't found.
+        let none = Sections::default();
+        let shares = CARDS.iter().find(|c| c.id == "links").unwrap();
+        assert!(!card_shown(shares, false, false, Some(none)));
+        let profile = CARDS.iter().find(|c| c.id == "profile").unwrap();
+        assert!(card_shown(profile, false, true, None));
+        assert!(!card_shown(profile, false, false, None));
+    }
+
+    #[test]
+    fn every_card_found_is_on_the_page_with_its_words() {
+        let sources = [
+            include_str!("../pages/settings/mod.rs"),
+            include_str!("../pages/settings/account.rs"),
+            include_str!("../pages/settings/sessions.rs"),
+            include_str!("../pages/settings/appearance.rs"),
+            include_str!("../pages/settings/blacklist.rs"),
+            include_str!("../pages/settings/viewing.rs"),
+            include_str!("../pages/settings/battery.rs"),
+            include_str!("../pages/settings/keys.rs"),
+            include_str!("../pages/library.rs"),
+            include_str!("../pages/profile/edit.rs"),
+            include_str!("../pages/share/previews.rs"),
+            include_str!("../pages/share/links.rs"),
+        ]
+        .join("\n");
+        let catalogue = include_str!("../../locales/en.ftl");
+        let mut ids = std::collections::BTreeSet::new();
+        for card in CARDS {
+            assert!(ids.insert(card.id), "{} twice", card.id);
+            assert!(
+                sources.contains(&format!("id=\"{}\"", card.id)),
+                "{}",
+                card.id
+            );
+            for text in card.texts {
+                let line = format!("\n{text} =");
+                assert!(catalogue.contains(&line), "{text}");
+            }
+        }
+        // In the groups' order, as the results stand.
+        let order: Vec<usize> = CARDS
+            .iter()
+            .map(|c| Group::ALL.iter().position(|g| *g == c.group).unwrap())
+            .collect();
+        assert!(order.windows(2).all(|w| w[0] <= w[1]));
+        // An old address's card is one a search finds too.
+        for (_, _, target) in ANCHORS {
+            assert!(target.is_empty() || ids.contains(target), "{target}");
+        }
+    }
 
     fn now() -> DateTime<Utc> {
         DateTime::from_timestamp(1_800_000_000, 0).unwrap()
@@ -511,6 +952,7 @@ mod tests {
             score_kind: starbooru_core::ScoreKind::Likes,
             guests: false,
             home: false,
+            link_previews: false,
         }
     }
 

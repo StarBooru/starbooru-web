@@ -1,6 +1,6 @@
 //! Settings › Shared links: every link the account made, newest first, with
-//! its cover, how often it was opened and when it expires, the link to copy,
-//! and a way to stop it working.
+//! its cover, how often it was opened and when it expires, whether chats
+//! show its picture, the link to copy, and a way to stop it working.
 
 use chrono::Utc;
 use leptos::prelude::*;
@@ -8,14 +8,78 @@ use leptos::task::spawn_local;
 use starbooru_core::Share;
 
 use super::LinkField;
-use crate::api;
 use crate::components::banner::{ErrorBanner, Spinner};
 use crate::components::confirm::ConfirmButton;
 use crate::components::icons::{Ico, Icon};
-use crate::logic::share::{expired, share_name, share_status, share_url};
+use crate::logic::share::{expired, flip_preview, previewed, share_name, share_status, share_url};
+use crate::{api, instance};
 
+/// Whether chats show the link's picture, which a press turns on or off.
+/// It follows the account's choice until pressed into another, and follows
+/// it again once pressed back. Only while the server allows previews.
+fn preview_chip(
+    share: &Share,
+    account: RwSignal<Option<bool>>,
+    error: RwSignal<Option<String>>,
+) -> impl IntoView + use<> {
+    let id = share.id;
+    let own = RwSignal::new(share.preview);
+    let told = share.preview_on;
+    let busy = RwSignal::new(false);
+    let on =
+        Memo::new(move |_| previewed(instance::link_previews(), account.get(), own.get(), told));
+    let flip = move |_| {
+        let Some(mine) = account.get_untracked() else {
+            return;
+        };
+        if busy.get_untracked() {
+            return;
+        }
+        let update = flip_preview(mine, on.get_untracked());
+        let was = own.get_untracked();
+        if let Some(next) = update.preview {
+            own.set(next);
+        }
+        busy.set(true);
+        error.set(None);
+        spawn_local(async move {
+            match api::call(move |c| async move { c.update_share(id, &update).await }).await {
+                Ok(kept) => {
+                    own.try_set(kept.preview);
+                }
+                Err(message) => {
+                    own.try_set(was);
+                    error.try_set(Some(message));
+                }
+            }
+            busy.try_set(false);
+        });
+    };
+    move || {
+        instance::link_previews().then(|| {
+            view! {
+                <button
+                    type="button"
+                    class="chip preview-chip"
+                    class:on=move || on.get()
+                    aria-pressed=move || if on.get() { "true" } else { "false" }
+                    disabled=move || busy.get() || account.get().is_none()
+                    on:click=flip
+                >
+                    {move || {
+                        let icon = if on.get() { Icon::Gallery } else { Icon::Link };
+                        view! { <Ico icon=icon size=18 /> }
+                    }}
+                    <span>{move || t!("share-preview")}</span>
+                </button>
+            }
+        })
+    }
+}
+
+/// `account` is the account's choice of previews, once read.
 #[component]
-pub fn SharesCard() -> impl IntoView {
+pub fn SharesCard(account: RwSignal<Option<bool>>) -> impl IntoView {
     let list = RwSignal::new(None::<Vec<Share>>);
     let error = RwSignal::new(None::<String>);
     let busy = RwSignal::new(false);
@@ -83,6 +147,7 @@ pub fn SharesCard() -> impl IntoView {
                 });
                 let posts = s.posts;
                 let status = share_status(&s, now);
+                let chip = preview_chip(&s, account, error);
                 let id = s.id;
                 let label = {
                     let name = name.clone();
@@ -96,6 +161,7 @@ pub fn SharesCard() -> impl IntoView {
                             <span class="pill">{move || t!("share-posts", count = posts)}</span>
                             {gone}
                             <span class="muted">{status}</span>
+                            {chip}
                             {url.map(|url| view! { <LinkField url=url /> })}
                         </div>
                         <ConfirmButton
